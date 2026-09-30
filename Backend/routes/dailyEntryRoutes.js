@@ -1,0 +1,72 @@
+const express = require("express");
+
+const authenticate = require("../middleware/authMiddleware");
+const allowRoles = require("../middleware/roleMiddleware");
+
+const {
+  createEntry,
+  getMyEntries,
+  updateEntry,
+  getPendingTeamEntries,
+  reviewEntry,
+  getProjectFields,
+} = require("../controllers/dailyEntryController");
+
+const router = express.Router();
+
+router.get(
+  "/team/pending",
+  authenticate,
+  allowRoles("teamLead"),
+  getPendingTeamEntries
+);
+
+router.get(
+  "/my",
+  authenticate,
+  allowRoles("indexer","teamLead"),
+  getMyEntries
+);
+
+router.post(
+  "/",
+  authenticate,
+  allowRoles("indexer","teamLead"),
+  createEntry
+);
+
+// Loads dynamic Daily Entry fields for a project assigned to the logged-in user.
+router.get(
+  "/projects/:projectId/fields",
+  authenticate,
+  allowRoles("indexer", "teamLead"),
+  getProjectFields
+);
+
+router.patch(
+  "/:id",
+  authenticate,
+  allowRoles("indexer", "teamLead"),
+  updateEntry
+);
+router.post(
+  "/:id",
+  authenticate,
+  allowRoles("indexer", "teamLead"),
+  updateEntry
+);
+
+router.patch(
+  "/:id/review",
+  authenticate,
+  allowRoles("teamLead"),
+  reviewEntry
+);
+router.post(
+  "/:id/review",
+  authenticate,
+  allowRoles("teamLead"),
+  reviewEntry
+);
+
+module.exports = router;
