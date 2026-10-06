@@ -156,52 +156,52 @@ const entriesIndexer = [
 // =========================================================
 
 function StatusChipIndexer({ status }) {
-    const styles = {
-      DRAFT: {
-        bgcolor: "#eef2ff",
-        color: "#315fd4",
-        borderColor: "#c7d2fe",
-      },
-      SUBMITTED: {
-        bgcolor: "#eaf2ff",
-        color: "#2563eb",
-        borderColor: "#bfdbfe",
-      },
-      REVIEWED: {
-        bgcolor: "#e0f7fa",
-        color: "#00838f",
-        borderColor: "#b2ebf2",
-      },
-      LOCKED: {
-        bgcolor: "#f0e9ff",
-        color: "#6d28d9",
-        borderColor: "#ddd6fe",
-      },
-    };
+  const styles = {
+    DRAFT: {
+      bgcolor: "#eef2ff",
+      color: "#315fd4",
+      borderColor: "#c7d2fe",
+    },
+    SUBMITTED: {
+      bgcolor: "#eaf2ff",
+      color: "#2563eb",
+      borderColor: "#bfdbfe",
+    },
+    REVIEWED: {
+      bgcolor: "#e0f7fa",
+      color: "#00838f",
+      borderColor: "#b2ebf2",
+    },
+    LOCKED: {
+      bgcolor: "#f0e9ff",
+      color: "#6d28d9",
+      borderColor: "#ddd6fe",
+    },
+  };
 
-    return (
-      <Chip
-        label={status}
-        size="small"
-        variant="outlined"
-        sx={{
-          height: 26,
-          borderRadius: "13px",
-          fontSize: 11,
-          fontWeight: 700,
-          letterSpacing: 0.2,
-          px: 0.5,
-          ...styles[status],
-        }}
-      />
-    );
-  }
+  return (
+    <Chip
+      label={status}
+      size="small"
+      variant="outlined"
+      sx={{
+        height: 26,
+        borderRadius: "13px",
+        fontSize: 11,
+        fontWeight: 700,
+        letterSpacing: 0.2,
+        px: 0.5,
+        ...styles[status],
+      }}
+    />
+  );
+}
 
-  // =========================================================
-  // INDEXER DAILY ENTRY
-  // =========================================================
+// =========================================================
+// INDEXER DAILY ENTRY
+// =========================================================
 
- function IndexerDailyEntryIndexer({
+function IndexerDailyEntryIndexer({
   onNavigate,
 }) {
   const toast = useToast();
@@ -226,12 +226,9 @@ function StatusChipIndexer({ status }) {
   const [formData, setFormData] = useState({
     productionDate: new Date().toISOString().slice(0, 10),
     projectId: "",
-    batchJobId: "",
     reportingCategory: "",
-    documentsReceived: "",
     documentsCompleted: "",
     batchesProcessed: "",
-    errorsFlagged: "",
     notes: "",
   });
 
@@ -247,7 +244,7 @@ function StatusChipIndexer({ status }) {
     };
 
     loadProjects();
-  }, []);
+  }, [toast]);
 
   const loadEntries = useCallback(async () => {
     try {
@@ -265,9 +262,8 @@ function StatusChipIndexer({ status }) {
             }
           ),
           project: entry.project_name,
-          batch: entry.batch_ref || "—",
-          received: entry.documents_received,
           completed: entry.documents_completed,
+          batchesProcessed: entry.batches_processed,
           status: entry.status?.toUpperCase(),
 
           // Preserves the backend-calculated edit permission for this entry.
@@ -284,19 +280,15 @@ function StatusChipIndexer({ status }) {
     loadEntries();
   }, [loadEntries]);
 
+  // Changes the project and lets the Team Lead choose the reporting category separately.
   const handleProjectChange = (event) => {
     const projectId = event.target.value;
 
-    const selectedProject = projects.find(
-      (project) => String(project.project_id || project.id) === String(projectId)
-    );
-
-    // Updates the selected project and resets reporting category for a fresh selection.
-setFormData((currentData) => ({
-  ...currentData,
-  projectId,
-  reportingCategory: "",
-}));
+    setFormData((current) => ({
+      ...current,
+      projectId,
+      reportingCategory: "",
+    }));
   };
   const handleInputChange = (event) => {
     const { name, value } = event.target;
@@ -308,27 +300,24 @@ setFormData((currentData) => ({
   };
 
   const handleEditEntry = (entry) => {
-  if (saving || !entry.canEdit) return;
+    if (saving || !entry.canEdit) return;
 
-  const original = entry.raw;
+    const original = entry.raw;
 
-  setEditingEntryId(entry.id);
+    setEditingEntryId(entry.id);
 
-  // Remembers whether the current entry was Draft or Submitted before editing started.
-  setEditingEntryStatus(entry.status);
+    // Remembers whether the current entry was Draft or Submitted before editing started.
+    setEditingEntryStatus(entry.status);
 
-  setFormData({
-    productionDate: original.production_date,
-    projectId: original.project_id,
-    batchJobId: original.batch_ref || "",
-    reportingCategory: original.reporting_category || "",
-    documentsReceived: original.documents_received ?? "",
-    documentsCompleted: original.documents_completed ?? "",
-    batchesProcessed: original.batches_processed ?? "",
-    errorsFlagged: original.errors_flagged ?? "",
-    notes: original.notes || "",
-  });
-};
+    setFormData({
+      productionDate: original.production_date,
+      projectId: original.project_id,
+      reportingCategory: original.reporting_category || "",
+      documentsCompleted: original.documents_completed ?? "",
+      batchesProcessed: original.batches_processed ?? "",
+      notes: original.notes || "",
+    });
+  };
 
   const handleSaveEntry = async (status) => {
     if (saving) return;
@@ -341,7 +330,6 @@ setFormData((currentData) => ({
     const numbers = {
       documentsCompleted: Number(formData.documentsCompleted || 0),
       batchesProcessed: Number(formData.batchesProcessed || 0),
-      errorsFlagged: Number(formData.errorsFlagged || 0),
     };
 
     if (
@@ -350,11 +338,6 @@ setFormData((currentData) => ({
       )
     ) {
       toast.warning("Enter valid non-negative whole numbers.");
-      return;
-    }
-
-    if (numbers.documentsCompleted > numbers.documentsReceived) {
-      toast.warning("Completed documents cannot exceed received documents.");
       return;
     }
 
@@ -367,23 +350,23 @@ setFormData((currentData) => ({
     setSaving(true);
 
     try {
-        const data = await apiRequest(
-          editingEntryId !== null
-            ? `/daily-entries/${editingEntryId}`
-            : "/daily-entries",
-          {
-            method: editingEntryId !== null ? "PATCH" : "POST",
+      const data = await apiRequest(
+        editingEntryId !== null
+          ? `/daily-entries/${editingEntryId}`
+          : "/daily-entries",
+        {
+          method: editingEntryId !== null ? "PATCH" : "POST",
 
-            body: JSON.stringify({
-              ...formData,
-              ...numbers,
-              projectId: Number(formData.projectId),
+          body: JSON.stringify({
+            ...formData,
+            ...numbers,
+            projectId: Number(formData.projectId),
 
-              // Sends the preserved workflow status when editing an already Submitted entry.
-              status: statusToSend,
-            }),
-          }
-        );
+            // Sends the preserved workflow status when editing an already Submitted entry.
+            status: statusToSend,
+          }),
+        }
+      );
 
       toast.success(`${data.message}. Entry ID: ${data.entryId}`);
 
@@ -395,11 +378,8 @@ setFormData((currentData) => ({
 
       setFormData((currentData) => ({
         ...currentData,
-        batchJobId: "",
-        documentsReceived: "",
         documentsCompleted: "",
         batchesProcessed: "",
-        errorsFlagged: "",
         notes: "",
       }));
     } catch (error) {
@@ -410,32 +390,32 @@ setFormData((currentData) => ({
   };
 
 
- const handleRequestCorrection = (entry) => {
-  setCorrectionEntry(entry);
+  const handleRequestCorrection = (entry) => {
+    setCorrectionEntry(entry);
 
-  setCorrectionForm({
-    fieldName: "docs_completed",
-    newValue: "",
-    reason: "",
-  });
+    setCorrectionForm({
+      fieldName: "docs_completed",
+      newValue: "",
+      reason: "",
+    });
 
-  setCorrectionErrors({});
-  setCorrectionOpen(true);
-};
+    setCorrectionErrors({});
+    setCorrectionOpen(true);
+  };
 
-const handleCorrectionFieldChange = (event) => {
-  const { name, value } = event.target;
+  const handleCorrectionFieldChange = (event) => {
+    const { name, value } = event.target;
 
-  setCorrectionForm((previousForm) => ({
-    ...previousForm,
-    [name]: value,
-  }));
+    setCorrectionForm((previousForm) => ({
+      ...previousForm,
+      [name]: value,
+    }));
 
-  setCorrectionErrors((previousErrors) => ({
-    ...previousErrors,
-    [name]: undefined,
-  }));
-};
+    setCorrectionErrors((previousErrors) => ({
+      ...previousErrors,
+      [name]: undefined,
+    }));
+  };
 
   const handleCorrectionSubmit = async () => {
     if (!correctionEntry) return;
@@ -468,10 +448,10 @@ const handleCorrectionFieldChange = (event) => {
     setCorrectionErrors({});
     const oldValue =
       correctionForm.fieldName === "docs_completed"
-        ? correctionEntry.completed
-        : correctionForm.fieldName === "docs_received"
-        ? correctionEntry.received
-        : "";
+        ? correctionEntry?.completed ?? ""
+        : correctionForm.fieldName === "batches_processed"
+          ? correctionEntry?.batchesProcessed ?? ""
+          : "";
     setCorrectionSaving(true);
     try {
       const data = await apiRequest("/indexer/corrections", {
@@ -486,7 +466,7 @@ const handleCorrectionFieldChange = (event) => {
       });
       toast.success(
         data.message ||
-          "Correction request submitted successfully"
+        "Correction request submitted successfully"
       );
 
       setCorrectionOpen(false);
@@ -604,7 +584,7 @@ const handleCorrectionFieldChange = (event) => {
               },
             }}
           >
-          {saving ? "Saving..." : "Save draft"}
+            {saving ? "Saving..." : "Save draft"}
           </Button>
 
           <Button
@@ -839,11 +819,8 @@ const handleCorrectionFieldChange = (event) => {
 
               setFormData((currentData) => ({
                 ...currentData,
-                batchJobId: "",
-                documentsReceived: "",
                 documentsCompleted: "",
                 batchesProcessed: "",
-                errorsFlagged: "",
                 notes: "",
               }));
             }}
@@ -852,7 +829,7 @@ const handleCorrectionFieldChange = (event) => {
           </Button>
         </Box>
       )}
-      <Card 
+      <Card
         elevation={0}
         sx={{
           borderRadius: "14px",
@@ -870,9 +847,10 @@ const handleCorrectionFieldChange = (event) => {
         <Box
           sx={{
             display: "grid",
+            // Keeps all four summary values in one row on normal screen sizes.
             gridTemplateColumns: {
-              xs: "1fr",
-              md: "1fr 1fr",
+              xs: "repeat(2, 1fr)",
+              md: "repeat(4, 1fr)",
             },
             columnGap: 2.5,
             rowGap: 2.75,
@@ -880,47 +858,47 @@ const handleCorrectionFieldChange = (event) => {
         >
           {/* Production Date */}
 
-       <Field label="Production date">
-          <TextField
-            type="date"
-            value={formData.productionDate}
-            onChange={(event) =>
-              setFormData((currentData) => ({
-                ...currentData,
-                productionDate: event.target.value,
-              }))
-            }
-            fullWidth
-            size="small"
-            sx={inputSx}
-          />
-        </Field>
+          <Field label="Production date">
+            <TextField
+              type="date"
+              value={formData.productionDate}
+              onChange={(event) =>
+                setFormData((currentData) => ({
+                  ...currentData,
+                  productionDate: event.target.value,
+                }))
+              }
+              fullWidth
+              size="small"
+              sx={inputSx}
+            />
+          </Field>
 
           {/* Project */}
 
-            <Field label="Project">
-              <TextField
-                select
-                value={formData.projectId}
-                onChange={handleProjectChange}
-                fullWidth
-                size="small"
-                sx={inputSx}
-              >
-                <MenuItem value="">
-                  Select project
-                </MenuItem>
+          <Field label="Project">
+            <TextField
+              select
+              value={formData.projectId}
+              onChange={handleProjectChange}
+              fullWidth
+              size="small"
+              sx={inputSx}
+            >
+              <MenuItem value="">
+                Select project
+              </MenuItem>
 
-                {projects.map((project) => (
-                  <MenuItem
-                    key={project.project_id || project.id}
-                    value={project.project_id || project.id}
-                  >
-                    {project.project_name}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Field>
+              {projects.map((project) => (
+                <MenuItem
+                  key={project.project_id || project.id}
+                  value={project.project_id || project.id}
+                >
+                  {project.project_name}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Field>
 
           {/* Reporting Category */}
           <Field label="Reporting category">
@@ -951,7 +929,7 @@ const handleCorrectionFieldChange = (event) => {
 
           {/* Documents Completed */}
 
-         <Field label="Documents completed">
+          <Field label="Documents completed">
             <TextField
               name="documentsCompleted"
               type="number"
@@ -977,20 +955,6 @@ const handleCorrectionFieldChange = (event) => {
             />
           </Field>
 
-          {/* Errors Flagged */}
-
-         <Field label="Errors flagged">
-            <TextField
-              name="errorsFlagged"
-              type="number"
-              value={formData.errorsFlagged}
-              onChange={handleInputChange}
-              fullWidth
-              size="small"
-              sx={inputSx}
-            />
-          </Field>
-
           {/* Notes */}
 
           <Field
@@ -1000,7 +964,7 @@ const handleCorrectionFieldChange = (event) => {
               md: "1 / -1",
             }}
           >
-           <TextField
+            <TextField
               name="notes"
               value={formData.notes}
               onChange={handleInputChange}
@@ -1060,9 +1024,8 @@ const handleCorrectionFieldChange = (event) => {
               {[
                 "DATE",
                 "PROJECT",
-                "BATCH",
-                "RECEIVED",
                 "COMPLETED",
+                "BATCHES PROCESSED",
                 "STATUS",
                 "",
               ].map((heading, index) => (
@@ -1105,27 +1068,6 @@ const handleCorrectionFieldChange = (event) => {
                 >
                   {entry.project}
                 </TableCell>
-
-                <TableCell
-                  sx={{
-                    fontSize: 14,
-                    color: "#64748b",
-                    py: 1.5,
-                  }}
-                >
-                  {entry.batch}
-                </TableCell>
-
-                <TableCell
-                  sx={{
-                    fontSize: 14,
-                    color: "#334155",
-                    py: 1.5,
-                  }}
-                >
-                  {entry.received}
-                </TableCell>
-
                 <TableCell
                   sx={{
                     fontSize: 14,
@@ -1134,6 +1076,16 @@ const handleCorrectionFieldChange = (event) => {
                   }}
                 >
                   {entry.completed}
+                </TableCell>
+                {/* Shows the number of batches processed by the Indexer. */}
+                <TableCell
+                  sx={{
+                    fontSize: 14,
+                    color: "#334155",
+                    py: 1.5,
+                  }}
+                >
+                  {entry.batchesProcessed}
                 </TableCell>
 
                 <TableCell
@@ -1171,38 +1123,38 @@ const handleCorrectionFieldChange = (event) => {
                   )}
 
                   {entry.status === "LOCKED" && (
-                        <Button
-                          // Keeps the existing correction request functionality unchanged.
-                          type="button"
-                          size="small"
-                          variant="outlined"
-                          onClick={() =>
-                            handleRequestCorrection(entry)
-                          }
-                          sx={{
-                            // Gives Request correction a clear clickable button appearance.
-                            minWidth: "auto",
-                            height: 32,
-                            px: 1.5,
-                            fontSize: 12,
-                            fontWeight: 600,
-                            textTransform: "none",
-                            whiteSpace: "nowrap",
-                            color: "#3169e8",
-                            borderColor: "#bcd2ff",
-                            bgcolor: "#f5f8ff",
-                            borderRadius: "6px",
+                    <Button
+                      // Keeps the existing correction request functionality unchanged.
+                      type="button"
+                      size="small"
+                      variant="outlined"
+                      onClick={() =>
+                        handleRequestCorrection(entry)
+                      }
+                      sx={{
+                        // Gives Request correction a clear clickable button appearance.
+                        minWidth: "auto",
+                        height: 32,
+                        px: 1.5,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        textTransform: "none",
+                        whiteSpace: "nowrap",
+                        color: "#3169e8",
+                        borderColor: "#bcd2ff",
+                        bgcolor: "#f5f8ff",
+                        borderRadius: "6px",
 
-                            // Adds a stronger blue appearance on hover.
-                            "&:hover": {
-                              bgcolor: "#eaf1ff",
-                              borderColor: "#3169e8",
-                            },
-                          }}
-                        >
-                          Request correction
-                        </Button>
-                      )}
+                        // Adds a stronger blue appearance on hover.
+                        "&:hover": {
+                          bgcolor: "#eaf1ff",
+                          borderColor: "#3169e8",
+                        },
+                      }}
+                    >
+                      Request correction
+                    </Button>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
@@ -1219,120 +1171,78 @@ const handleCorrectionFieldChange = (event) => {
         </Box>
       )}
 
-          {/* CORRECTION REQUEST DIALOG */}
-    <Dialog
-      open={correctionOpen}
-      onClose={() => {
-        if (!correctionSaving) {
-          setCorrectionOpen(false);
-        }
-      }}
-      fullWidth
-      maxWidth={false}
-      aria-labelledby="correction-dialog-title"
-      sx={{
-        "& .MuiDialog-paper": {
-          width: 600,
-          maxWidth: "94vw",
-          borderRadius: "16px",
-          overflow: "hidden",
-          boxShadow:
-            "0 20px 60px rgba(15, 23, 42, 0.25)",
-        },
-      }}
-      slotProps={{
-        backdrop: {
-          sx: {
-            backgroundColor: "rgba(15, 23, 42, 0.48)",
+      {/* CORRECTION REQUEST DIALOG */}
+      <Dialog
+        open={correctionOpen}
+        onClose={() => {
+          if (!correctionSaving) {
+            setCorrectionOpen(false);
+          }
+        }}
+        fullWidth
+        maxWidth={false}
+        aria-labelledby="correction-dialog-title"
+        sx={{
+          "& .MuiDialog-paper": {
+            width: 600,
+            maxWidth: "94vw",
+            borderRadius: "16px",
+            overflow: "hidden",
+            boxShadow:
+              "0 20px 60px rgba(15, 23, 42, 0.25)",
           },
-        },
-      }}
-    >
-      {/* HEADER */}
-      <DialogTitle
-        id="correction-dialog-title"
-        sx={{
-          px: 2.75,
-          py: 2.1,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          color: "#1a2434",
-          fontSize: 18,
-          fontWeight: 800,
+        }}
+        slotProps={{
+          backdrop: {
+            sx: {
+              backgroundColor: "rgba(15, 23, 42, 0.48)",
+            },
+          },
         }}
       >
-        New correction request
-
-        <IconButton
-          size="small"
-          disabled={correctionSaving}
-          onClick={() => setCorrectionOpen(false)}
-          sx={{ color: "#6a7585" }}
-        >
-          <CloseRoundedIcon fontSize="small" />
-        </IconButton>
-      </DialogTitle>
-
-      <Divider />
-
-      {/* FORM */}
-      <DialogContent
-        sx={{
-          px: 2.75,
-          py: 2.75,
-        }}
-      >
-        <Box
+        {/* HEADER */}
+        <DialogTitle
+          id="correction-dialog-title"
           sx={{
+            px: 2.75,
+            py: 2.1,
             display: "flex",
-            flexDirection: "column",
-            gap: 2.25,
+            alignItems: "center",
+            justifyContent: "space-between",
+            color: "#1a2434",
+            fontSize: 18,
+            fontWeight: 800,
           }}
         >
-          {/* PROJECT */}
-          <Box>
-            <Typography
-              sx={{
-                mb: 0.7,
-                color: "#3b5068",
-                fontSize: 13,
-                fontWeight: 600,
-              }}
-            >
-              Project
-            </Typography>
+          New correction request
 
-            <TextField
-              fullWidth
-              size="small"
-              value={correctionEntry?.project || ""}
-              slotProps={{
-                input: {
-                  readOnly: true,
-                },
-              }}
-              sx={{
-                "& .MuiOutlinedInput-root": {
-                  height: 51,
-                  borderRadius: "9px",
-                  backgroundColor: "#fff",
-                },
-              }}
-            />
-          </Box>
+          <IconButton
+            size="small"
+            disabled={correctionSaving}
+            onClick={() => setCorrectionOpen(false)}
+            sx={{ color: "#6a7585" }}
+          >
+            <CloseRoundedIcon fontSize="small" />
+          </IconButton>
+        </DialogTitle>
 
-          {/* DATE AND FIELD */}
+        <Divider />
+
+        {/* FORM */}
+        <DialogContent
+          sx={{
+            px: 2.75,
+            py: 2.75,
+          }}
+        >
           <Box
             sx={{
-              display: "grid",
-              gridTemplateColumns: {
-                xs: "1fr",
-                sm: "1fr 1fr",
-              },
-              gap: 2,
+              display: "flex",
+              flexDirection: "column",
+              gap: 2.25,
             }}
           >
+            {/* PROJECT */}
             <Box>
               <Typography
                 sx={{
@@ -1342,17 +1252,13 @@ const handleCorrectionFieldChange = (event) => {
                   fontWeight: 600,
                 }}
               >
-                Production date
+                Project
               </Typography>
 
               <TextField
                 fullWidth
                 size="small"
-                value={
-                  correctionEntry?.raw?.production_date ||
-                  correctionEntry?.date ||
-                  ""
-                }
+                value={correctionEntry?.project || ""}
                 slotProps={{
                   input: {
                     readOnly: true,
@@ -1362,220 +1268,265 @@ const handleCorrectionFieldChange = (event) => {
                   "& .MuiOutlinedInput-root": {
                     height: 51,
                     borderRadius: "9px",
+                    backgroundColor: "#fff",
                   },
                 }}
               />
             </Box>
 
-            <Box>
-              <Typography
-                sx={{
-                  mb: 0.7,
-                  color: "#3b5068",
-                  fontSize: 13,
-                  fontWeight: 600,
-                }}
-              >
-                Field name
-              </Typography>
-
-              <TextField
-                select
-                fullWidth
-                size="small"
-                name="fieldName"
-                value={correctionForm.fieldName}
-                onChange={handleCorrectionFieldChange}
-                error={Boolean(correctionErrors.fieldName)}
-                helperText={correctionErrors.fieldName}
-                sx={{
-                  "& .MuiOutlinedInput-root": {
-                    minHeight: 51,
-                    borderRadius: "9px",
-                  },
-                }}
-              >
-                <MenuItem value="docs_completed">
-                  Documents completed
-                </MenuItem>
-
-                <MenuItem value="docs_received">
-                  Documents received
-                </MenuItem>
-              </TextField>
-            </Box>
-          </Box>
-
-          {/* OLD AND NEW VALUE */}
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: {
-                xs: "1fr",
-                sm: "1fr 1fr",
-              },
-              gap: 2,
-            }}
-          >
-            <Box>
-              <Typography
-                sx={{
-                  mb: 0.7,
-                  color: "#3b5068",
-                  fontSize: 13,
-                  fontWeight: 600,
-                }}
-              >
-                Old value
-              </Typography>
-
-              <TextField
-                fullWidth
-                size="small"
-                value={
-                  correctionForm.fieldName ===
-                  "docs_completed"
-                    ? correctionEntry?.completed ?? ""
-                    : correctionEntry?.received ?? ""
-                }
-                slotProps={{
-                  input: {
-                    readOnly: true,
-                  },
-                }}
-                sx={{
-                  "& .MuiOutlinedInput-root": {
-                    height: 51,
-                    borderRadius: "9px",
-                    backgroundColor: "#f8fafc",
-                  },
-                }}
-              />
-            </Box>
-
-            <Box>
-              <Typography
-                sx={{
-                  mb: 0.7,
-                  color: "#3b5068",
-                  fontSize: 13,
-                  fontWeight: 600,
-                }}
-              >
-                New value
-              </Typography>
-
-              <TextField
-                fullWidth
-                size="small"
-                type="number"
-                name="newValue"
-                placeholder="Corrected value"
-                value={correctionForm.newValue}
-                onChange={handleCorrectionFieldChange}
-                error={Boolean(correctionErrors.newValue)}
-                helperText={correctionErrors.newValue}
-                slotProps={{
-                  htmlInput: {
-                    min: 0,
-                    step: 1,
-                  },
-                }}
-                sx={{
-                  "& .MuiOutlinedInput-root": {
-                    minHeight: 51,
-                    borderRadius: "9px",
-                  },
-                }}
-              />
-            </Box>
-          </Box>
-
-          {/* REASON */}
-          <Box>
-            <Typography
+            {/* DATE AND FIELD */}
+            <Box
               sx={{
-                mb: 0.7,
-                color: "#3b5068",
-                fontSize: 13,
-                fontWeight: 600,
+                display: "grid",
+                gridTemplateColumns: {
+                  xs: "1fr",
+                  sm: "1fr 1fr",
+                },
+                gap: 2,
               }}
             >
-              Reason for change
-            </Typography>
+              <Box>
+                <Typography
+                  sx={{
+                    mb: 0.7,
+                    color: "#3b5068",
+                    fontSize: 13,
+                    fontWeight: 600,
+                  }}
+                >
+                  Production date
+                </Typography>
 
-            <TextField
-              fullWidth
-              multiline
-              minRows={3}
-              name="reason"
-              placeholder="Why this correction is needed"
-              value={correctionForm.reason}
-              onChange={handleCorrectionFieldChange}
-              error={Boolean(correctionErrors.reason)}
-              helperText={correctionErrors.reason}
+                <TextField
+                  fullWidth
+                  size="small"
+                  value={
+                    correctionEntry?.raw?.production_date ||
+                    correctionEntry?.date ||
+                    ""
+                  }
+                  slotProps={{
+                    input: {
+                      readOnly: true,
+                    },
+                  }}
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      height: 51,
+                      borderRadius: "9px",
+                    },
+                  }}
+                />
+              </Box>
+
+              <Box>
+                <Typography
+                  sx={{
+                    mb: 0.7,
+                    color: "#3b5068",
+                    fontSize: 13,
+                    fontWeight: 600,
+                  }}
+                >
+                  Field name
+                </Typography>
+
+                <TextField
+                  select
+                  fullWidth
+                  size="small"
+                  name="fieldName"
+                  value={correctionForm.fieldName}
+                  onChange={handleCorrectionFieldChange}
+                  error={Boolean(correctionErrors.fieldName)}
+                  helperText={correctionErrors.fieldName}
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      minHeight: 51,
+                      borderRadius: "9px",
+                    },
+                  }}
+                >
+                  <MenuItem value="docs_completed">
+                    Documents completed
+                  </MenuItem>
+                  <MenuItem value="batches_processed">
+                    Batches processed
+                  </MenuItem>
+                </TextField>
+              </Box>
+            </Box>
+
+            {/* OLD AND NEW VALUE */}
+            <Box
               sx={{
-                "& .MuiOutlinedInput-root": {
-                  borderRadius: "9px",
+                display: "grid",
+                gridTemplateColumns: {
+                  xs: "1fr",
+                  sm: "1fr 1fr",
                 },
+                gap: 2,
               }}
-            />
+            >
+              <Box>
+                <Typography
+                  sx={{
+                    mb: 0.7,
+                    color: "#3b5068",
+                    fontSize: 13,
+                    fontWeight: 600,
+                  }}
+                >
+                  Old value
+                </Typography>
+
+                <TextField
+                  fullWidth
+                  size="small"
+                  value={
+                    correctionForm.fieldName ===
+                      "docs_completed"
+                      ? correctionEntry?.completed ?? ""
+                      : correctionEntry?.received ?? ""
+                  }
+                  slotProps={{
+                    input: {
+                      readOnly: true,
+                    },
+                  }}
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      height: 51,
+                      borderRadius: "9px",
+                      backgroundColor: "#f8fafc",
+                    },
+                  }}
+                />
+              </Box>
+
+              <Box>
+                <Typography
+                  sx={{
+                    mb: 0.7,
+                    color: "#3b5068",
+                    fontSize: 13,
+                    fontWeight: 600,
+                  }}
+                >
+                  New value
+                </Typography>
+
+                <TextField
+                  fullWidth
+                  size="small"
+                  type="number"
+                  name="newValue"
+                  placeholder="Corrected value"
+                  value={correctionForm.newValue}
+                  onChange={handleCorrectionFieldChange}
+                  error={Boolean(correctionErrors.newValue)}
+                  helperText={correctionErrors.newValue}
+                  slotProps={{
+                    htmlInput: {
+                      min: 0,
+                      step: 1,
+                    },
+                  }}
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      minHeight: 51,
+                      borderRadius: "9px",
+                    },
+                  }}
+                />
+              </Box>
+            </Box>
+
+            {/* REASON */}
+            <Box>
+              <Typography
+                sx={{
+                  mb: 0.7,
+                  color: "#3b5068",
+                  fontSize: 13,
+                  fontWeight: 600,
+                }}
+              >
+                Reason for change
+              </Typography>
+
+              <TextField
+                fullWidth
+                multiline
+                minRows={3}
+                name="reason"
+                placeholder="Why this correction is needed"
+                value={correctionForm.reason}
+                onChange={handleCorrectionFieldChange}
+                error={Boolean(correctionErrors.reason)}
+                helperText={correctionErrors.reason}
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    borderRadius: "9px",
+                  },
+                }}
+              />
+            </Box>
           </Box>
-        </Box>
-      </DialogContent>
+        </DialogContent>
 
-  <Divider />
+        <Divider />
 
-  {/* BUTTONS */}
-  <DialogActions
-    sx={{
-      px: 2.75,
-      py: 2,
-      gap: 1,
-      backgroundColor: "#f8fafc",
-    }}
-  >
-    <Button
-      variant="outlined"
-      disabled={correctionSaving}
-      onClick={() => setCorrectionOpen(false)}
-      sx={{
-        height: 46,
-        px: 2.4,
-        borderRadius: "9px",
-        borderColor: "#d0d7e2",
-        color: "#1a2434",
-        textTransform: "none",
-        fontWeight: 600,
-      }}
-    >
-      Cancel
-    </Button>
+        {/* BUTTONS */}
+        <DialogActions
+          sx={{
+            px: 2.75,
+            py: 2,
+            gap: 1,
+            backgroundColor: "#f8fafc",
+          }}
+        >
+          <Button
+            variant="outlined"
+            disabled={correctionSaving}
+            onClick={() => setCorrectionOpen(false)}
+            sx={{
+              height: 46,
+              px: 2.4,
+              borderRadius: "9px",
+              borderColor: "#d0d7e2",
+              color: "#1a2434",
+              textTransform: "none",
+              fontWeight: 600,
+            }}
+          >
+            Cancel
+          </Button>
 
-    <Button
-      variant="contained"
-      disabled={correctionSaving}
-      onClick={handleCorrectionSubmit}
-      sx={{
-        height: 46,
-        px: 2.4,
-        borderRadius: "9px",
-        backgroundColor: "#2f6df0",
-        textTransform: "none",
-        fontWeight: 700,
-        boxShadow: "none",
-        "&:hover": {
-          backgroundColor: "#255dd8",
-          boxShadow: "none",
-        },
-      }}
-    >
-      {correctionSaving
-        ? "Submitting…"
-        : "Submit request"}
-    </Button>
-  </DialogActions>
-</Dialog>
+          <Button
+            variant="contained"
+            disabled={correctionSaving}
+            onClick={handleCorrectionSubmit}
+            sx={{
+              height: 46,
+              px: 2.4,
+              borderRadius: "9px",
+              backgroundColor: "#2f6df0",
+              textTransform: "none",
+              fontWeight: 700,
+              boxShadow: "none",
+              "&:hover": {
+                backgroundColor: "#255dd8",
+                boxShadow: "none",
+              },
+            }}
+          >
+            {correctionSaving
+              ? "Submitting…"
+              : "Submit request"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
@@ -1666,7 +1617,8 @@ function StatusChipTeamLead({ status }) {
 }
 
 
-function TeamPendingEntries() {
+// Receives the project opened from the Team Lead Projects page.
+function TeamPendingEntries({ projectId, projectName }) {
   const toast = useToast();
   const { confirm, ConfirmElement } = useConfirm();
   const [entries, setEntries] = useState([]);
@@ -1688,13 +1640,19 @@ function TeamPendingEntries() {
         throw new Error(data.message || "Failed to load team entries");
       }
 
-      setEntries(data.entries || []);
+      // Keeps only entries belonging to the project opened by the Team Lead.
+      const projectEntries = (data.entries || []).filter(
+        (entry) =>
+          String(entry.project_id) === String(projectId)
+      );
+
+      setEntries(projectEntries);
     } catch (err) {
       setError(err.message || "Failed to load team entries");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [projectId]);
 
   useEffect(() => {
     loadPendingEntries();
@@ -1842,23 +1800,17 @@ function TeamPendingEntries() {
                         </Typography>
                       </TableCell>
 
-                     <TableCell>
-                      {/* Displays Project / Reporting Category on the same line. */}
-                      {entry.project_name} / {entry.reporting_category || "—"}
-                    </TableCell>
+                      <TableCell>
+                        {/* Displays Project / Reporting Category on the same line. */}
+                        {entry.project_name} / {entry.reporting_category || "—"}
+                      </TableCell>
 
                       <TableCell sx={{ whiteSpace: "nowrap" }}>
-                        <Typography variant="body2">
-                          Received: {entry.documents_received}
-                        </Typography>
                         <Typography variant="body2">
                           Completed: {entry.documents_completed}
                         </Typography>
                         <Typography variant="body2">
                           Batches: {entry.batches_processed}
-                        </Typography>
-                        <Typography variant="body2">
-                          Errors: {entry.errors_flagged}
                         </Typography>
                       </TableCell>
 
@@ -1909,35 +1861,43 @@ function TeamPendingEntries() {
       )}
       {ConfirmElement}
     </Card>
+
   );
 }
 // =========================================================
 // TEAM LEAD DAILY ENTRY
 // =========================================================
 
-function TeamLeadDailyEntryTeamLead() {
+// Receives the project selected from the Team Lead Projects page.
+function TeamLeadDailyEntryTeamLead({ navigationData }) {
   const toast = useToast();
   const [projects, setProjects] = useState([]);
   const [saving, setSaving] = useState(false);
+  // Stores the calculated Received, Completed and Pending totals for the selected project/date.
+  const [projectSummary, setProjectSummary] = useState({
+    received: 0,
+    completed: 0,
+    backlog: 0,
+    pending: 0,
+  });
+
+  // Tracks while the project summary is being loaded.
+  const [summaryLoading, setSummaryLoading] = useState(false);
   const [entries, setEntries] = useState([]);
   const [entriesLoading, setEntriesLoading] = useState(true);
   const [entriesError, setEntriesError] = useState("");
   const [editingEntryId, setEditingEntryId] = useState(null);
   const [tlEntriesPage, setTlEntriesPage] = useState(0);
-  const TL_ROWS_PER_PAGE = 10;
+  const TL_ROWS_PER_PAGE = 5;
 
+  // Stores only the fields used by the Team Lead Daily Entry form.
   const [formData, setFormData] = useState({
     productionDate: new Date().toISOString().slice(0, 10),
     projectId: "",
     reportingCategory: "",
-    batchJobId: "",
     documentsReceived: "",
-    documentsCompleted: "",
-    batchesProcessed: "",
-    errorsFlagged: "",
     notes: "",
   });
-
   useEffect(() => {
     const loadProjects = async () => {
       try {
@@ -1950,13 +1910,21 @@ function TeamLeadDailyEntryTeamLead() {
         const assignedProjects = data.projects || [];
         setProjects(assignedProjects);
 
+        // Selects the project opened from the Projects page.
+        // Falls back to the first assigned project when Daily Entry is opened directly.
         if (assignedProjects.length > 0) {
-          const firstProject = assignedProjects[0];
+          const selectedProject =
+            assignedProjects.find(
+              (project) =>
+                String(project.project_id || project.id) ===
+                String(navigationData?.projectId)
+            ) || assignedProjects[0];
 
           setFormData((current) => ({
             ...current,
-            projectId: firstProject.project_id || firstProject.id,
-            reportingCategory: firstProject.reporting_category || "",
+            projectId:
+              selectedProject.project_id || selectedProject.id,
+            reportingCategory: "",
           }));
         }
       } catch (error) {
@@ -1968,28 +1936,74 @@ function TeamLeadDailyEntryTeamLead() {
   }, [toast]);
 
   const handleProjectChange = (event) => {
-      const projectId = event.target.value;
-      const selectedProject = projects.find(
-        (project) => String(project.project_id || project.id) === String(projectId)
+    const projectId = event.target.value;
+    const selectedProject = projects.find(
+      (project) => String(project.project_id || project.id) === String(projectId)
+    );
+
+    setFormData((current) => ({
+      ...current,
+      projectId,
+      reportingCategory: selectedProject?.reporting_category || "",
+    }));
+  };
+
+  const handleInputChange = (event) => {
+    const { name, value } = event.target;
+
+    setFormData((current) => ({
+      ...current,
+      [name]: value,
+    }));
+  };
+  // Loads Received, Completed and Pending for the selected project and date.
+  // Loads Received, Completed and Pending for the selected project and date.
+  const loadProjectSummary = async () => {
+    // Do not call the API until both project and date are selected.
+    if (!formData.projectId || !formData.productionDate) {
+      setProjectSummary({
+        received: 0,
+        completed: 0,
+        backlog: 0,
+        pending: 0,
+      });
+      return;
+    }
+
+    setSummaryLoading(true);
+
+    try {
+      // Gets the calculated project production summary from the backend.
+      const data = await apiRequest(
+        `/daily-entries/projects/${formData.projectId}/summary?date=${formData.productionDate}`
       );
 
-      setFormData((current) => ({
-        ...current,
-        projectId,
-        reportingCategory: selectedProject?.reporting_category || "",
-      }));
-    };
+      setProjectSummary({
+        received: Number(data.received || 0),
+        completed: Number(data.completed || 0),
+        backlog: Number(data.backlog || 0),
+        pending: Number(data.pending || 0),
+      });
+    } catch (error) {
+      console.error("Project summary loading error:", error);
 
-    const handleInputChange = (event) => {
-      const { name, value } = event.target;
+      setProjectSummary({
+        received: 0,
+        completed: 0,
+        backlog: 0,
+        pending: 0,
+      });
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
 
-      setFormData((current) => ({
-        ...current,
-        [name]: value,
-      }));
-    };
+  // Reloads the summary whenever the selected project or production date changes.
+  useEffect(() => {
+    loadProjectSummary();
+  }, [formData.projectId, formData.productionDate]);
 
-    const loadEntries = useCallback(async () => {
+  const loadEntries = useCallback(async () => {
     setEntriesLoading(true);
     setEntriesError("");
 
@@ -2009,6 +2023,7 @@ function TeamLeadDailyEntryTeamLead() {
           batch: entry.batch_ref || "—",
           received: entry.documents_received,
           completed: entry.documents_completed,
+          batchesProcessed: entry.batches_processed,
           status: String(entry.status || "").toUpperCase(),
         }))
       );
@@ -2024,102 +2039,103 @@ function TeamLeadDailyEntryTeamLead() {
   }, [loadEntries]);
 
   const handleEditEntry = (entry) => {
-  if (saving || entry.status !== "DRAFT") return;
+    if (saving || entry.status !== "DRAFT") return;
 
-  const original = entry.raw;
+    const original = entry.raw;
 
-  setEditingEntryId(entry.id);
+    setEditingEntryId(entry.id);
 
-  setFormData({
-    productionDate: original.production_date,
-    projectId: original.project_id,
-    reportingCategory: original.reporting_category || "",
-    batchJobId: original.batch_ref || "",
-    documentsReceived: original.documents_received ?? "",
-    documentsCompleted: original.documents_completed ?? "",
-    batchesProcessed: original.batches_processed ?? "",
-    errorsFlagged: original.errors_flagged ?? "",
-    notes: original.notes || "",
-  });
-
-  window.scrollTo({ top: 0, behavior: "smooth" });
-};
-
-  const handleSaveEntry = async (status) => {
-  if (saving) return;
-
-  if (!formData.projectId || !formData.productionDate) {
-    toast.warning("Select a project and production date.");
-    return;
-  }
-
-  const numbers = {
-    documentsReceived: Number(formData.documentsReceived || 0),
-    documentsCompleted: Number(formData.documentsCompleted || 0),
-    batchesProcessed: Number(formData.batchesProcessed || 0),
-    errorsFlagged: Number(formData.errorsFlagged || 0),
-  };
-
-  if (
-    Object.values(numbers).some(
-      (value) =>
-        !Number.isInteger(value) ||
-        value < 0 ||
-        value > 4294967295
-    )
-  ) {
-    toast.warning("Enter valid non-negative whole numbers.");
-    return;
-  }
-
-  if (numbers.documentsCompleted > numbers.documentsReceived) {
-    toast.warning("Completed documents cannot exceed received documents.");
-    return;
-  }
-
-  setSaving(true);
-
-  try {
-    const data = await apiRequest(
-      editingEntryId !== null
-        ? `/daily-entries/${editingEntryId}`
-        : "/daily-entries",
-      {
-        method: editingEntryId !== null ? "PATCH" : "POST",
-      body: JSON.stringify({
-        ...formData,
-        ...numbers,
-        projectId: Number(formData.projectId),
-        status,
-      }),
+    // Loads only the fields used by the Team Lead form while editing.
+    setFormData({
+      productionDate: original.production_date,
+      projectId: original.project_id,
+      reportingCategory: original.reporting_category || "",
+      documentsReceived: original.documents_received ?? "",
+      notes: original.notes || "",
     });
 
-    if (!data.success) {
-      throw new Error(data.message || "Failed to save draft");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleSaveEntry = async (status) => {
+    if (saving) return;
+
+    // Team Lead must select the project, date, and reporting category.
+    if (
+      !formData.projectId ||
+      !formData.productionDate ||
+      !formData.reportingCategory
+    ) {
+      toast.warning(
+        "Select a project, production date, and reporting category."
+      );
+      return;
     }
 
-    toast.success(`${data.message}. Entry ID: ${data.entryId}`);
-    setEditingEntryId(null);
-    await loadEntries();
+    // Team Lead only enters the project's received document count.
+    const numbers = {
+      documentsReceived: Number(formData.documentsReceived || 0),
+    };
 
-    setFormData((current) => ({
-      ...current,
-      batchJobId: "",
-      documentsCompleted: "",
-      batchesProcessed: "",
-      errorsFlagged: "",
-      notes: "",
-    }));
-  } catch (error) {
-    toast.error(error.message || "Failed to save draft");
-  } finally {
-    setSaving(false);
-  }
-};
+    if (
+      Object.values(numbers).some(
+        (value) =>
+          !Number.isInteger(value) ||
+          value < 0 ||
+          value > 4294967295
+      )
+    ) {
+      toast.warning("Enter valid non-negative whole numbers.");
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      const data = await apiRequest(
+        editingEntryId !== null
+          ? `/daily-entries/${editingEntryId}`
+          : "/daily-entries",
+        {
+          method: editingEntryId !== null ? "PATCH" : "POST",
+          // Sends only the fields used by the Team Lead Daily Entry form.
+          body: JSON.stringify({
+            projectId: Number(formData.projectId),
+            productionDate: formData.productionDate,
+            reportingCategory: formData.reportingCategory,
+            documentsReceived: numbers.documentsReceived,
+            notes: formData.notes,
+            status,
+          }),
+        });
+
+      if (!data.success) {
+        throw new Error(data.message || "Failed to save draft");
+      }
+
+      toast.success(`${data.message}. Entry ID: ${data.entryId}`);
+      setEditingEntryId(null);
+      await loadEntries();
+      // Refreshes the project summary after saving the Team Lead daily entry.
+      await loadProjectSummary();
+
+
+    } catch (error) {// Clears the Team Lead entry values after saving.
+      setFormData((current) => ({
+        ...current,
+        reportingCategory: "",
+        documentsReceived: "",
+        notes: "",
+      }));
+      toast.error(error.message || "Failed to save draft");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <Box sx={{ width: "100%" }}>
-            {editingEntryId !== null && (
+      {editingEntryId !== null && (
         <Typography sx={{ mb: 2, color: "#2563eb", fontWeight: 600 }}>
           Editing draft #{editingEntryId} — click Save draft to update it.
         </Typography>
@@ -2435,9 +2451,13 @@ function TeamLeadDailyEntryTeamLead() {
           EDITABLE — DRAFT
         </Typography>
       </Box>
-      
+
       {/* TEAM MEMBERS' SUBMITTED ENTRIES FOR REVIEW */}
-      <TeamPendingEntries />
+      {/* Shows pending Indexer entries only for the project opened by the Team Lead. */}
+      <TeamPendingEntries
+        projectId={navigationData?.projectId}
+        projectName={navigationData?.projectName}
+      />
       {/* =================================================
           ENTRY FORM
        ================================================= */}
@@ -2460,29 +2480,30 @@ function TeamLeadDailyEntryTeamLead() {
         <Box
           sx={{
             display: "grid",
+            // Shows Received, Completed, Backlog and Pending in four columns.
             gridTemplateColumns: {
               xs: "1fr",
-              md: "1fr 1fr",
+              sm: "repeat(4, 1fr)",
             },
             columnGap: 2.5,
             rowGap: 2.75,
           }}
         >
           <Field label="Production date">
-              <TextField
-                type="date"
-                value={formData.productionDate}
-                onChange={(event) =>
-                  setFormData((current) => ({
-                    ...current,
-                    productionDate: event.target.value,
-                  }))
-                }
-                fullWidth
-                size="small"
-                sx={inputSx}
-              />
-            </Field>
+            <TextField
+              type="date"
+              value={formData.productionDate}
+              onChange={(event) =>
+                setFormData((current) => ({
+                  ...current,
+                  productionDate: event.target.value,
+                }))
+              }
+              fullWidth
+              size="small"
+              sx={inputSx}
+            />
+          </Field>
 
           <Field label="Project">
             <TextField
@@ -2506,46 +2527,44 @@ function TeamLeadDailyEntryTeamLead() {
             </TextField>
           </Field>
 
-          <Field label="Batch / Job ID">
-              <TextField
-                name="batchJobId"
-                value={formData.batchJobId}
-                onChange={handleInputChange}
-                placeholder="e.g. ABC-2025-0520-14"
-                fullWidth
-                size="small"
-                sx={inputSx}
-              />
-            </Field>
+          {/* Reporting Category dropdown for Team Lead */}
+          <Field label="Reporting category">
+            <TextField
+              select
+              name="reportingCategory"
+              value={formData.reportingCategory}
+              onChange={handleInputChange}
+              fullWidth
+              size="small"
+              sx={inputSx}
+            >
+              <MenuItem value="">
+                Select reporting category
+              </MenuItem>
 
-            <Field label="Reporting category">
-              <TextField
-                value={formData.reportingCategory}
-                placeholder="Select a project first"
-                slotProps={{
-                  input: {
-                    readOnly: true,
-                  },
-                }}
-                fullWidth
-                size="small"
-                sx={inputSx}
-              />
-            </Field>
+              <MenuItem value="Implant Indexing">
+                Implant Indexing
+              </MenuItem>
+
+              <MenuItem value="QC Review">
+                QC Review
+              </MenuItem>
+            </TextField>
+          </Field>
 
           <Field label="Documents received">
-              <TextField
-                name="documentsReceived"
-                type="number"
-                value={formData.documentsReceived}
-                onChange={handleInputChange}
-                fullWidth
-                size="small"
-                sx={inputSx}
-              />
-            </Field>
+            <TextField
+              name="documentsReceived"
+              type="number"
+              value={formData.documentsReceived}
+              onChange={handleInputChange}
+              fullWidth
+              size="small"
+              sx={inputSx}
+            />
+          </Field>
 
-          <Field label="Documents completed">
+          {/* <Field label="Documents completed">
             <TextField
               name="documentsCompleted"
               type="number"
@@ -2555,21 +2574,9 @@ function TeamLeadDailyEntryTeamLead() {
               size="small"
               sx={inputSx}
             />
-          </Field>
-
-          <Field label="Batches processed">
-            <TextField
-              name="batchesProcessed"
-              type="number"
-              value={formData.batchesProcessed}
-              onChange={handleInputChange}
-              fullWidth
-              size="small"
-              sx={inputSx}
-            />
-          </Field>
-
-          <Field label="Errors flagged">
+          </Field> */}
+          {/* 
+          <Field label="Wrong entry">
             <TextField
               name="errorsFlagged"
               type="number"
@@ -2579,7 +2586,7 @@ function TeamLeadDailyEntryTeamLead() {
               size="small"
               sx={inputSx}
             />
-          </Field>
+          </Field> */}
 
           <Field
             label="Notes / remarks"
@@ -2600,6 +2607,82 @@ function TeamLeadDailyEntryTeamLead() {
               sx={textareaSx}
             />
           </Field>
+        </Box>
+      </Card>
+      {/* PROJECT DAILY SUMMARY */}
+      <Card
+        elevation={0}
+        sx={{
+          borderRadius: "14px",
+          border: "1px solid #dbe3ec",
+          bgcolor: "#fff",
+          p: 2.5,
+          mb: 2.5,
+        }}
+      >
+        <Typography
+          sx={{
+            fontSize: 17,
+            fontWeight: 800,
+            color: "#0f172a",
+            mb: 2,
+          }}
+        >
+          Project Daily Summary
+        </Typography>
+
+        <Box
+          sx={{
+            display: "grid",
+
+            // Keeps Received, Completed, Backlog and Pending on the same row.
+            gridTemplateColumns: "repeat(4, 1fr)",
+
+            gap: 2,
+          }}
+        >
+          {/* Received total entered by Team Lead */}
+          <Box>
+            <Typography sx={{ fontSize: 12, color: "#64748b" }}>
+              Documents Received
+            </Typography>
+
+            <Typography sx={{ fontSize: 24, fontWeight: 800 }}>
+              {summaryLoading ? "..." : projectSummary.received}
+            </Typography>
+          </Box>
+
+          {/* Completed total submitted by all Indexers */}
+          <Box>
+            <Typography sx={{ fontSize: 12, color: "#64748b" }}>
+              Documents Completed
+            </Typography>
+
+            <Typography sx={{ fontSize: 24, fontWeight: 800 }}>
+              {summaryLoading ? "..." : projectSummary.completed}
+            </Typography>
+          </Box>
+          {/* Previous unfinished work still remaining as backlog */}
+          <Box>
+            <Typography sx={{ fontSize: 12, color: "#64748b" }}>
+              Backlog
+            </Typography>
+
+            <Typography sx={{ fontSize: 24, fontWeight: 800 }}>
+              {summaryLoading ? "..." : projectSummary.backlog}
+            </Typography>
+          </Box>
+
+          {/* Remaining work for this project/date */}
+          <Box>
+            <Typography sx={{ fontSize: 12, color: "#64748b" }}>
+              Pending
+            </Typography>
+
+            <Typography sx={{ fontSize: 24, fontWeight: 800 }}>
+              {summaryLoading ? "..." : projectSummary.pending}
+            </Typography>
+          </Box>
         </Box>
       </Card>
 
@@ -2664,28 +2747,28 @@ function TeamLeadDailyEntryTeamLead() {
 
           <TableBody>
             {entriesLoading && (
-                <TableRow>
-                  <TableCell colSpan={7}>Loading entries...</TableCell>
-                </TableRow>
-              )}
+              <TableRow>
+                <TableCell colSpan={7}>Loading entries...</TableCell>
+              </TableRow>
+            )}
 
-              {!entriesLoading && entriesError && (
-                <TableRow>
-                  <TableCell colSpan={7} sx={{ color: "error.main" }}>
-                    {entriesError}
-                  </TableCell>
-                </TableRow>
-              )}
+            {!entriesLoading && entriesError && (
+              <TableRow>
+                <TableCell colSpan={7} sx={{ color: "error.main" }}>
+                  {entriesError}
+                </TableCell>
+              </TableRow>
+            )}
 
-              {!entriesLoading && !entriesError && entries.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7}>
-                    No entries yet. Save your first draft above.
-                  </TableCell>
-                </TableRow>
-              )}
-           {entries.slice(tlEntriesPage * TL_ROWS_PER_PAGE, (tlEntriesPage + 1) * TL_ROWS_PER_PAGE).map((entry) => (
-            <TableRow key={entry.id}>
+            {!entriesLoading && !entriesError && entries.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={7}>
+                  No entries yet. Save your first draft above.
+                </TableCell>
+              </TableRow>
+            )}
+            {entries.slice(tlEntriesPage * TL_ROWS_PER_PAGE, (tlEntriesPage + 1) * TL_ROWS_PER_PAGE).map((entry) => (
+              <TableRow key={entry.id}>
                 <TableCell
                   sx={{
                     fontSize: 13,
@@ -2735,6 +2818,9 @@ function TeamLeadDailyEntryTeamLead() {
                 >
                   {entry.completed}
                 </TableCell>
+                <TableCell>
+                  {entry.batchesProcessed}
+                </TableCell>
 
                 <TableCell sx={{ py: 1.15 }}>
                   <StatusChipTeamLead status={entry.status} />
@@ -2746,8 +2832,8 @@ function TeamLeadDailyEntryTeamLead() {
                       size="small"
                       variant="outlined"
                       type="button"
-                        onClick={() => handleEditEntry(entry)}
-                        disabled={saving || projects.length === 0}
+                      onClick={() => handleEditEntry(entry)}
+                      disabled={saving || projects.length === 0}
                       sx={{
                         minWidth: 28,
                         height: 28,

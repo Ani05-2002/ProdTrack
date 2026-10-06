@@ -22,6 +22,7 @@ const getLatestGuide = async (req, res) => {
         g.title,
         p.project_name,
         gv.version_label AS version,
+        gv.file_path,
         gv.change_summary AS description,
         gv.uploaded_at AS updated_date,
         gv.effective_date,
@@ -130,18 +131,18 @@ const acknowledgeGuide = async (req, res) => {
       });
     }
 
-   // Checks whether acknowledgement row already exists.
-const [existingAcknowledgements] =
-  await db.query(
-    `
+    // Checks whether acknowledgement row already exists.
+    const [existingAcknowledgements] =
+      await db.query(
+        `
     SELECT ack_id
     FROM guide_acknowledgement
     WHERE version_id = ?
       AND user_id = ?
     LIMIT 1
     `,
-    [versionId, userId]
-  );
+        [versionId, userId]
+      );
 
     // Existing unread row ko read mein update karta hai.
     if (existingAcknowledgements.length > 0) {
@@ -441,7 +442,12 @@ const downloadGuide = async (req, res, next) => {
         message: "Guide file is not available",
       });
     }
-
+    // Prevents guide downloads from being returned as 304 cached responses.
+    res.set({
+      "Cache-Control": "no-store, no-cache, must-revalidate, private",
+      "Pragma": "no-cache",
+      "Expires": "0",
+    });
     // Sends the PDF file to the client.
     return res.download(
       realFile,
@@ -734,8 +740,8 @@ const getGuideCompliance = async (req, res) => {
       users.length === 0
         ? 0
         : Math.round(
-            (acknowledgedCount / users.length) * 100
-          );
+          (acknowledgedCount / users.length) * 100
+        );
 
     // Returns guide information and employee-level compliance.
     return res.status(200).json({
@@ -810,16 +816,16 @@ const uploadGuideVersion = async (req, res) => {
       req.body.requiresAck === undefined
         ? 1
         : ["1", "true", "yes"].includes(
-            String(req.body.requiresAck).toLowerCase()
-          )
-        ? 1
-        : 0;
+          String(req.body.requiresAck).toLowerCase()
+        )
+          ? 1
+          : 0;
 
     // Validates the selected guide ID.
     if (!Number.isSafeInteger(guideId) || guideId <= 0) {
       // Deletes the uploaded file when validation fails.
       if (req.file?.path) {
-        await fs.unlink(req.file.path).catch(() => {});
+        await fs.unlink(req.file.path).catch(() => { });
       }
 
       return res.status(400).json({
@@ -832,7 +838,7 @@ const uploadGuideVersion = async (req, res) => {
     if (!version) {
       // Deletes the uploaded file when validation fails.
       if (req.file?.path) {
-        await fs.unlink(req.file.path).catch(() => {});
+        await fs.unlink(req.file.path).catch(() => { });
       }
 
       return res.status(400).json({
@@ -842,10 +848,11 @@ const uploadGuideVersion = async (req, res) => {
     }
 
     // Ensures that Multer received a PDF.
-    if (!req.file) {
+    // Ensure that Multer received a PDF or Word document.
+    if (!version || !req.file) {
       return res.status(400).json({
         success: false,
-        message: "Guide PDF file is required",
+        message: "Version and PDF, Word, or Excel file are required",
       });
     }
 
@@ -871,8 +878,8 @@ const uploadGuideVersion = async (req, res) => {
     );
 
     // Loads the current latest version before it is replaced by the new upload.
-const [previousLatestRows] = await connection.query(
-  `
+    const [previousLatestRows] = await connection.query(
+      `
   SELECT
     version_id
   FROM guide_version
@@ -883,19 +890,19 @@ const [previousLatestRows] = await connection.query(
     version_id DESC
   LIMIT 1
   `,
-  [guideId]
-);
+      [guideId]
+    );
 
-// Stores the previous latest version ID so its guide sections can be copied later.
-const previousLatestVersionId =
-  previousLatestRows.length > 0
-    ? Number(previousLatestRows[0].version_id)
-    : null;
+    // Stores the previous latest version ID so its guide sections can be copied later.
+    const previousLatestVersionId =
+      previousLatestRows.length > 0
+        ? Number(previousLatestRows[0].version_id)
+        : null;
 
     // Prevents uploading a version for a nonexistent guide.
     if (guideRows.length === 0) {
       // Deletes the already-uploaded PDF because the database operation cannot continue.
-      await fs.unlink(req.file.path).catch(() => {});
+      await fs.unlink(req.file.path).catch(() => { });
 
       return res.status(404).json({
         success: false,
@@ -922,7 +929,7 @@ const previousLatestVersionId =
     // Prevents duplicate version labels for the same guide.
     if (duplicateVersions.length > 0) {
       // Removes the unused uploaded PDF.
-      await fs.unlink(req.file.path).catch(() => {});
+      await fs.unlink(req.file.path).catch(() => { });
 
       return res.status(409).json({
         success: false,
@@ -982,13 +989,13 @@ const previousLatestVersionId =
     const versionId = insertResult.insertId;
 
     // ======================================================
-// COPY GUIDE SECTIONS FROM PREVIOUS LATEST VERSION
-// ======================================================
+    // COPY GUIDE SECTIONS FROM PREVIOUS LATEST VERSION
+    // ======================================================
 
-// Copies the previous latest version's preview sections into the new version.
-if (previousLatestVersionId) {
-  await connection.query(
-    `
+    // Copies the previous latest version's preview sections into the new version.
+    if (previousLatestVersionId) {
+      await connection.query(
+        `
     INSERT INTO guide_section
     (
       version_id,
@@ -1011,12 +1018,12 @@ if (previousLatestVersionId) {
 
     ORDER BY sort_order ASC
     `,
-    [
-      versionId,
-      previousLatestVersionId,
-    ]
-  );
-}
+        [
+          versionId,
+          previousLatestVersionId,
+        ]
+      );
+    }
 
     // Creates pending acknowledgements only when this version requires acknowledgement.
     if (requiresAck === 1) {
@@ -1196,15 +1203,15 @@ const getPendingAckGuide = async (req, res) => {
       success: true,
       hasPending: true,
       guide: {
-        version_id:    guide.version_id,
-        guide_id:      guide.guide_id,
-        title:         guide.guide_title,
-        project_name:  guide.project_name,
-        version:       guide.version,
+        version_id: guide.version_id,
+        guide_id: guide.guide_id,
+        title: guide.guide_title,
+        project_name: guide.project_name,
+        version: guide.version,
         change_summary: guide.change_summary,
-        uploaded_at:   formatDate(guide.uploaded_at),
+        uploaded_at: formatDate(guide.uploaded_at),
         effective_date: formatDate(guide.effective_date),
-        requires_ack:  guide.requires_ack,
+        requires_ack: guide.requires_ack,
       },
     });
   } catch (error) {
@@ -1481,6 +1488,182 @@ const updateGuideSection = async (req, res) => {
   }
 };
 
+
+// Creates a new guide and uploads its first version.
+
+const createGuide = async (req, res) => {
+  // Stores the database connection once it is established.
+  let connection;
+
+  // Imports the filesystem API for uploaded-file cleanup.
+  const fs = require("fs/promises");
+
+  // Tracks whether the database transaction has started.
+  let transactionStarted = false;
+
+  try {
+    // Gets a dedicated database connection inside the error handler.
+    connection = await db.getConnection();
+
+    // Reads the project, guide name and version from the form.
+    const projectId = Number(req.body.projectId);
+    const title = req.body.title?.trim();
+    const version = req.body.version?.trim();
+
+    // Requires acknowledgement unless explicitly disabled.
+    const requiresAck =
+      req.body.requiresAck === undefined ||
+        ["1", "true", "yes"].includes(
+          String(req.body.requiresAck).toLowerCase()
+        )
+        ? 1
+        : 0;
+
+    // Validates the selected project.
+    if (!Number.isSafeInteger(projectId) || projectId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "A valid project is required",
+      });
+    }
+
+    // Validates the guide name against the existing VARCHAR(160) column.
+    if (!title || title.length > 160) {
+      return res.status(400).json({
+        success: false,
+        message: "Guide name must be between 1 and 160 characters",
+      });
+    }
+
+    // Requires a version and an uploaded document.
+    if (!version || !req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "Version and PDF or Word file are required",
+      });
+    }
+
+    // Confirms that the selected project exists.
+    const [projects] = await connection.query(
+      "SELECT project_id FROM project WHERE project_id = ? LIMIT 1",
+      [projectId]
+    );
+
+    if (projects.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Project not found",
+      });
+    }
+
+    // Prevents creating another guide with the same name for this project.
+    const [existing] = await connection.query(
+      `SELECT guide_id
+       FROM guide
+       WHERE project_id = ? AND title = ?
+       LIMIT 1`,
+      [projectId, title]
+    );
+
+    if (existing.length > 0) {
+      return res.status(409).json({
+        success: false,
+        message: "A guide with this name already exists for this project",
+      });
+    }
+
+    // Starts a transaction so the guide and first version are saved together.
+    await connection.beginTransaction();
+    transactionStarted = true;
+
+    // Inserts the new guide into the existing guide table.
+    const [guideResult] = await connection.query(
+      "INSERT INTO guide (project_id, title) VALUES (?, ?)",
+      [projectId, title]
+    );
+
+    // Stores the uploaded document's relative path.
+    const filePath = `uploads/guides/${req.file.filename}`;
+
+    // Creates the first version of the new guide.
+    const [versionResult] = await connection.query(
+      `INSERT INTO guide_version
+       (guide_id, version_label, file_path, is_latest,
+        requires_ack, uploaded_by)
+       VALUES (?, ?, ?, 1, ?, ?)`,
+      [
+        guideResult.insertId,
+        version,
+        filePath,
+        requiresAck,
+        req.user.id,
+      ]
+    );
+
+    // Creates pending acknowledgements for assigned, active indexers.
+    if (requiresAck === 1) {
+      await connection.query(
+        `INSERT INTO guide_acknowledgement
+         (version_id, user_id, status, acknowledged_at)
+         SELECT ?, pa.user_id, 'unread', NULL
+         FROM project_assignment pa
+         JOIN users u ON u.user_id = pa.user_id
+         JOIN role r ON r.role_id = u.role_id
+         WHERE pa.project_id = ?
+           AND r.code = 'indexer'
+           AND u.status = 'active'`,
+        [versionResult.insertId, projectId]
+      );
+    }
+
+    // Saves all database records together.
+    await connection.commit();
+    transactionStarted = false;
+
+    // Returns the newly created guide.
+    return res.status(201).json({
+      success: true,
+      message: "Guide created successfully",
+      guide: {
+        guide_id: guideResult.insertId,
+        version_id: versionResult.insertId,
+        project_id: projectId,
+        title,
+        version,
+        file_path: filePath,
+      },
+    });
+  } catch (error) {
+    // Reverts database changes if the transaction fails.
+    if (transactionStarted) {
+      await connection.rollback();
+    }
+
+    // Logs the actual backend error.
+    console.error("Create Guide Error:", error);
+
+    // Returns a safe error response.
+    return res.status(500).json({
+      success: false,
+      message: "Failed to create guide",
+    });
+  } finally {
+    // Deletes the uploaded file if the request did not succeed.
+    if (!res.statusCode || res.statusCode >= 400) {
+      if (req.file?.path) {
+        await fs.unlink(req.file.path).catch(() => { });
+      }
+    }
+
+    // Releases the database connection.
+    // Releases the connection only if it was established.
+    if (connection) {
+      connection.release();
+    }
+  }
+};
+
+
 // ======================================================
 // EXPORTS
 // ======================================================
@@ -1497,4 +1680,5 @@ module.exports = {
   getPendingAckGuide,
   getGuideSections,
   updateGuideSection,
+  createGuide,
 };

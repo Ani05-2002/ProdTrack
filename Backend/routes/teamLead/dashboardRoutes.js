@@ -15,6 +15,7 @@ const {
   getDashboardTeamMembers,
   getTeamAvailability,
   getAvailabilityProductivity,
+  getProjectDailySummary,
 } = require("../../controllers/teamLead/dashboardController");
 
 // Creates an Express router for Team Lead dashboard APIs.
@@ -71,6 +72,14 @@ router.get(
   authenticate,
   allowRoles("teamLead"),
   getAvailabilityProductivity
+);
+
+// Gets date-wise and project-wise Received, Completed, Backlog and Pending.
+router.get(
+  "/dashboard/project-daily-summary",
+  authenticate,
+  allowRoles("teamLead"),
+  getProjectDailySummary
 );
 
 // Exports the Team Lead dashboard router for index.js.

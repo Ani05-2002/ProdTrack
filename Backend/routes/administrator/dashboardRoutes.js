@@ -1,9 +1,13 @@
 const express = require("express");
-const router  = express.Router();
+const router = express.Router();
 
-const { getAdminDashboard } = require("../../controllers/administrator/dashboardController");
+// Imports Admin Dashboard controllers.
+const {
+  getAdminDashboard,
+  getProjectDailySummary,
+} = require("../../controllers/administrator/dashboardController");
 const authMiddleware = require("../../middleware/authMiddleware");
-const allowRoles    = require("../../middleware/roleMiddleware");
+const allowRoles = require("../../middleware/roleMiddleware");
 
 // GET /api/admin/dashboard  — admin only
 router.get(
@@ -11,6 +15,14 @@ router.get(
   authMiddleware,
   allowRoles("administrator"),
   getAdminDashboard
+);
+
+// GET /api/admin/dashboard/project-daily-summary — admin only
+router.get(
+  "/dashboard/project-daily-summary",
+  authMiddleware,
+  allowRoles("administrator"),
+  getProjectDailySummary
 );
 
 module.exports = router;

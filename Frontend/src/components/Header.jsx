@@ -50,6 +50,31 @@ export default function Header({
   // Controls whether the search result dropdown is visible.
   const [searchOpen, setSearchOpen] = useState(false);
 
+  // Close global search when another page opens a form.
+  // Close global search when another form opens.
+  useEffect(() => {
+    // Reset the search popup and its contents.
+    const closeSearch = () => {
+      setSearchOpen(false);
+      setSearchQuery("");
+      setSearchResults([]);
+      setSearchLoading(false);
+    };
+
+    // Listen for the Add User form opening.
+    window.addEventListener(
+      "prodtrack-close-search",
+      closeSearch
+    );
+
+    // Remove the listener when Header unmounts.
+    return () => {
+      window.removeEventListener(
+        "prodtrack-close-search",
+        closeSearch
+      );
+    };
+  }, []);
   // =========================================================
   // LOAD NOTIFICATION COUNT
   // =========================================================
@@ -115,57 +140,64 @@ export default function Header({
   // GLOBAL BASIC SEARCH
   // =========================================================
 
+  // Search for projects, users and entries.
   useEffect(() => {
-    // Removes unnecessary spaces from the typed search text.
+    // Prevent outdated API requests from updating search.
+    let cancelled = false;
+
+    // Remove extra spaces from the query.
     const trimmedQuery = searchQuery.trim();
 
-    // Clears and closes search when no text is entered.
+    // Close the popup when search is empty.
     if (!trimmedQuery) {
       setSearchResults([]);
       setSearchOpen(false);
+      setSearchLoading(false);
       return;
     }
 
-    // Delays the request slightly so the API is not called on every instant keystroke.
+    // Wait briefly before searching.
     const searchTimer = setTimeout(async () => {
       try {
-        // Enables the loading state.
+        // Show loading state.
         setSearchLoading(true);
 
-        // Calls the backend global search API.
+        // Request matching results from the backend.
         const data = await apiRequest(
-          `/search?q=${encodeURIComponent(
-            trimmedQuery
-          )}`
+          `/search?q=${encodeURIComponent(trimmedQuery)}`
         );
 
-        // Stores the returned search results.
-        setSearchResults(
-          data.results || []
-        );
+        // Ignore outdated requests.
+        if (cancelled) return;
 
-        // Opens the dropdown after the request completes.
-        setSearchOpen(true);
+        // Store the latest search results.
+        setSearchResults(data.results || []);
+
+        // Open the popup only if search currently has focus.
+        setSearchOpen(
+          document.activeElement ===
+          document.getElementById("global-search-input")
+        );
       } catch (error) {
-        // Logs global search errors.
-        console.error(
-          "Header global search error:",
-          error
-        );
+        // Ignore errors from cancelled requests.
+        if (cancelled) return;
 
-        // Clears stale search results when the request fails.
+        console.error("Header search error:", error);
+
+        // Clear search results after an error.
         setSearchResults([]);
-
-        // Closes the dropdown on an API error.
         setSearchOpen(false);
       } finally {
-        // Stops the loading state.
-        setSearchLoading(false);
+        // Stop loading for the active request.
+        if (!cancelled) {
+          setSearchLoading(false);
+        }
       }
     }, 350);
 
-    // Cancels the previous delayed search if the user types again.
+    // Cancel the previous search when the query changes.
     return () => {
+      cancelled = true;
       clearTimeout(searchTimer);
     };
   }, [searchQuery]);
@@ -208,81 +240,81 @@ export default function Header({
       }
     };
 
-// Handles search-result navigation according to the logged-in user role.
-const handleSearchResultClick = (result) => {
-  // Closes the search dropdown after a result is selected.
-  setSearchOpen(false);
+  // Handles search-result navigation according to the logged-in user role.
+  const handleSearchResultClick = (result) => {
+    // Closes the search dropdown after a result is selected.
+    setSearchOpen(false);
 
-  // Clears the search box after selection.
-  setSearchQuery("");
+    // Clears the search box after selection.
+    setSearchQuery("");
 
-  // Normalizes role names such as "Core Team" → "coreteam".
-  const normalizedRole = String(role || "")
-    .replace(/\s+/g, "")
-    .toLowerCase();
+    // Normalizes role names such as "Core Team" → "coreteam".
+    const normalizedRole = String(role || "")
+      .replace(/\s+/g, "")
+      .toLowerCase();
 
-  // Core Team and Administrator use management pages.
-  if (
-    normalizedRole === "coreteam" ||
-    normalizedRole === "administrator"
-  ) {
-    // Project results open Project Master.
-    if (result.type === "project") {
-      onNavigate?.("project-master");
-      return;
+    // Core Team and Administrator use management pages.
+    if (
+      normalizedRole === "coreteam" ||
+      normalizedRole === "administrator"
+    ) {
+      // Project results open Project Master.
+      if (result.type === "project") {
+        onNavigate?.("project-master");
+        return;
+      }
+
+      // User results open User Master.
+      if (result.type === "user") {
+        onNavigate?.("users");
+        return;
+      }
+
+      // Entry results currently open Analytics & KPIs.
+      if (result.type === "entry") {
+        onNavigate?.("analytics-kpis");
+        return;
+      }
     }
 
-    // User results open User Master.
-    if (result.type === "user") {
-      onNavigate?.("users");
-      return;
+    // Team Lead uses operational project and entry pages.
+    if (normalizedRole === "teamlead") {
+      // Project results open Projects.
+      if (result.type === "project") {
+        onNavigate?.("projects");
+        return;
+      }
+
+      // Entry results open Daily Entry.
+      if (result.type === "entry") {
+        onNavigate?.("daily-entry");
+        return;
+      }
+
+      // User results open My Team.
+      if (result.type === "user") {
+        onNavigate?.("my-team");
+        return;
+      }
     }
 
-    // Entry results currently open Analytics & KPIs.
-    if (result.type === "entry") {
-      onNavigate?.("analytics-kpis");
-      return;
-    }
-  }
-
-  // Team Lead uses operational project and entry pages.
-  if (normalizedRole === "teamlead") {
-    // Project results open Projects.
+    // Indexer project results open Projects.
     if (result.type === "project") {
       onNavigate?.("projects");
       return;
     }
 
-    // Entry results open Daily Entry.
+    // Indexer entry results open Daily Entry.
     if (result.type === "entry") {
       onNavigate?.("daily-entry");
       return;
     }
 
-    // User results open My Team.
+    // Indexer user results currently open My Profile.
     if (result.type === "user") {
-      onNavigate?.("my-team");
-      return;
+      onNavigate?.("my-profile");
     }
-  }
-
-  // Indexer project results open Projects.
-  if (result.type === "project") {
-    onNavigate?.("projects");
-    return;
-  }
-
-  // Indexer entry results open Daily Entry.
-  if (result.type === "entry") {
-    onNavigate?.("daily-entry");
-    return;
-  }
-
-  // Indexer user results currently open My Profile.
-  if (result.type === "user") {
-    onNavigate?.("my-profile");
-  }
-};
+  };
 
   return (
     <AppBar
@@ -445,12 +477,16 @@ const handleSearchResultClick = (result) => {
               }}
 
               // Reopens existing results when the user focuses the search box again.
+
+              // Open search results only when there is a search query.
               onFocus={() => {
-                if (
-                  searchResults.length > 0
-                ) {
+                if (searchQuery.trim() && searchResults.length > 0) {
                   setSearchOpen(true);
                 }
+              }}
+              // Close search results when the search input loses focus.
+              onBlur={() => {
+                setSearchOpen(false);
               }}
 
               sx={{
@@ -514,7 +550,7 @@ const handleSearchResultClick = (result) => {
                 {/* Shows a message when no results match the search. */}
                 {!searchLoading &&
                   searchResults.length ===
-                    0 && (
+                  0 && (
                     <Typography
                       sx={{
                         px: 1.5,
@@ -533,8 +569,12 @@ const handleSearchResultClick = (result) => {
                     (result) => (
                       <Box
                         key={`${result.type}-${result.id}`}
-                         // Navigates to the correct page when a search result is selected.
-                          // Uses role-based navigation for the selected search result.
+                        // Navigates to the correct page when a search result is selected.
+                        // Uses role-based navigation for the selected search result.
+                        // Prevent search input from losing focus before result selection.
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                        }}
                         onClick={() => {
                           handleSearchResultClick(result);
                         }}

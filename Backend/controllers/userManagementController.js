@@ -138,8 +138,8 @@ const getAllUsers = async (req, res) => {
 
       project_ids: user.project_ids
         ? user.project_ids
-            .split(",")
-            .map(Number)
+          .split(",")
+          .map(Number)
         : [],
     }));
 
@@ -290,7 +290,7 @@ const getUserDepartments = async (req, res) => {
 // ============================================================
 
 const createUser = async (req, res) => {
- 
+
   let connection;
 
   try {
@@ -312,20 +312,33 @@ const createUser = async (req, res) => {
     // Required fields
     // --------------------------------------------------------
 
+    // if (
+    //   !name ||
+    //   !username ||
+    //   !email ||
+    //   !password ||
+    //   !roleId
+    // ) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message:
+    //       "Name, username, email, password and role are required",
+    //   });
+    // }
+
+    // Require the common account fields.
     if (
-      !name ||
-      !username ||
-      !email ||
+      !name?.trim() ||
+      !username?.trim() ||
       !password ||
       !roleId
     ) {
       return res.status(400).json({
         success: false,
         message:
-          "Name, username, email, password and role are required",
+          "Name, username, password and role are required",
       });
     }
-
 
     if (
       !["active", "inactive"].includes(status)
@@ -352,25 +365,57 @@ const createUser = async (req, res) => {
     );
 
     if (roleRows.length === 0) {
-          return res.status(400).json({
-            success: false,
-            message: "Invalid role",
-          });
-        }
-
-        if (
-      !name ||
-      !username ||
-      !email ||
-      !password ||
-      !roleId
-    ) {
       return res.status(400).json({
         success: false,
-        message:
-          "Name, username, email, password and role are required",
+        message: "Invalid role",
       });
     }
+
+    // if (
+    //   !name ||
+    //   !username ||
+    //   !email ||
+    //   !password ||
+    //   !roleId
+    // ) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message:
+    //       "Name, username, email, password and role are required",
+    //   });
+    // }
+
+    // Check whether the new user is an Indexer.
+    const isIndexer =
+      String(roleRows[0].code).toLowerCase() === "indexer";
+
+    // Check whether the logged-in user is an Administrator.
+    const isAdministrator =
+      String(req.user?.role || "").toLowerCase() ===
+      "administrator";
+
+    // Convert an empty email address to null.
+    const normalizedEmail =
+      String(email || "").trim().toLowerCase() || null;
+
+    // Allow only Administrators to create Indexers without email.
+    if (!normalizedEmail && !(isIndexer && isAdministrator)) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required for this account",
+      });
+    }
+
+    // Validate the supplied username.
+    if (!/^[a-zA-Z0-9._-]{3,60}$/.test(username)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid username format",
+      });
+    }
+
+    // Use the supplied password for bcrypt hashing.
+    // const actualPassword = String(password);
 
     const actualPassword =
       String(password);
@@ -378,25 +423,35 @@ const createUser = async (req, res) => {
     // Check duplicate username/email
     // --------------------------------------------------------
 
+    // const [existingUsers] = await db.query(
+    //   `
+    //   SELECT user_id
+    //   FROM users
+    //   WHERE email = ?
+    //      OR username = ?
+    //   LIMIT 1
+    //   `,
+    //   [email, username]
+    // );
+
+    // if (existingUsers.length > 0) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message:
+    //       "Email or username already exists",
+    //   });
+    // }
+    // Check whether the username or supplied email already exists.
     const [existingUsers] = await db.query(
       `
-      SELECT user_id
-      FROM users
-      WHERE email = ?
-         OR username = ?
-      LIMIT 1
-      `,
-      [email, username]
+  SELECT user_id
+  FROM users
+  WHERE username = ?
+     OR (? IS NOT NULL AND email = ?)
+  LIMIT 1
+  `,
+      [username, normalizedEmail, normalizedEmail]
     );
-
-    if (existingUsers.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Email or username already exists",
-      });
-    }
-
 
     // --------------------------------------------------------
     // Validate Team Lead
@@ -523,7 +578,7 @@ const createUser = async (req, res) => {
           employeeCode,
           name,
           username,
-          email,
+          normalizedEmail,
           passwordHash,
           departmentId || null,
           designation || null,
@@ -563,41 +618,88 @@ const createUser = async (req, res) => {
 
     await connection.commit();
 
+    // let emailSent = false;
+
+    // try {
+    //   await sendPasswordEmail({
+    //     name,
+    //     email,
+    //     password: actualPassword,
+    //     passwordSource: "New User",
+    //     subject:
+    //       "Your ProdTrack account password",
+    //   });
+
+    //   emailSent = true;
+    // } catch (emailError) {
+    //   console.error(
+    //     "Create User Email Error:",
+    //     emailError.message
+    //   );
+    // }
+    // Track whether credentials were delivered by email.
     let emailSent = false;
 
-    try {
-      await sendPasswordEmail({
-        name,
-        email,
-        password: actualPassword,
-        passwordSource: "New User",
-        subject:
-          "Your ProdTrack account password",
-      });
+    // Send an email only when an address is available.
+    if (normalizedEmail) {
+      try {
+        // Send the existing account-creation email.
+        await sendPasswordEmail({
+          name,
+          email: normalizedEmail,
+          password: actualPassword,
+          passwordSource: "New User",
+          subject: "Your ProdTrack account password",
+        });
 
-      emailSent = true;
-    } catch (emailError) {
-      console.error(
-        "Create User Email Error:",
-        emailError.message
-      );
+        // Record successful delivery.
+        emailSent = true;
+      } catch (emailError) {
+        // Do not fail account creation if email delivery fails.
+        console.error(
+          "Create User Email Error:",
+          emailError.message
+        );
+      }
     }
+    // return res.status(201).json({
+    //   success: true,
 
+    //   message: emailSent
+    //     ? "User created and password emailed successfully"
+    //     : "User created, but password email could not be sent",
+
+    //   emailSent,
+
+    //   user: {
+    //     id: userId,
+    //     employee_id: employeeCode,
+    //     name,
+    //     username,
+    //     email,
+    //   },
+    // });
+
+    // Return the created account without exposing its password.
     return res.status(201).json({
       success: true,
 
-      message: emailSent
-        ? "User created and password emailed successfully"
-        : "User created, but password email could not be sent",
+      // Explain how the account credentials will be delivered.
+      message: !normalizedEmail
+        ? "User created. Admin must provide login credentials."
+        : emailSent
+          ? "User created and password emailed successfully"
+          : "User created, but password email could not be sent",
 
       emailSent,
 
+      // Return the new user's basic details.
       user: {
         id: userId,
         employee_id: employeeCode,
         name,
         username,
-        email,
+        email: normalizedEmail,
       },
     });
 

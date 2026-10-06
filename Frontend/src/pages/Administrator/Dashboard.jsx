@@ -3,19 +3,19 @@ import apiRequest from "../../lib/api.js";
 
 import { Box, Button, Card, Grid, Link, Paper, Typography, Skeleton } from "@mui/material";
 
-import MoveToInboxRoundedIcon        from "@mui/icons-material/MoveToInboxRounded";
+import MoveToInboxRoundedIcon from "@mui/icons-material/MoveToInboxRounded";
 import AssignmentTurnedInRoundedIcon from "@mui/icons-material/AssignmentTurnedInRounded";
-import AccessTimeRoundedIcon         from "@mui/icons-material/AccessTimeRounded";
-import PeopleAltRoundedIcon          from "@mui/icons-material/PeopleAltRounded";
-import BarChartRoundedIcon           from "@mui/icons-material/BarChartRounded";
+import AccessTimeRoundedIcon from "@mui/icons-material/AccessTimeRounded";
+import PeopleAltRoundedIcon from "@mui/icons-material/PeopleAltRounded";
+import BarChartRoundedIcon from "@mui/icons-material/BarChartRounded";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
-const FONT        = '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+const FONT = '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 const CARD_SHADOW = "0 1px 3px rgba(16,30,54,.07), 0 4px 16px rgba(16,30,54,.06)";
-const LINE        = "#dfe4ec";
-const LINE2       = "#e8ecf3";
-const MUTED       = "#6a7585";
-const HEAD        = "#1a2434";
+const LINE = "#dfe4ec";
+const LINE2 = "#e8ecf3";
+const MUTED = "#6a7585";
+const HEAD = "#1a2434";
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -43,8 +43,8 @@ function StatCard({ icon, iconBg, iconColor, label, value, trend, trendColor, lo
         {loading
           ? <Skeleton variant="text" width={80} height={36} />
           : <Typography sx={{ fontFamily: FONT, color: HEAD, fontSize: 27, fontWeight: 800, lineHeight: 1.05, letterSpacing: "-0.6px" }}>
-              {value}
-            </Typography>
+            {value}
+          </Typography>
         }
         {trend && !loading && (
           <Typography sx={{ fontFamily: FONT, color: trendColor, fontSize: 11.5, fontWeight: 600, mt: "2px" }}>
@@ -110,11 +110,11 @@ function TrendChart({ trend, loading }) {
     );
   }
 
-  const maxVal  = Math.max(...trend.map((t) => t.received), 1);
+  const maxVal = Math.max(...trend.map((t) => t.received), 1);
   const PADDING = 16;
-  const WIDTH   = 800;
-  const HEIGHT  = 160;
-  const step    = trend.length > 1
+  const WIDTH = 800;
+  const HEIGHT = 160;
+  const step = trend.length > 1
     ? (WIDTH - PADDING * 2) / (trend.length - 1)
     : WIDTH / 2;
 
@@ -128,9 +128,11 @@ function TrendChart({ trend, loading }) {
   const receivedPts = trend
     .map((t, i) => `${PADDING + i * step},${toY(t.received).toFixed(1)}`)
     .join(" ");
+  // Detects when only one month is available in the new workflow.
+  const isSingleMonth = trend.length === 1;
 
-  const firstX  = PADDING;
-  const lastX   = PADDING + (trend.length - 1) * step;
+  const firstX = PADDING;
+  const lastX = PADDING + (trend.length - 1) * step;
   const fillPts = `${completedPts} ${lastX},${HEIGHT} ${firstX},${HEIGHT}`;
 
   return (
@@ -147,7 +149,7 @@ function TrendChart({ trend, loading }) {
         >
           <defs>
             <linearGradient id="adminFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%"   stopColor="#3478ed" stopOpacity=".18" />
+              <stop offset="0%" stopColor="#3478ed" stopOpacity=".18" />
               <stop offset="100%" stopColor="#3478ed" stopOpacity=".02" />
             </linearGradient>
           </defs>
@@ -165,11 +167,30 @@ function TrendChart({ trend, loading }) {
           <polyline points={receivedPts} fill="none"
             stroke="#8052df" strokeWidth="2"
             strokeDasharray="7 6" strokeLinecap="round" />
+
+          {/* Shows visible data points when only one month is available. */}
+          {isSingleMonth && (
+            <>
+              <circle
+                cx={WIDTH / 2}
+                cy={toY(trend[0].completed)}
+                r="5"
+                fill="#3478ed"
+              />
+
+              <circle
+                cx={WIDTH / 2}
+                cy={toY(trend[0].received)}
+                r="5"
+                fill="#8052df"
+              />
+            </>
+          )}
         </svg>
       </Box>
 
       {/* Month labels — rendered as HTML below the SVG, properly spaced */}
-      {trend.length > 1 && (
+      {trend.length > 0 && (
         <Box sx={{ display: "flex", justifyContent: "space-between", mt: "6px", px: "2px" }}>
           {trend.map((t) => (
             <Typography key={t.monthLabel} sx={{
@@ -189,7 +210,7 @@ function TrendChart({ trend, loading }) {
       <Box sx={{ display: "flex", gap: 2.5, pt: 1, flexWrap: "wrap" }}>
         {[
           { label: "Completed", dash: false },
-          { label: "Received",  dash: true  },
+          { label: "Received", dash: true },
         ].map(({ label, dash }) => (
           <Box key={label} sx={{ display: "flex", alignItems: "center", gap: "5px", fontFamily: FONT, fontSize: 12, color: MUTED }}>
             <Box component="i" sx={{
@@ -250,8 +271,8 @@ function KpiCard({ label, value, note, color, action, nav, onNavigate, loading }
         {loading
           ? <Skeleton variant="text" width={80} height={48} sx={{ mx: "auto" }} />
           : <Typography sx={{ fontFamily: FONT, fontSize: { xs: 34, sm: 40 }, fontWeight: 800, color, lineHeight: 1, letterSpacing: "-1px" }}>
-              {value}
-            </Typography>
+            {value}
+          </Typography>
         }
         <Typography sx={{ fontFamily: FONT, color: MUTED, fontSize: 12.5, mt: 0.75 }}>
           {note}
@@ -261,16 +282,206 @@ function KpiCard({ label, value, note, color, action, nav, onNavigate, loading }
   );
 }
 
+// Defines the column widths for the Project Daily Summary table.
+const DAILY_SUMMARY_COL =
+  "1.1fr 1.8fr 1.2fr 1.2fr 1fr 1fr";
+
+// Displays the Administrator Project Daily Summary.
+function ProjectDailySummaryTable({
+  rows,
+  page,
+  setPage,
+  rowsPerPage,
+}) {
+  // Gets only the records for the current page.
+  const paginatedRows = rows.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage
+  );
+
+  return (
+    <PanelCard title="Project Daily Summary">
+      <Box sx={{ overflowX: "auto" }}>
+        {/* Displays table headings. */}
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: DAILY_SUMMARY_COL,
+            minWidth: 850,
+            px: 2,
+            py: 1.2,
+            bgcolor: "#f8fafc",
+            borderBottom: `1px solid ${LINE2}`,
+          }}
+        >
+          {[
+            "DATE",
+            "PROJECT",
+            "RECEIVED",
+            "COMPLETED",
+            "BACKLOG",
+            "PENDING",
+          ].map((column) => (
+            <Typography
+              key={column}
+              sx={{
+                fontSize: 11,
+                fontWeight: 800,
+                color: MUTED,
+                letterSpacing: "0.4px",
+              }}
+            >
+              {column}
+            </Typography>
+          ))}
+        </Box>
+
+        {/* Displays message when no records exist. */}
+        {rows.length === 0 ? (
+          <Box sx={{ px: 2, py: 2 }}>
+            <Typography sx={{ fontSize: 13, color: MUTED }}>
+              No project production data found.
+            </Typography>
+          </Box>
+        ) : (
+          paginatedRows.map((row, index) => (
+            <Box
+              key={`${row.projectId}-${row.productionDate}-${index}`}
+              sx={{
+                display: "grid",
+                gridTemplateColumns: DAILY_SUMMARY_COL,
+                minWidth: 850,
+                alignItems: "center",
+                px: 2,
+                py: 1.3,
+                borderBottom: `1px solid ${LINE2}`,
+              }}
+            >
+              {/* Displays production date. */}
+              <Typography sx={{ fontSize: 13, color: HEAD }}>
+                {row.productionDate}
+              </Typography>
+
+              {/* Displays project name. */}
+              <Typography
+                sx={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: HEAD,
+                }}
+              >
+                {row.projectName}
+              </Typography>
+
+              {/* Displays documents received. */}
+              <Typography sx={{ fontSize: 13, color: HEAD }}>
+                {Number(row.received || 0).toLocaleString()}
+              </Typography>
+
+              {/* Displays documents completed. */}
+              <Typography sx={{ fontSize: 13, color: HEAD }}>
+                {Number(row.completed || 0).toLocaleString()}
+              </Typography>
+
+              {/* Displays remaining previous backlog. */}
+              <Typography sx={{ fontSize: 13, color: HEAD }}>
+                {Number(row.backlog || 0).toLocaleString()}
+              </Typography>
+
+              {/* Displays today's pending documents. */}
+              <Typography
+                sx={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: HEAD,
+                }}
+              >
+                {Number(row.pending || 0).toLocaleString()}
+              </Typography>
+            </Box>
+          ))
+        )}
+      </Box>
+
+      {/* Displays pagination controls. */}
+      {rows.length > 0 && (
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            gap: 2,
+            px: 2,
+            py: 1.4,
+            borderTop: `1px solid ${LINE2}`,
+          }}
+        >
+          <Typography sx={{ fontSize: 12.5, color: MUTED }}>
+            {page * rowsPerPage + 1}–
+            {Math.min((page + 1) * rowsPerPage, rows.length)} of{" "}
+            {rows.length}
+          </Typography>
+
+          {/* Goes to previous page. */}
+          <Button
+            disabled={page === 0}
+            onClick={() => setPage((current) => current - 1)}
+            sx={{
+              minWidth: 30,
+              p: 0.5,
+              fontSize: 18,
+            }}
+          >
+            ‹
+          </Button>
+
+          {/* Goes to next page. */}
+          <Button
+            disabled={(page + 1) * rowsPerPage >= rows.length}
+            onClick={() => setPage((current) => current + 1)}
+            sx={{
+              minWidth: 30,
+              p: 0.5,
+              fontSize: 18,
+            }}
+          >
+            ›
+          </Button>
+        </Box>
+      )}
+    </PanelCard>
+  );
+}
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function Dashboard({ onNavigate }) {
   const [dashboard, setDashboard] = useState(null);
-  const [loading,   setLoading]   = useState(true);
+  const [loading, setLoading] = useState(true);
+
+  // Stores date-wise and project-wise production summary.
+  const [projectDailySummary, setProjectDailySummary] = useState([]);
+
+  // Controls pagination for Project Daily Summary.
+  const [projectSummaryPage, setProjectSummaryPage] = useState(0);
+
+  // Shows five Project Daily Summary records per page.
+  const PROJECT_SUMMARY_ROWS_PER_PAGE = 5;
 
   useEffect(() => {
     const load = async () => {
       try {
+        // Loads the main Administrator dashboard.
         const data = await apiRequest("/admin/dashboard");
+
+        // Stores the main dashboard data.
         setDashboard(data.dashboard);
+
+        // Loads the Administrator Project Daily Summary.
+        const summaryData = await apiRequest(
+          "/admin/dashboard/project-daily-summary"
+        );
+        console.log("ADMIN PROJECT SUMMARY:", summaryData);
+        // Stores the Project Daily Summary records.
+        setProjectDailySummary(summaryData.summary || []);
       } catch (err) {
         console.error("Admin Dashboard error:", err);
       } finally {
@@ -283,37 +494,37 @@ export default function Dashboard({ onNavigate }) {
   // ── Stat cards from live data ──────────────────────────────────────────────
   const STAT_CARDS = [
     {
-      label:     "Total Received",
-      value:     dashboard?.totalReceived?.toLocaleString() ?? "—",
-      icon:      <MoveToInboxRoundedIcon />,
-      iconBg:    "#e5eefe", iconColor: "#2f6df0",
+      label: "Total Received",
+      value: dashboard?.totalReceived?.toLocaleString() ?? "—",
+      icon: <MoveToInboxRoundedIcon />,
+      iconBg: "#e5eefe", iconColor: "#2f6df0",
     },
     {
-      label:     "Total Completed",
-      value:     dashboard?.totalCompleted?.toLocaleString() ?? "—",
-      icon:      <AssignmentTurnedInRoundedIcon />,
-      iconBg:    "#e4f6ee", iconColor: "#1f9d6b",
-      trend:     dashboard ? `${dashboard.activeProjects} active projects` : null,
+      label: "Total Completed",
+      value: dashboard?.totalCompleted?.toLocaleString() ?? "—",
+      icon: <AssignmentTurnedInRoundedIcon />,
+      iconBg: "#e4f6ee", iconColor: "#1f9d6b",
+      trend: dashboard ? `${dashboard.activeProjects} active projects` : null,
       trendColor: "#1f9d6b",
     },
     {
-      label:     "Project Backlog",
-      value:     dashboard?.totalBacklog?.toLocaleString() ?? "—",
-      icon:      <AccessTimeRoundedIcon />,
-      iconBg:    "#fbf1dc", iconColor: "#d9962b",
-      trend:     dashboard
+      label: "Project Backlog",
+      value: dashboard?.totalBacklog?.toLocaleString() ?? "—",
+      icon: <AccessTimeRoundedIcon />,
+      iconBg: "#fbf1dc", iconColor: "#d9962b",
+      trend: dashboard
         ? `${dashboard.totalReceived > 0
-            ? Math.round((dashboard.totalBacklog / dashboard.totalReceived) * 100)
-            : 0}% of received`
+          ? Math.round((dashboard.totalBacklog / dashboard.totalReceived) * 100)
+          : 0}% of received`
         : null,
       trendColor: "#d64545",
     },
     {
-      label:     "Active employees",
-      value:     dashboard?.activeEmployees ?? "—",
-      icon:      <PeopleAltRoundedIcon />,
-      iconBg:    "#efe9fb", iconColor: "#7a51d6",
-      trend:     dashboard ? `${dashboard.activeProjects} projects` : null,
+      label: "Active employees",
+      value: dashboard?.activeEmployees ?? "—",
+      icon: <PeopleAltRoundedIcon />,
+      iconBg: "#efe9fb", iconColor: "#7a51d6",
+      trend: dashboard ? `${dashboard.activeProjects} projects` : null,
       trendColor: "#1f9d6b",
     },
   ];
@@ -321,24 +532,24 @@ export default function Dashboard({ onNavigate }) {
   // ── KPI cards from live data ───────────────────────────────────────────────
   const KPI_CARDS = [
     {
-      label:  "Pending corrections",
-      value:  dashboard?.pendingCorrections ?? "—",
-      note:   "awaiting approval",
-      color:  "#df9324",
+      label: "Pending corrections",
+      value: dashboard?.pendingCorrections ?? "—",
+      note: "awaiting approval",
+      color: "#df9324",
       action: "Review", nav: "corrections",
     },
     {
-      label:  "Guide compliance",
-      value:  dashboard ? `${dashboard.guideCompliance.rate}%` : "—",
-      note:   `${dashboard?.guideCompliance?.acked ?? 0} / ${dashboard?.guideCompliance?.total ?? 0} acknowledged`,
-      color:  "#15966a",
+      label: "Guide compliance",
+      value: dashboard ? `${dashboard.guideCompliance.rate}%` : "—",
+      note: `${dashboard?.guideCompliance?.acked ?? 0} / ${dashboard?.guideCompliance?.total ?? 0} acknowledged`,
+      color: "#15966a",
       action: "Details", nav: "compliance",
     },
     {
-      label:  "Missing entries",
-      value:  dashboard?.missingEntriesToday ?? "—",
-      note:   "employees today",
-      color:  "#dc3545",
+      label: "Missing entries",
+      value: dashboard?.missingEntriesToday ?? "—",
+      note: "employees today",
+      color: "#dc3545",
       action: "View", nav: "users",
     },
   ];
@@ -412,7 +623,7 @@ export default function Dashboard({ onNavigate }) {
           <PanelCard title="Backlog by project">
             {loading ? (
               <Box sx={{ px: 2, py: 1 }}>
-                {[1,2,3,4].map((i) => <Skeleton key={i} variant="text" height={40} sx={{ mb: 0.5 }} />)}
+                {[1, 2, 3, 4].map((i) => <Skeleton key={i} variant="text" height={40} sx={{ mb: 0.5 }} />)}
               </Box>
             ) : dashboard?.backlogByProject?.length === 0 ? (
               <Box sx={{ px: 2, py: 2 }}>
@@ -428,6 +639,16 @@ export default function Dashboard({ onNavigate }) {
           </PanelCard>
         </Grid>
       </Grid>
+      {/* ───────────────── PROJECT DAILY SUMMARY ───────────────── */}
+
+      <Box sx={{ mb: 2.5 }}>
+        <ProjectDailySummaryTable
+          rows={projectDailySummary}
+          page={projectSummaryPage}
+          setPage={setProjectSummaryPage}
+          rowsPerPage={PROJECT_SUMMARY_ROWS_PER_PAGE}
+        />
+      </Box>
 
       {/* KPI CARDS */}
       <Grid container spacing={2}>

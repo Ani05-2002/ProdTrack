@@ -1,4 +1,4 @@
-﻿import { useEffect,useState } from "react";
+﻿import { useEffect, useState } from "react";
 import {
   Alert,
   Avatar,
@@ -36,6 +36,17 @@ import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
 import ShieldRoundedIcon from "@mui/icons-material/ShieldRounded";
 import LinkRoundedIcon from "@mui/icons-material/LinkRounded";
 import FolderRoundedIcon from "@mui/icons-material/FolderRounded";
+// Adds an icon at the end of the password input.
+import InputAdornment from "@mui/material/InputAdornment";
+
+// Makes the eye icon clickable.
+// import IconButton from "@mui/material/IconButton";
+
+// Eye icon for showing passwords.
+import Visibility from "@mui/icons-material/Visibility";
+
+// Crossed-out eye icon for hiding passwords.
+import VisibilityOff from "@mui/icons-material/VisibilityOff";
 
 // Maps each metric-card position to a real MUI icon component instead of an emoji.
 const icons = [
@@ -70,60 +81,60 @@ export function CoreMetricCards({ items }) {
         const IconComponent = icons[index % icons.length];
 
         return (
-        <Paper
-          key={label}
-          elevation={0}
-          sx={{
-            p: 1.7,
-            minHeight: 98,
-            border: "1px solid #dbe3ec",
-            borderRadius: 1.5,
-            boxShadow: "0 2px 5px rgba(16,35,61,.08)",
-            display: "flex",
-            alignItems: "center",
-            gap: 1.3,
-          }}
-        >
-          <Box
+          <Paper
+            key={label}
+            elevation={0}
             sx={{
-              width: 45,
-              height: 45,
-              flexShrink: 0,
-              borderRadius: 1.3,
-              bgcolor: ["#eaf1ff", "#e2f6ec", "#fff3dc", "#f0e9ff"][index % 4],
-              display: "grid",
-              placeItems: "center",
-              fontSize: 22,
+              p: 1.7,
+              minHeight: 98,
+              border: "1px solid #dbe3ec",
+              borderRadius: 1.5,
+              boxShadow: "0 2px 5px rgba(16,35,61,.08)",
+              display: "flex",
+              alignItems: "center",
+              gap: 1.3,
             }}
           >
-            <IconComponent
+            <Box
               sx={{
+                width: 45,
+                height: 45,
+                flexShrink: 0,
+                borderRadius: 1.3,
+                bgcolor: ["#eaf1ff", "#e2f6ec", "#fff3dc", "#f0e9ff"][index % 4],
+                display: "grid",
+                placeItems: "center",
                 fontSize: 22,
-                color: iconColors[index % 4],
               }}
-            />
-          </Box>
-          <Box>
-            <Typography sx={{ color: "#667085", fontSize: 12 }}>
-              {label}
-            </Typography>
-            <Typography
-              sx={{ fontSize: 25, lineHeight: 1.12, fontWeight: 800 }}
             >
-              {value}
-            </Typography>
-            {note && (
-              <Typography
+              <IconComponent
                 sx={{
-                  color: note.startsWith("-") ? "#dc3545" : "#15966a",
-                  fontSize: 11,
+                  fontSize: 22,
+                  color: iconColors[index % 4],
                 }}
-              >
-                {note}
+              />
+            </Box>
+            <Box>
+              <Typography sx={{ color: "#667085", fontSize: 12 }}>
+                {label}
               </Typography>
-            )}
-          </Box>
-        </Paper>
+              <Typography
+                sx={{ fontSize: 25, lineHeight: 1.12, fontWeight: 800 }}
+              >
+                {value}
+              </Typography>
+              {note && (
+                <Typography
+                  sx={{
+                    color: note.startsWith("-") ? "#dc3545" : "#15966a",
+                    fontSize: 11,
+                  }}
+                >
+                  {note}
+                </Typography>
+              )}
+            </Box>
+          </Paper>
         );
       })}
     </Box>
@@ -233,101 +244,101 @@ export function CoreTable({
           {pagedRows.map((row, rowIndex) => {
             const globalIndex = page * CORE_TABLE_ROWS_PER_PAGE + rowIndex;
             return (
-            <TableRow key={`row-${globalIndex}`} hover>
-              {row.map((cell, cellIndex) => (
-                <TableCell
-                  key={`${row[0]}-${cellIndex}`}
-                  align={cell === "●" || cell === "○" ? "center" : "left"}
-                  sx={{ verticalAlign: "middle", py: 1.9 }}
-                >
-                  {cell === "●" || cell === "○" ? (
-                    <Box
-                      component="button"
-                      type="button"
-                      aria-label={
-                        cell === "●"
-                          ? "Revoke project access"
-                          : "Grant project access"
-                      }
-                      onClick={() => onCellAction?.(globalIndex, cellIndex)}
-                      sx={{
-                        width: 10,
-                        height: 10,
-                        p: 0,
-                        minWidth: 10,
-                        borderRadius: "50%",
-                        border:
-                          cell === "●"
-                            ? "1px solid #15966a"
-                            : "1px solid #cbd5e1",
-                        bgcolor: cell === "●" ? "#15966a" : "transparent",
-                        cursor: onCellAction ? "pointer" : "default",
-                        "&:hover": onCellAction
-                          ? { transform: "scale(1.25)" }
-                          : {},
-                      }}
-                    />
-                  ) : cellIndex === row.length - 1 &&
-                    [
-                      "Active",
-                      "ACTIVE",
-                      "Pending",
-                      "PENDING",
-                      "INACTIVE",
-                    ].includes(cell) ? (
-                    <Chip
-                      size="small"
-                      label={cell}
-                      color={
-                        cell.toLowerCase() === "active"
-                          ? "success"
-                          : cell.toLowerCase() === "pending"
-                            ? "warning"
-                            : "default"
-                      }
-                      sx={{ fontSize: 10, fontWeight: 800 }}
-                    />
-                  ) : ROLE_LABELS.includes(cell) ? (
-                    <Box
-                      sx={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        px: 1.2,
-                        py: 0.3,
-                        borderRadius: "5px",
-                        bgcolor: ROLE_COLORS[cell]?.bg,
-                        border: `1px solid ${ROLE_COLORS[cell]?.border}`,
-                        color: ROLE_COLORS[cell]?.color,
-                        fontSize: 10,
-                        fontWeight: 800,
-                        letterSpacing: "0.04em",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {cell}
-                    </Box>
-                  ) : (
-                    cell
-                  )}
-                </TableCell>
-              ))}
-              {actionLabel && (
-                <TableCell sx={{ py: 1.9 }}>
-                  <Button
-                    size="small"
-                    variant={actionVariant}
-                    onClick={() => onAction?.(row, globalIndex)}
-                    sx={
-                      actionVariant === "text"
-                        ? { color: "#10233d", minWidth: 0, px: 0, fontSize: 12 }
-                        : {}
-                    }
+              <TableRow key={`row-${globalIndex}`} hover>
+                {row.map((cell, cellIndex) => (
+                  <TableCell
+                    key={`${row[0]}-${cellIndex}`}
+                    align={cell === "●" || cell === "○" ? "center" : "left"}
+                    sx={{ verticalAlign: "middle", py: 1.9 }}
                   >
-                    {actionLabel}
-                  </Button>
-                </TableCell>
-              )}
-            </TableRow>
+                    {cell === "●" || cell === "○" ? (
+                      <Box
+                        component="button"
+                        type="button"
+                        aria-label={
+                          cell === "●"
+                            ? "Revoke project access"
+                            : "Grant project access"
+                        }
+                        onClick={() => onCellAction?.(globalIndex, cellIndex)}
+                        sx={{
+                          width: 10,
+                          height: 10,
+                          p: 0,
+                          minWidth: 10,
+                          borderRadius: "50%",
+                          border:
+                            cell === "●"
+                              ? "1px solid #15966a"
+                              : "1px solid #cbd5e1",
+                          bgcolor: cell === "●" ? "#15966a" : "transparent",
+                          cursor: onCellAction ? "pointer" : "default",
+                          "&:hover": onCellAction
+                            ? { transform: "scale(1.25)" }
+                            : {},
+                        }}
+                      />
+                    ) : cellIndex === row.length - 1 &&
+                      [
+                        "Active",
+                        "ACTIVE",
+                        "Pending",
+                        "PENDING",
+                        "INACTIVE",
+                      ].includes(cell) ? (
+                      <Chip
+                        size="small"
+                        label={cell}
+                        color={
+                          cell.toLowerCase() === "active"
+                            ? "success"
+                            : cell.toLowerCase() === "pending"
+                              ? "warning"
+                              : "default"
+                        }
+                        sx={{ fontSize: 10, fontWeight: 800 }}
+                      />
+                    ) : ROLE_LABELS.includes(cell) ? (
+                      <Box
+                        sx={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          px: 1.2,
+                          py: 0.3,
+                          borderRadius: "5px",
+                          bgcolor: ROLE_COLORS[cell]?.bg,
+                          border: `1px solid ${ROLE_COLORS[cell]?.border}`,
+                          color: ROLE_COLORS[cell]?.color,
+                          fontSize: 10,
+                          fontWeight: 800,
+                          letterSpacing: "0.04em",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {cell}
+                      </Box>
+                    ) : (
+                      cell
+                    )}
+                  </TableCell>
+                ))}
+                {actionLabel && (
+                  <TableCell sx={{ py: 1.9 }}>
+                    <Button
+                      size="small"
+                      variant={actionVariant}
+                      onClick={() => onAction?.(row, globalIndex)}
+                      sx={
+                        actionVariant === "text"
+                          ? { color: "#10233d", minWidth: 0, px: 0, fontSize: 12 }
+                          : {}
+                      }
+                    >
+                      {actionLabel}
+                    </Button>
+                  </TableCell>
+                )}
+              </TableRow>
             );
           })}
         </TableBody>
@@ -378,7 +389,7 @@ export default function CorePageShell({
         }}
       >
         <Box>
-          <Typography component="div" sx={{ fontSize: 22, fontWeight: 800, color:"#1A2434" }}>
+          <Typography component="div" sx={{ fontSize: 22, fontWeight: 800, color: "#1A2434" }}>
             {title}
           </Typography>
           <Typography sx={{ color: "#6A7585", fontSize: 13.5, mt: 0.4 }}>
@@ -418,6 +429,10 @@ export default function CorePageShell({
         maxWidth="sm"
         slotProps={{
           paper: {
+            // Disable ordinary form autocomplete.
+            autoComplete: "off",
+
+            // Preserve existing styling.
             sx: {
               borderRadius: 2,
             },
@@ -504,11 +519,11 @@ export function SectionCard({ title, action, children }) {
         }}
       >
         <Typography
-            component="div"
-            sx={{ fontWeight: 800 }}
-          >
-            {title}
-          </Typography>
+          component="div"
+          sx={{ fontWeight: 800 }}
+        >
+          {title}
+        </Typography>
         {action}
       </Box>
       {children}
@@ -542,12 +557,20 @@ export function CoreFormDialog({
   submitLabel = "Save",
   onSubmit,
   initialValues = {},
+  extraAction = null,
 }) {
   // Stores the current values entered or selected inside the form.
   const [values, setValues] = useState({});
 
   // Stores inline field-level validation errors.
   const [errors, setErrors] = useState({});
+
+  // Controls whether the password is visible.
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Controls whether the confirm password is visible.
+  const [showConfirmPassword, setShowConfirmPassword] =
+    useState(false);
 
   // Updates one form field and clears its error.
   const update = (name, value) => {
@@ -562,6 +585,9 @@ export function CoreFormDialog({
     if (open) {
       setValues(initialValues || {});
       setErrors({});
+      // Hide both password fields.
+      setShowPassword(false);
+      setShowConfirmPassword(false);
     }
   }, [open, initialValues]);
 
@@ -595,6 +621,7 @@ export function CoreFormDialog({
     <Dialog
       open={open}
       onClose={onClose}
+      disableRestoreFocus
       fullWidth
       maxWidth="sm"
       slotProps={{ paper: { sx: { borderRadius: 2 } } }}
@@ -619,9 +646,19 @@ export function CoreFormDialog({
           "@media (max-width: 560px)": { gridTemplateColumns: "1fr" },
         }}
       >
-        {(fields || []).map((field) => (
+        {(fields || []).map((field, index) => (
           // Wraps each field in a Box so the label sits above the input like the reference design.
-          <Box key={field.name} sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+          <Box
+            key={field.name}
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 0.5,
+
+              // Allows the password eye button to be positioned inside this field.
+              position: "relative",
+            }}
+          >
             {/* Label rendered outside and above the input box, always visible. */}
             <Typography
               component="label"
@@ -641,9 +678,77 @@ export function CoreFormDialog({
 
             {/* Input box with no MUI floating label — just a clean placeholder. */}
             <TextField
+              autoFocus={index === 0}
               id={`field-${field.name}`}
               placeholder={field.placeholder}
-              type={field.options ? "text" : (field.type || "text")}
+              // Distinguish Add User inputs from login inputs.
+              name={
+                field.name === "username"
+                  ? "new-user-username"
+                  : field.name === "password"
+                    ? "new-user-password"
+                    : field.name === "confirmPassword"
+                      ? "new-user-confirm-password"
+                      : field.name
+              }
+
+              // Prevent Chrome from inserting saved login credentials.
+              autoComplete={
+                field.name === "password" ||
+                  field.name === "confirmPassword"
+                  ? "new-password"
+                  : "off"
+              }
+              // Show or hide each password field independently.
+              type={
+                field.name === "password"
+                  ? showPassword
+                    ? "text"
+                    : "password"
+                  : field.name === "confirmPassword"
+                    ? showConfirmPassword
+                      ? "text"
+                      : "password"
+                    : field.options
+                      ? "text"
+                      : field.type || "text"
+              }
+              // Display an eye button for password fields only.
+              InputProps={
+                field.name === "password" || field.name === "confirmPassword"
+                  ? {
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          type="button"
+                          onClick={() => {
+                            if (field.name === "password") {
+                              setShowPassword((prev) => !prev);
+                            } else {
+                              setShowConfirmPassword((prev) => !prev);
+                            }
+                          }}
+                          onMouseDown={(event) => event.preventDefault()}
+                          edge="end"
+                          sx={{
+                            color: "#667085",
+                            visibility: "visible",
+                            opacity: 1,
+                          }}
+                        >
+                          {(field.name === "password"
+                            ? showPassword
+                            : showConfirmPassword) ? (
+                            <VisibilityOff fontSize="small" />
+                          ) : (
+                            <Visibility fontSize="small" />
+                          )}
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }
+                  : undefined
+              }
               value={values[field.name] || ""}
               onChange={(event) => update(field.name, event.target.value)}
               select={Boolean(field.options)}
@@ -652,7 +757,7 @@ export function CoreFormDialog({
               error={Boolean(errors[field.name])}
               helperText={errors[field.name] ? `${field.label} is required.` : ""}
               // No label prop — label is rendered above as a Typography element.
-              InputLabelProps={{ shrink: false }}
+              // InputLabelProps={{ shrink: false }}
               sx={{
                 "& .MuiOutlinedInput-root": {
                   borderRadius: 1.2,
@@ -664,6 +769,7 @@ export function CoreFormDialog({
                   fontSize: 13.5,
                 },
               }}
+
             >
               {field.options && (
                 <MenuItem value="">
@@ -678,6 +784,38 @@ export function CoreFormDialog({
                 </MenuItem>
               ))}
             </TextField>
+            {/* Shows the eye button only for Password and Confirm Password fields. */}
+            {(field.name === "password" || field.name === "confirmPassword") && (
+              <IconButton
+                type="button"
+
+                // Toggles the correct password field between hidden and visible.
+                onClick={() => {
+                  if (field.name === "password") {
+                    setShowPassword((prev) => !prev);
+                  } else {
+                    setShowConfirmPassword((prev) => !prev);
+                  }
+                }}
+
+                // Places the eye button inside the right side of the input.
+                sx={{
+                  position: "absolute",
+                  right: 8,
+                  top: 27,
+                  zIndex: 10,
+                  color: "#667085",
+                }}
+              >
+                {(field.name === "password"
+                  ? showPassword
+                  : showConfirmPassword) ? (
+                  <VisibilityOff fontSize="small" />
+                ) : (
+                  <Visibility fontSize="small" />
+                )}
+              </IconButton>
+            )}
           </Box>
         ))}
       </DialogContent>
@@ -685,10 +823,25 @@ export function CoreFormDialog({
       <Divider />
 
       <DialogActions sx={{ p: 2, bgcolor: "#f8fafc" }}>
-        <Button onClick={onClose}>Cancel</Button>
+
+        {/* Shows an optional action such as Change Password. */}
+        {extraAction && (
+          <Button
+            onClick={extraAction.onClick}
+            sx={{ mr: "auto" }}
+          >
+            {extraAction.label}
+          </Button>
+        )}
+
+        <Button onClick={onClose}>
+          Cancel
+        </Button>
+
         <Button variant="contained" onClick={submit}>
           {submitLabel}
         </Button>
+
       </DialogActions>
     </Dialog>
   );

@@ -29,7 +29,9 @@ const getStoredUser = () => {
 export default function App() {
   const [user, setUser] = useState(getStoredUser);
   const [page, setPage] = useState("dashboard");
-   // Stores the exact item selected from the global search.
+  // Stores extra information passed while navigating, such as the selected project.
+  const [navigationData, setNavigationData] = useState(null);
+  // Stores the exact item selected from the global search.
   const [searchSelection, setSearchSelection] = useState(null);
 
   // Stores the pending guide object returned by /api/guides/pending-ack.
@@ -37,6 +39,11 @@ export default function App() {
   // object → a guide is waiting for acknowledgement, open the modal.
   const [pendingGuide, setPendingGuide] = useState(null);
   const toast = useToast();
+  // Changes the page and preserves optional data from the clicked item.
+  const handleNavigate = (nextPage, data = null) => {
+    setPage(nextPage);
+    setNavigationData(data);
+  };
 
   // Fetches the pending-ack guide for indexer users and opens the modal
   // when one is found. Called on login and when "Review now" is clicked.
@@ -64,25 +71,25 @@ export default function App() {
     }
   };
 
-const logout = useCallback(() => {
-  localStorage.removeItem("prodtrackToken");
-  localStorage.removeItem("prodtrackUser");
+  const logout = useCallback(() => {
+    localStorage.removeItem("prodtrackToken");
+    localStorage.removeItem("prodtrackUser");
 
-  sessionStorage.removeItem("prodtrackToken");
-  sessionStorage.removeItem("prodtrackUser");
+    sessionStorage.removeItem("prodtrackToken");
+    sessionStorage.removeItem("prodtrackUser");
 
-  localStorage.removeItem(
-    "prodtrackSessionTimeout"
-  );
+    localStorage.removeItem(
+      "prodtrackSessionTimeout"
+    );
 
-  sessionStorage.removeItem(
-    "prodtrackSessionTimeout"
-  );
+    sessionStorage.removeItem(
+      "prodtrackSessionTimeout"
+    );
 
-  setUser(null);
-  setPage("dashboard");
-  setPendingGuide(null);
-}, []);
+    setUser(null);
+    setPage("dashboard");
+    setPendingGuide(null);
+  }, []);
 
 
 
@@ -99,91 +106,93 @@ const logout = useCallback(() => {
   }, [logout, toast]);
 
   useEffect(() => {
-  if (!user) {
-    return undefined;
-  }
+    if (!user) {
+      return undefined;
+    }
 
-  const storage =
-    localStorage.getItem("prodtrackUser")
-      ? localStorage
-      : sessionStorage;
+    const storage =
+      localStorage.getItem("prodtrackUser")
+        ? localStorage
+        : sessionStorage;
 
-  const configuredMinutes = Number(
-    storage.getItem(
-      "prodtrackSessionTimeout"
-    )
-  );
-
-  const timeoutMinutes =
-    [15, 30, 60].includes(
-      configuredMinutes
-    )
-      ? configuredMinutes
-      : 30;
-
-  let timeoutId;
-
-  const handleIdleLogout = () => {
-    toast.info("Your session ended because of inactivity.");
-    logout();
-  };
-
-  const resetIdleTimer = () => {
-    window.clearTimeout(timeoutId);
-
-    timeoutId = window.setTimeout(
-      handleIdleLogout,
-      timeoutMinutes * 60 * 1000
+    const configuredMinutes = Number(
+      storage.getItem(
+        "prodtrackSessionTimeout"
+      )
     );
-  };
 
-  const activityEvents = [
-    "mousedown",
-    "mousemove",
-    "keydown",
-    "scroll",
-    "touchstart",
-  ];
- 
-  activityEvents.forEach((eventName) => {
-    window.addEventListener(
-      eventName,
-      resetIdleTimer,
-      { passive: true }
-    );
-  });
+    const timeoutMinutes =
+      [15, 30, 60].includes(
+        configuredMinutes
+      )
+        ? configuredMinutes
+        : 30;
 
-  resetIdleTimer();
+    let timeoutId;
 
-  return () => {
-    window.clearTimeout(timeoutId);
+    const handleIdleLogout = () => {
+      toast.info("Your session ended because of inactivity.");
+      logout();
+    };
 
-    activityEvents.forEach(
-      (eventName) => {
-        window.removeEventListener(
-          eventName,
-          resetIdleTimer
-        );
-      }
-    );
-  };
-}, [user, logout]);
+    const resetIdleTimer = () => {
+      window.clearTimeout(timeoutId);
 
-if (!user) return <SignIn onLogin={login} />;
+      timeoutId = window.setTimeout(
+        handleIdleLogout,
+        timeoutMinutes * 60 * 1000
+      );
+    };
+
+    const activityEvents = [
+      "mousedown",
+      "mousemove",
+      "keydown",
+      "scroll",
+      "touchstart",
+    ];
+
+    activityEvents.forEach((eventName) => {
+      window.addEventListener(
+        eventName,
+        resetIdleTimer,
+        { passive: true }
+      );
+    });
+
+    resetIdleTimer();
+
+    return () => {
+      window.clearTimeout(timeoutId);
+
+      activityEvents.forEach(
+        (eventName) => {
+          window.removeEventListener(
+            eventName,
+            resetIdleTimer
+          );
+        }
+      );
+    };
+  }, [user, logout]);
+
+  if (!user) return <SignIn onLogin={login} />;
 
   return (
     <>
       <DashboardLayout
         user={user}
         currentPage={page}
-        onNavigate={setPage}
+        onNavigate={handleNavigate}
         onLogout={logout}
       >
-        <AppRoutes 
-        user={user} currentPage={page} 
-        onNavigate={setPage} 
-        onReviewGuide={fetchPendingGuide}
-        searchSelection={searchSelection} />
+        <AppRoutes
+          user={user} currentPage={page}
+           onNavigate={handleNavigate}
+          onReviewGuide={fetchPendingGuide}
+          searchSelection={searchSelection} 
+          navigationData={navigationData}
+          />
       </DashboardLayout>
 
       {user.roleKey === "indexer" && (

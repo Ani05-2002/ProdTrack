@@ -223,7 +223,7 @@ function TrendChart({ data }) {
         chartHeight -
         verticalPadding -
         (Number(item.completed || 0) / maxCompleted) *
-          (chartHeight - verticalPadding * 2);
+        (chartHeight - verticalPadding * 2);
 
       // Returns the position in SVG coordinate format.
       return `${x},${y}`;
@@ -331,7 +331,7 @@ function TrendChart({ data }) {
               chartHeight -
               verticalPadding -
               (Number(item.completed || 0) / maxCompleted) *
-                (chartHeight - verticalPadding * 2);
+              (chartHeight - verticalPadding * 2);
 
             return (
               <circle
@@ -480,6 +480,184 @@ function BacklogRow({ name, pct, total }) {
   );
 }
 
+
+// Defines the column widths for the Project Daily Summary table.
+const DAILY_SUMMARY_COL =
+  "1.1fr 1.8fr 1.2fr 1.2fr 1fr 1fr";
+
+// Displays date-wise and project-wise production summary.
+function ProjectDailySummaryTable({
+  rows,
+  page,
+  setPage,
+  rowsPerPage,
+}) {
+  // Gets only the five records for the current page.
+  const paginatedRows = rows.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage
+  );
+
+  return (
+    <SectionCard title="Project Daily Summary">
+      <Box sx={{ overflowX: "auto" }}>
+        {/* Displays table headings. */}
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: DAILY_SUMMARY_COL,
+            minWidth: 850,
+            px: 2,
+            py: 1.2,
+            bgcolor: "#f8fafc",
+            borderBottom: `1px solid ${LINE2}`,
+          }}
+        >
+          {[
+            "DATE",
+            "PROJECT",
+            "RECEIVED",
+            "COMPLETED",
+            "BACKLOG",
+            "PENDING",
+          ].map((column) => (
+            <Typography
+              key={column}
+              sx={{
+                fontSize: 11,
+                fontWeight: 800,
+                color: MUTED,
+                letterSpacing: "0.4px",
+              }}
+            >
+              {column}
+            </Typography>
+          ))}
+        </Box>
+
+        {/* Displays an empty message when no production records exist. */}
+        {rows.length === 0 ? (
+          <Box sx={{ px: 2, py: 2 }}>
+            <Typography sx={{ fontSize: 13, color: MUTED }}>
+              No project production data found.
+            </Typography>
+          </Box>
+        ) : (
+          // Displays the current page of production records.
+          paginatedRows.map((row, index) => (
+            <Box
+              key={`${row.projectId}-${row.productionDate}-${index}`}
+              sx={{
+                display: "grid",
+                gridTemplateColumns: DAILY_SUMMARY_COL,
+                minWidth: 850,
+                alignItems: "center",
+                px: 2,
+                py: 1.3,
+                borderBottom: `1px solid ${LINE2}`,
+                "&:hover": {
+                  bgcolor: "#fafbff",
+                },
+              }}
+            >
+              {/* Displays production date. */}
+              <Typography sx={{ fontSize: 13, color: HEAD }}>
+                {row.productionDate}
+              </Typography>
+
+              {/* Displays project name. */}
+              <Typography
+                sx={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: HEAD,
+                }}
+              >
+                {row.projectName}
+              </Typography>
+
+              {/* Displays documents received. */}
+              <Typography sx={{ fontSize: 13, color: HEAD }}>
+                {row.received?.toLocaleString()}
+              </Typography>
+
+              {/* Displays documents completed. */}
+              <Typography sx={{ fontSize: 13, color: HEAD }}>
+                {row.completed?.toLocaleString()}
+              </Typography>
+
+              {/* Displays remaining previous backlog. */}
+              <Typography sx={{ fontSize: 13, color: HEAD }}>
+                {row.backlog?.toLocaleString()}
+              </Typography>
+
+              {/* Displays today's pending documents. */}
+              <Typography
+                sx={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: HEAD,
+                }}
+              >
+                {row.pending?.toLocaleString()}
+              </Typography>
+            </Box>
+          ))
+        )}
+      </Box>
+
+      {/* Displays pagination when records are available. */}
+      {rows.length > 0 && (
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            gap: 2,
+            px: 2,
+            py: 1.4,
+            borderTop: `1px solid ${LINE2}`,
+          }}
+        >
+          {/* Displays the current record range. */}
+          <Typography sx={{ fontSize: 12.5, color: MUTED }}>
+            {page * rowsPerPage + 1}–
+            {Math.min((page + 1) * rowsPerPage, rows.length)} of{" "}
+            {rows.length}
+          </Typography>
+
+          {/* Goes to the previous page. */}
+          <Button
+            disabled={page === 0}
+            onClick={() => setPage((current) => current - 1)}
+            sx={{
+              minWidth: 30,
+              p: 0.5,
+              fontSize: 18,
+              textTransform: "none",
+            }}
+          >
+            ‹
+          </Button>
+
+          {/* Goes to the next page. */}
+          <Button
+            disabled={(page + 1) * rowsPerPage >= rows.length}
+            onClick={() => setPage((current) => current + 1)}
+            sx={{
+              minWidth: 30,
+              p: 0.5,
+              fontSize: 18,
+              textTransform: "none",
+            }}
+          >
+            ›
+          </Button>
+        </Box>
+      )}
+    </SectionCard>
+  );
+}
 /* ───────────────────────── main page ───────────────────────── */
 
 // Displays the complete Core Team dashboard page.
@@ -501,6 +679,15 @@ export default function Dashboard({ onNavigate }) {
 
   // Stores the live missing-entries count returned by the backend.
   const [missingEntries, setMissingEntries] = useState(null);
+
+  // Stores date-wise and project-wise production summary.
+  const [projectDailySummary, setProjectDailySummary] = useState([]);
+
+  // Controls pagination for Project Daily Summary.
+  const [projectSummaryPage, setProjectSummaryPage] = useState(0);
+
+  // Shows five Project Daily Summary records per page.
+  const PROJECT_SUMMARY_ROWS_PER_PAGE = 5;
 
   // Loads all required dashboard APIs when this page opens.
   useEffect(() => {
@@ -572,36 +759,55 @@ export default function Dashboard({ onNavigate }) {
       }
     };
     // Loads the current guide-compliance information from the backend.
-      const loadGuideCompliance = async () => {
-        try {
-          // Calls the Core Team guide-compliance dashboard API.
-          const data = await apiRequest(
-            "/core-team/dashboard/guide-compliance"
-          );
+    const loadGuideCompliance = async () => {
+      try {
+        // Calls the Core Team guide-compliance dashboard API.
+        const data = await apiRequest(
+          "/core-team/dashboard/guide-compliance"
+        );
 
-          // Stores the compliance object returned by the backend.
-          setGuideCompliance(data.compliance);
-        } catch (error) {
-          // Logs guide-compliance API errors for debugging.
-          console.error("Guide Compliance Error:", error);
-        }
-      };
+        // Stores the compliance object returned by the backend.
+        setGuideCompliance(data.compliance);
+      } catch (error) {
+        // Logs guide-compliance API errors for debugging.
+        console.error("Guide Compliance Error:", error);
+      }
+    };
 
-      // Loads today's missing-entry employees from the backend.
-      const loadMissingEntries = async () => {
-        try {
-          // Calls the Core Team missing-entries API.
-          const data = await apiRequest(
-            "/core-team/dashboard/missing-entries"
-          );
+    // Loads today's missing-entry employees from the backend.
+    const loadMissingEntries = async () => {
+      try {
+        // Calls the Core Team missing-entries API.
+        const data = await apiRequest(
+          "/core-team/dashboard/missing-entries"
+        );
 
-          // Stores the number of employees with missing entries.
-          setMissingEntries(data.count);
-        } catch (error) {
-          // Logs missing-entry API errors in the browser console.
-          console.error("Missing Entries Error:", error);
-        }
-      };
+        // Stores the number of employees with missing entries.
+        setMissingEntries(data.count);
+      } catch (error) {
+        // Logs missing-entry API errors in the browser console.
+        console.error("Missing Entries Error:", error);
+      }
+    };
+
+    // Loads date-wise and project-wise production summary.
+    const loadProjectDailySummary = async () => {
+      try {
+        // Calls the Core Team Project Daily Summary API.
+        const data = await apiRequest(
+          "/core-team/dashboard/project-daily-summary"
+        );
+
+        // Stores the returned Project Daily Summary records.
+        setProjectDailySummary(data.summary || []);
+      } catch (error) {
+        // Logs Project Daily Summary API errors.
+        console.error(
+          "Project Daily Summary Error:",
+          error
+        );
+      }
+    };
 
     // Starts loading the main dashboard summary.
     loadDashboard();
@@ -620,6 +826,9 @@ export default function Dashboard({ onNavigate }) {
 
     // Starts loading the live missing-entries count.
     loadMissingEntries();
+
+    // Starts loading the Project Daily Summary.
+    loadProjectDailySummary();
   }, []);
 
   // Replaces only the top-card values with live values from the backend.
@@ -627,11 +836,11 @@ export default function Dashboard({ onNavigate }) {
     // Creates the live value list only after dashboard data has loaded.
     const values = dashboard
       ? [
-          dashboard.totalReceived,
-          dashboard.totalCompleted,
-          dashboard.projectBacklog,
-          dashboard.activeEmployees,
-        ]
+        dashboard.totalReceived,
+        dashboard.totalCompleted,
+        dashboard.projectBacklog,
+        dashboard.activeEmployees,
+      ]
       : [];
 
     // Keeps the original card design while replacing its displayed value.
@@ -642,36 +851,36 @@ export default function Dashboard({ onNavigate }) {
   });
 
   // Creates the KPI cards using live backend data without changing the original UI.
-const liveKpiCards = KPI_CARDS.map((card) => {
-  // Replaces Pending corrections with its live backend value.
-  if (card.label === "Pending corrections") {
-    return {
-      ...card,
-      value: pendingCorrections ?? card.value,
-    };
-  }
+  const liveKpiCards = KPI_CARDS.map((card) => {
+    // Replaces Pending corrections with its live backend value.
+    if (card.label === "Pending corrections") {
+      return {
+        ...card,
+        value: pendingCorrections ?? card.value,
+      };
+    }
 
-  // Replaces Guide compliance with the live compliance percentage.
-  if (card.label === "Guide compliance") {
-    return {
-      ...card,
-      value:
-        guideCompliance?.complianceRate !== undefined
-          ? `${guideCompliance.complianceRate}%`
-          : card.value,
-    };
-  }
-   // Replaces Missing entries with the live backend count.
-  if (card.label === "Missing entries") {
-    return {
-      ...card,
-      value: missingEntries ?? card.value,
-    };
-  }
+    // Replaces Guide compliance with the live compliance percentage.
+    if (card.label === "Guide compliance") {
+      return {
+        ...card,
+        value:
+          guideCompliance?.complianceRate !== undefined
+            ? `${guideCompliance.complianceRate}%`
+            : card.value,
+      };
+    }
+    // Replaces Missing entries with the live backend count.
+    if (card.label === "Missing entries") {
+      return {
+        ...card,
+        value: missingEntries ?? card.value,
+      };
+    }
 
-  // Keeps any other KPI cards unchanged.
-  return card;
-});
+    // Keeps any other KPI cards unchanged.
+    return card;
+  });
 
   return (
     <CorePageShell
@@ -801,12 +1010,12 @@ const liveKpiCards = KPI_CARDS.map((card) => {
                   }
                   pct={
                     project.received >
-                    0
+                      0
                       ? Math.round(
-                          (project.backlog /
-                            project.received) *
-                            100
-                        )
+                        (project.backlog /
+                          project.received) *
+                        100
+                      )
                       : 0
                   }
                 />
@@ -814,6 +1023,17 @@ const liveKpiCards = KPI_CARDS.map((card) => {
             )}
           </Box>
         </SectionCard>
+      </Box>
+
+      {/* ───────────────── PROJECT DAILY SUMMARY ───────────────── */}
+
+      <Box sx={{ mb: 2.5 }}>
+        <ProjectDailySummaryTable
+          rows={projectDailySummary}
+          page={projectSummaryPage}
+          setPage={setProjectSummaryPage}
+          rowsPerPage={PROJECT_SUMMARY_ROWS_PER_PAGE}
+        />
       </Box>
 
       {/* ───────────────── KPI SUMMARY ───────────────── */}

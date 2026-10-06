@@ -87,6 +87,8 @@ function AcknowledgementCoreTeam({ value }) {
 function GuideManagerCoreTeam() {
   // Stores the Guide Manager table data returned by the backend.
   const [guides, setGuides] = useState([]);
+  // Stores the projects loaded dynamically from the backend.
+  const [projects, setProjects] = useState([]);
 
   // Controls the existing Upload Guide dialog.
   const [uploadOpen, setUploadOpen] =
@@ -102,6 +104,15 @@ function GuideManagerCoreTeam() {
 
   // Stores the selected guide ID for the upload request.
   const [guideId, setGuideId] = useState("");
+
+  // Switches between uploading an existing guide and creating a new guide.
+  const [guideMode, setGuideMode] = useState("existing");
+
+  // Stores the project selected for a new guide.
+  const [newProjectId, setNewProjectId] = useState("");
+
+  // Stores the name entered for a new guide.
+  const [newGuideName, setNewGuideName] = useState("");
 
   // Stores the selected PDF file.
   const [guideFile, setGuideFile] =
@@ -206,7 +217,7 @@ function GuideManagerCoreTeam() {
       // Shows the API error in the existing Snackbar.
       setNoticeMessage(
         error.message ||
-          "Failed to load guides"
+        "Failed to load guides"
       );
 
       // Changes the Snackbar to error mode.
@@ -219,6 +230,31 @@ function GuideManagerCoreTeam() {
       setLoading(false);
     }
   };
+
+
+  // Fetches the project list from the existing Project Master API.
+  const loadProjects = async () => {
+    try {
+      // Calls the backend using the existing API helper.
+      const data = await apiRequest("/core-team/projects");
+
+      // Stores active projects in React state.
+      setProjects(
+        (data.projects || []).filter(
+          (project) => project.status === "active"
+        )
+      );
+    } catch (error) {
+      // Displays the error in the browser console.
+      console.error("Load Projects Error:", error);
+
+      // Shows an error notification.
+      setNoticeMessage(error.message || "Failed to load projects");
+      setNoticeSeverity("error");
+      setNotice(true);
+    }
+  };
+
 
   // ======================================================
   // LOAD GUIDE SECTIONS
@@ -254,7 +290,7 @@ function GuideManagerCoreTeam() {
       if (!data.success) {
         throw new Error(
           data.message ||
-            "Failed to load guide sections"
+          "Failed to load guide sections"
         );
       }
 
@@ -268,8 +304,8 @@ function GuideManagerCoreTeam() {
       setSelectedSectionId(
         sections.length
           ? Number(
-              sections[0].section_id
-            )
+            sections[0].section_id
+          )
           : null
       );
     } catch (error) {
@@ -286,7 +322,7 @@ function GuideManagerCoreTeam() {
       // Shows the error using the existing Snackbar.
       setNoticeMessage(
         error.message ||
-          "Failed to load guide sections"
+        "Failed to load guide sections"
       );
 
       // Uses error Snackbar styling.
@@ -303,6 +339,7 @@ function GuideManagerCoreTeam() {
   // Loads Guide Manager data when the page first opens.
   useEffect(() => {
     loadGuides();
+    loadProjects();
   }, []);
 
   // ======================================================
@@ -367,6 +404,14 @@ function GuideManagerCoreTeam() {
 
   // Opens the upload dialog and clears previous form values.
   const openUploadDialog = () => {
+    // Resets the form to the existing-guide upload mode.
+    setGuideMode("existing");
+
+    // Clears the new-guide project selection.
+    setNewProjectId("");
+
+    // Clears the new-guide name.
+    setNewGuideName("");
     setGuideId("");
     setVersion("");
     setGuideFile(null);
@@ -393,11 +438,23 @@ function GuideManagerCoreTeam() {
     }
 
     // Verifies that the selected file has a PDF extension.
-    if (
-      !file.name
-        .toLowerCase()
-        .endsWith(".pdf")
-    ) {
+    // Allow PDF and Microsoft Word documents.
+    // Allow PDF, Word, and Excel guide files.
+    const allowedExtensions = [
+      ".pdf",
+      ".doc",
+      ".docx",
+      ".xls",
+      ".xlsx",
+    ];
+
+    // Check whether the selected file has an allowed extension.
+    const isValidFile = allowedExtensions.some((extension) =>
+      file.name.toLowerCase().endsWith(extension)
+    );
+
+    // Reject files that are not PDF or Word documents.
+    if (!isValidFile) {
       // Clears the invalid file.
       setGuideFile(null);
 
@@ -406,7 +463,7 @@ function GuideManagerCoreTeam() {
 
       // Shows the validation message.
       setNoticeMessage(
-        "Please select a PDF guide file"
+        "Please select a PDF or Word guide file"
       );
 
       // Uses error Snackbar styling.
@@ -434,11 +491,24 @@ function GuideManagerCoreTeam() {
   // Uploads a new version of the selected existing guide.
   const upload = async () => {
     // Inline field-level validation.
+
     const errors = {
-      guideId: !guideId,
+      // Require an existing guide only in existing-guide mode.
+      guideId: guideMode === "existing" && !guideId,
+
+      // Require a file and version in both modes.
       guideFile: !guideFile,
       version: !version.trim(),
     };
+
+    // Validate the project and guide name in new-guide mode.
+    if (guideMode === "new" && (!newProjectId || !newGuideName.trim())) {
+      setNoticeMessage("Please select a project and enter a guide name.");
+      setNoticeSeverity("error");
+      setNotice(true);
+      return;
+    }
+
 
     if (errors.guideId || errors.guideFile || errors.version) {
       setUploadErrors(errors);
@@ -452,42 +522,39 @@ function GuideManagerCoreTeam() {
       setUploading(true);
 
       // Creates multipart/form-data for the PDF upload.
-      const formData =
-        new FormData();
 
-      // Sends the selected existing guide ID.
-      formData.append(
-        "guideId",
-        guideId
-      );
+      // Creates the multipart form data for the guide upload.
+      const formData = new FormData();
 
-      // Sends the new version label.
-      formData.append(
-        "version",
-        version.trim()
-      );
+      // Adds the fields required by the selected upload mode.
+      if (guideMode === "new") {
+        // Sends the selected database project ID.
+        formData.append("projectId", newProjectId);
 
-      // Requires acknowledgement for Core Team guide uploads.
-      formData.append(
-        "requiresAck",
-        "true"
-      );
+        // Sends the new guide name.
+        formData.append("title", newGuideName.trim());
+      } else {
+        // Sends the selected existing guide ID.
+        formData.append("guideId", guideId);
+      }
 
-      // Sends the selected PDF using the exact backend Multer field name.
-      formData.append(
-        "file",
-        guideFile
-      );
+      // Adds the version, acknowledgement requirement and file.
+      formData.append("version", version.trim());
+      formData.append("requiresAck", "true");
+      formData.append("file", guideFile);
 
-      // Sends the multipart upload request to the backend.
-      const data =
-        await apiRequest(
-          "/guides/manage/upload",
-          {
-            method: "POST",
-            body: formData,
-          }
-        );
+      // Selects the appropriate backend endpoint.
+      const endpoint =
+        guideMode === "new"
+          ? "/guides/manage/create"
+          : "/guides/manage/upload";
+
+      // Submits the form to the selected endpoint.
+      const data = await apiRequest(endpoint, {
+        method: "POST",
+        body: formData,
+      });
+
 
       // Closes the existing upload dialog after successful upload.
       setUploadOpen(false);
@@ -495,7 +562,7 @@ function GuideManagerCoreTeam() {
       // Shows the backend success message.
       setNoticeMessage(
         data.message ||
-          "New guide version uploaded successfully"
+        "New guide version uploaded successfully"
       );
 
       // Uses success Snackbar styling.
@@ -518,7 +585,7 @@ function GuideManagerCoreTeam() {
       // Shows the backend error to the user.
       setNoticeMessage(
         error.message ||
-          "Failed to upload guide"
+        "Failed to upload guide"
       );
 
       // Uses error Snackbar styling.
@@ -603,7 +670,7 @@ function GuideManagerCoreTeam() {
         // Shows the backend error.
         setNoticeMessage(
           error.message ||
-            "Failed to load guide compliance"
+          "Failed to load guide compliance"
         );
 
         // Uses error Snackbar styling.
@@ -634,52 +701,52 @@ function GuideManagerCoreTeam() {
   // ======================================================
   // SAVE GUIDE SECTION
   // ======================================================
-// Converts stored HTML into normal readable text for the Core Team editor.
-const htmlToPlainText = (html = "") => {
-  // Creates a temporary browser element so HTML tags are not shown to the user.
-  const element = document.createElement("div");
+  // Converts stored HTML into normal readable text for the Core Team editor.
+  const htmlToPlainText = (html = "") => {
+    // Creates a temporary browser element so HTML tags are not shown to the user.
+    const element = document.createElement("div");
 
-  // Loads the stored HTML into the temporary element.
-  element.innerHTML = html;
+    // Loads the stored HTML into the temporary element.
+    element.innerHTML = html;
 
-  // Converts block elements into readable line breaks.
-  element.querySelectorAll(
-    "p, h1, h2, h3, h4, h5, h6, li"
-  ).forEach((node) => {
-    node.insertAdjacentText("beforeend", "\n");
-  });
+    // Converts block elements into readable line breaks.
+    element.querySelectorAll(
+      "p, h1, h2, h3, h4, h5, h6, li"
+    ).forEach((node) => {
+      node.insertAdjacentText("beforeend", "\n");
+    });
 
-  // Returns only the readable text.
-  return (element.textContent || "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-};
+    // Returns only the readable text.
+    return (element.textContent || "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  };
 
-// Converts normal text entered by Core Team back into safe basic HTML paragraphs.
-const plainTextToHtml = (text = "") => {
-  // Escapes special HTML characters so typed content cannot become HTML code.
-  const escapeHtml = (value) =>
-    value
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
+  // Converts normal text entered by Core Team back into safe basic HTML paragraphs.
+  const plainTextToHtml = (text = "") => {
+    // Escapes special HTML characters so typed content cannot become HTML code.
+    const escapeHtml = (value) =>
+      value
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 
-  // Converts separate text paragraphs into paragraph HTML for the Indexer preview.
-  return text
-    .split(/\n\s*\n/)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean)
-    .map(
-      (paragraph) =>
-        `<p>${escapeHtml(paragraph).replace(
-          /\n/g,
-          "<br>"
-        )}</p>`
-    )
-    .join("");
-};
+    // Converts separate text paragraphs into paragraph HTML for the Indexer preview.
+    return text
+      .split(/\n\s*\n/)
+      .map((paragraph) => paragraph.trim())
+      .filter(Boolean)
+      .map(
+        (paragraph) =>
+          `<p>${escapeHtml(paragraph).replace(
+            /\n/g,
+            "<br>"
+          )}</p>`
+      )
+      .join("");
+  };
   // Saves the currently selected guide section to the backend.
   const handleSaveSection =
     async () => {
@@ -719,7 +786,7 @@ const plainTextToHtml = (text = "") => {
         if (!data.success) {
           throw new Error(
             data.message ||
-              "Failed to update guide section"
+            "Failed to update guide section"
           );
         }
 
@@ -731,10 +798,10 @@ const plainTextToHtml = (text = "") => {
                 Number(
                   section.section_id
                 ) ===
-                Number(
-                  data.section
-                    .section_id
-                )
+                  Number(
+                    data.section
+                      .section_id
+                  )
                   ? data.section
                   : section
             )
@@ -743,7 +810,7 @@ const plainTextToHtml = (text = "") => {
         // Shows success message using the existing Snackbar.
         setNoticeMessage(
           data.message ||
-            "Guide section updated successfully"
+          "Guide section updated successfully"
         );
 
         // Uses existing success Snackbar styling.
@@ -763,7 +830,7 @@ const plainTextToHtml = (text = "") => {
         // Shows backend error using existing Snackbar.
         setNoticeMessage(
           error.message ||
-            "Failed to update guide section"
+          "Failed to update guide section"
         );
 
         // Uses existing error Snackbar styling.
@@ -954,7 +1021,7 @@ const plainTextToHtml = (text = "") => {
                 ) {
                   await handleManageSections(
                     rows[
-                      rowIndex
+                    rowIndex
                     ],
                     rowIndex
                   );
@@ -1005,26 +1072,26 @@ const plainTextToHtml = (text = "") => {
               },
             }}
           >
-          <CoreTable
-            columns={[
-              "PROJECT",
-              "GUIDE",
-              "VERSION",
-              "UPDATED",
-              "ACK. %",
-              "STATUS",
-            ]}
-            rows={rows}
-            actionLabel={
-              loading
-                ? "Loading..."
-                : "Compliance"
-            }
-            actionVariant="outlined"
-            onAction={
-              handleCompliance
-            }
-          />
+            <CoreTable
+              columns={[
+                "PROJECT",
+                "GUIDE",
+                "VERSION",
+                "UPDATED",
+                "ACK. %",
+                "STATUS",
+              ]}
+              rows={rows}
+              actionLabel={
+                loading
+                  ? "Loading..."
+                  : "Compliance"
+              }
+              actionVariant="outlined"
+              onAction={
+                handleCompliance
+              }
+            />
           </Box>
 
           {/* Shows the section editor only after a guide version has been selected. */}
@@ -1093,9 +1160,9 @@ const plainTextToHtml = (text = "") => {
                             Number(
                               selectedSectionId
                             ) ===
-                            Number(
-                              section.section_id
-                            )
+                              Number(
+                                section.section_id
+                              )
                               ? "contained"
                               : "outlined"
                           }
@@ -1259,29 +1326,93 @@ const plainTextToHtml = (text = "") => {
             pt: 2,
           }}
         >
+          {/* Choose whether to upload an existing guide or create a new one. */}
+          <TextField
+            select
+            label="Upload type"
+            value={guideMode}
+            onChange={(event) => {
+              setGuideMode(event.target.value);
+              setGuideId("");
+              setNewProjectId("");
+              setNewGuideName("");
+            }}
+            fullWidth
+          >
+            <MenuItem value="existing">Upload existing guide</MenuItem>
+            <MenuItem value="new">Create new guide</MenuItem>
+          </TextField>
           {/* Guide name */}
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-            <Typography component="label" sx={{ fontSize: 12.5, fontWeight: 600, color: "#374151" }}>
-              Guide name <Box component="span" sx={{ color: "#d32f2f" }}>*</Box>
-            </Typography>
-            <TextField
-              select
-              value={guideId}
-              onChange={(event) => {
-                setGuideId(event.target.value);
-                setUploadErrors((prev) => ({ ...prev, guideId: false }));
-              }}
-              fullWidth
-              error={uploadErrors.guideId}
-              helperText={uploadErrors.guideId ? "Please select a guide." : ""}
-            >
-              {guides.map((guide) => (
-                <MenuItem key={guide.guide_id} value={guide.guide_id}>
-                  {guide.guide}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Box>
+
+          {/* Show the existing guide dropdown only in existing-guide mode. */}
+          {guideMode === "existing" && (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+              <Typography
+                component="label"
+                sx={{ fontSize: 12.5, fontWeight: 600, color: "#374151" }}
+              >
+                Guide name <Box component="span" sx={{ color: "#d32f2f" }}>*</Box>
+              </Typography>
+
+              <TextField
+                select
+                value={guideId}
+                onChange={(event) => {
+                  setGuideId(event.target.value);
+                  setUploadErrors((prev) => ({ ...prev, guideId: false }));
+                }}
+                fullWidth
+                error={uploadErrors.guideId}
+                helperText={uploadErrors.guideId ? "Please select a guide." : ""}
+              >
+                {guides.map((guide) => (
+                  <MenuItem key={guide.guide_id} value={guide.guide_id}>
+                    {guide.guide}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Box>
+          )}
+
+          {/* Show these fields only when creating a new guide. */}
+          {guideMode === "new" && (
+            <>
+              {/* Select the project to which the new guide belongs. */}
+
+              {/* Loads project options from the backend instead of hardcoding them. */}
+              <TextField
+                select
+                label="Project"
+                value={newProjectId}
+                onChange={(event) => setNewProjectId(event.target.value)}
+                fullWidth
+                required
+              >
+                {/* Placeholder shown before a project is selected. */}
+                <MenuItem value="">Select project</MenuItem>
+
+                {/* Creates one option for each active project from the API. */}
+                {projects.map((project) => (
+                  <MenuItem key={project.id} value={project.id}>
+                    {project.project_name}
+                  </MenuItem>
+                ))}
+              </TextField>
+
+
+              {/* Enter the name of the new guide. */}
+              <TextField
+                label="New guide name"
+                placeholder="e.g. Spine Indexing QC Guide"
+                value={newGuideName}
+                onChange={(event) => setNewGuideName(event.target.value)}
+                inputProps={{ maxLength: 160 }}
+                fullWidth
+                required
+              />
+            </>
+          )}
+
 
           {/* Choose guide file */}
           <Box>
@@ -1299,18 +1430,19 @@ const plainTextToHtml = (text = "") => {
                 color: uploadErrors.guideFile
                   ? "error.main"
                   : selectedFileName
-                  ? "text.primary"
-                  : "text.secondary",
+                    ? "text.primary"
+                    : "text.secondary",
                 "&:hover": {
                   borderColor: uploadErrors.guideFile ? "error.main" : "#888",
                 },
               }}
             >
-              {selectedFileName || "Choose guide file (PDF)"}
+              {selectedFileName || "Choose guide file (PDF or Word)"}
               <input
                 hidden
                 type="file"
-                accept=".pdf,application/pdf"
+                // Allow PDF, Word, and Excel documents.
+                accept=".pdf,.doc,.docx,.xls,.xlsx"
                 onChange={(e) => {
                   handleFileChange(e);
                   setUploadErrors((prev) => ({ ...prev, guideFile: false }));
@@ -1319,7 +1451,7 @@ const plainTextToHtml = (text = "") => {
             </Button>
             {uploadErrors.guideFile && (
               <Typography sx={{ fontSize: 12, color: "error.main", mt: 0.5, ml: 1.5 }}>
-                Please choose a guide PDF.
+                Please choose a PDF or Word guide file.
               </Typography>
             )}
           </Box>
@@ -1650,7 +1782,7 @@ const plainTextToHtml = (text = "") => {
                             800,
                           color:
                             user.acknowledgement_status ===
-                            "ACKNOWLEDGED"
+                              "ACKNOWLEDGED"
                               ? "#20a36f"
                               : "#e09a22",
                         }}
@@ -1827,10 +1959,10 @@ function GuideManagerAdministrator() {
           sx={{
             display: "grid",
             gridTemplateColumns:
-              {
-                xs: "1fr",
-                sm: "repeat(3, 1fr)",
-              },
+            {
+              xs: "1fr",
+              sm: "repeat(3, 1fr)",
+            },
             gap: 2,
             mb: 2,
           }}
@@ -1922,7 +2054,7 @@ function GuideManagerAdministrator() {
             }
             actionLabel="View"
             actionVariant="text"
-            onAction={() => {}}
+            onAction={() => { }}
           />
         </Box>
       </CorePageShell>

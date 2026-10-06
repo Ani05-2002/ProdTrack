@@ -165,8 +165,7 @@ const applyAutomaticLocks = async () => {
     // Prints a useful backend message only when entries were actually locked.
     if (entriesToLock.length > 0) {
       console.log(
-        `Automatic Lock: ${entriesToLock.length} daily entr${
-          entriesToLock.length === 1 ? "y" : "ies"
+        `Automatic Lock: ${entriesToLock.length} daily entr${entriesToLock.length === 1 ? "y" : "ies"
         } locked`
       );
     }
@@ -303,14 +302,19 @@ const createEntry = async (req, res) => {
         message: "Project and production date are required",
       });
     }
-    const received = 0;
+    // Team Lead can enter received documents; Indexer received count always remains 0.
+    const received =
+      req.user.role === "teamLead"
+        ? Number(documentsReceived || 0)
+        : 0;
     // Converts the four current production fields into numbers.
     const completed = Number(documentsCompleted || 0);
     const processed = Number(batchesProcessed || 0);
     const errors = Number(errorsFlagged || 0);
 
-    // Groups all production numeric values for common validation.
+    // Validates all production numeric values, including Team Lead received count.
     const numericValues = [
+      received,
       completed,
       processed,
       errors,
@@ -831,7 +835,7 @@ const getMyEntries = async (req, res) => {
           // Gets this Daily Entry's dynamic field records.
           const dynamicFields =
             dynamicFieldsByEntry[
-              entry.entry_id
+            entry.entry_id
             ] || [];
 
           // Creates a simpler object such as { documents_received: 100 } for easy frontend access.
@@ -915,6 +919,7 @@ const updateEntry = async (req, res) => {
       projectId,
       productionDate,
       batchJobId,
+      reportingCategory,
       documentsReceived,
       documentsCompleted,
       batchesProcessed,
@@ -925,13 +930,42 @@ const updateEntry = async (req, res) => {
 
     // Converts the selected project ID into a number.
     const selectedProjectId = Number(projectId);
+    // Stores the reporting category ID selected by the Team Lead.
+    let categoryId = null;
+
+    // Resolves the reporting category name or ID from the frontend.
+    if (reportingCategory) {
+      if (!Number.isNaN(Number(reportingCategory))) {
+        categoryId = Number(reportingCategory);
+      } else {
+        const [categories] = await db.query(
+          `
+        SELECT category_id
+        FROM reporting_category
+        WHERE name = ?
+        LIMIT 1
+      `,
+          [reportingCategory]
+        );
+
+        categoryId =
+          categories.length > 0
+            ? categories[0].category_id
+            : null;
+      }
+    }
 
     // Normalizes the requested workflow status.
     const statusCode = String(status).toLowerCase();
     // Documents received is no longer entered by the Indexer.
-    const received = 0;
+    // Team Lead can update received documents; Indexer received count always remains 0.
+    const received =
+      req.user.role === "teamLead"
+        ? Number(documentsReceived || 0)
+        : 0;
     // Converts the four current production fields into numbers.
     const numbers = [
+      received,
       documentsCompleted,
       batchesProcessed,
       errorsFlagged,
@@ -939,6 +973,7 @@ const updateEntry = async (req, res) => {
 
     // Stores the normalized production values for easier use below.
     const [
+      validatedReceived,
       completed,
       processed,
       errors,
@@ -1063,19 +1098,22 @@ const updateEntry = async (req, res) => {
     const entry = entries[0];
 
     // Checks whether the current Administrator locking rule permits editing.
-    const canEditEntry =
-      await getIndexerEditPermission(
-        connection,
-        entry.status,
-        entry.locked_at
-      );
+    // Applies Indexer edit restrictions only to Indexer entries.
+    // Team Leads can edit their own Draft entry before submitting it.
+    if (req.user.role === "indexer") {
+      const canEditEntry =
+        await getIndexerEditPermission(
+          connection,
+          entry.status,
+          entry.locked_at
+        );
 
-    // Prevents editing when the workflow state is read-only.
-    if (!canEditEntry) {
-      reject(
-        403,
-        `${entry.status} entries are currently read-only for Indexers`
-      );
+      if (!canEditEntry) {
+        reject(
+          403,
+          `${entry.status} entries are currently read-only for Indexers`
+        );
+      }
     }
 
     // Checks that the selected project is active and assigned to this user.
@@ -1170,7 +1208,7 @@ const updateEntry = async (req, res) => {
         selectedProjectId,
         productionDate,
         batchRef,
-        projects[0].category_id,
+        categoryId,
         received,
         completed,
         processed,
@@ -1733,11 +1771,221 @@ const getProjectFields = async (req, res) => {
     });
   }
 };
+
+// ============================================================
+// GET PROJECT DAILY PRODUCTION SUMMARY
+// ============================================================
+
+// Calculates Received, Completed and Pending for one project and production date.
+const getProjectDailySummary = async (req, res) => {
+  try {
+    // Reads the project and production date from the request.
+    const projectId = Number(req.params.projectId);
+    const productionDate = req.query.date;
+
+    // Validates the required project and date.
+    if (
+      !Number.isSafeInteger(projectId) ||
+      projectId <= 0 ||
+      !productionDate
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid project ID and production date are required",
+      });
+    }
+    // Team Leads can view the summary only for projects directly assigned to them.
+    if (req.user.role === "teamLead") {
+      const [assignments] = await db.query(
+        `
+      SELECT assignment_id
+      FROM project_assignment
+      WHERE user_id = ?
+        AND project_id = ?
+      LIMIT 1
+    `,
+        [
+          req.user.id,
+          projectId,
+        ]
+      );
+
+      // Blocks access when the requested project is not assigned to this Team Lead.
+      if (assignments.length === 0) {
+        return res.status(403).json({
+          success: false,
+          message: "This project is not assigned to you",
+        });
+      }
+    }
+    // Defines when the new Team Lead Received + Indexer Completed backlog workflow starts.
+    const backlogWorkflowStartDate = "2026-10-05";
+    // Calculates all received and completed work before the selected production date.
+    const [previousRows] = await db.query(
+      `
+    SELECT
+
+      COALESCE(
+        SUM(
+          CASE
+            WHEN r.code IN ('teamLead', 'team_lead', 'lead')
+            THEN de.docs_received
+            ELSE 0
+          END
+        ),
+        0
+      ) AS received,
+
+      COALESCE(
+        SUM(
+          CASE
+            WHEN r.code = 'indexer'
+            THEN de.docs_completed
+            ELSE 0
+          END
+        ),
+        0
+      ) AS completed
+
+    FROM daily_entry de
+
+    JOIN users u
+      ON u.user_id = de.user_id
+
+    JOIN role r
+      ON r.role_id = u.role_id
+
+    JOIN entry_status es
+      ON es.status_id = de.status_id
+
+    WHERE de.project_id = ?
+      AND de.production_date >= ?
+      AND de.production_date < ?
+      AND es.code IN ('submitted', 'reviewed', 'locked')
+  `,
+      [
+        projectId,
+        backlogWorkflowStartDate,
+        productionDate,
+      ]
+    );
+
+    // Calculates the Team Lead received count and total Indexer completed count.
+    const [rows] = await db.query(
+      `
+        SELECT
+
+          COALESCE(
+            SUM(
+              CASE
+                WHEN r.code IN ('teamLead', 'team_lead', 'lead')
+                THEN de.docs_received
+                ELSE 0
+              END
+            ),
+            0
+          ) AS received,
+
+          COALESCE(
+            SUM(
+              CASE
+                WHEN r.code = 'indexer'
+                THEN de.docs_completed
+                ELSE 0
+              END
+            ),
+            0
+          ) AS completed
+
+        FROM daily_entry de
+
+        JOIN users u
+          ON u.user_id = de.user_id
+
+        JOIN role r
+          ON r.role_id = u.role_id
+        JOIN entry_status es
+           ON es.status_id = de.status_id
+
+       WHERE de.project_id = ?
+         AND de.production_date = ?
+         AND es.code IN ('submitted', 'reviewed', 'locked')
+      `,
+      [
+        projectId,
+        productionDate,
+      ]
+    );
+    // Converts all production totals before the selected date into numbers.
+    const previousReceived = Number(previousRows[0]?.received || 0);
+    const previousCompleted = Number(previousRows[0]?.completed || 0);
+
+    // Calculates unfinished work carried forward from previous dates.
+    const previousBacklog = Math.max(
+      previousReceived - previousCompleted,
+      0
+    );
+    // Converts database aggregate values into normal numbers.
+    const received = Number(rows[0]?.received || 0);
+    const completed = Number(rows[0]?.completed || 0);
+
+    // Pending cannot be negative when completed exceeds received.
+    // Uses today's completed work to clear the previous backlog first.
+    const backlogCompleted = Math.min(
+      completed,
+      previousBacklog
+    );
+
+    // Calculates how much previous backlog still remains.
+    const backlog = Math.max(
+      previousBacklog - backlogCompleted,
+      0
+    );
+
+    // Calculates how much of today's completed work remains after clearing backlog.
+    const todayCompleted = Math.max(
+      completed - backlogCompleted,
+      0
+    );
+
+    // Calculates today's pending work after applying the remaining completion.
+    const pending = Math.max(
+      received - todayCompleted,
+      0
+    );
+    // Returns the calculated project/day production totals.
+    // Returns today's production totals together with backlog information.
+    return res.status(200).json({
+      success: true,
+      projectId,
+      productionDate,
+      received,
+      completed,
+      previousBacklog,
+      backlogCompleted,
+      backlog,
+      todayCompleted,
+      pending,
+    });
+  } catch (error) {
+    console.error(
+      "Get Project Daily Summary Error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load project daily summary",
+      error: error.message,
+    });
+  }
+};
 module.exports = {
   createEntry,
   getMyEntries,
   updateEntry,
   getPendingTeamEntries,
   reviewEntry,
-  getProjectFields
+  getProjectFields,
+  getProjectDailySummary,
 };

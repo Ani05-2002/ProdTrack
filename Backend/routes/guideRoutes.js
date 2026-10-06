@@ -21,6 +21,7 @@ const {
   getGuideManagerList,
   getGuideCompliance,
   uploadGuideVersion,
+  createGuide, // Handles creating a new guide.
   getPendingAckGuide,
   getGuideSections,
   updateGuideSection,
@@ -48,6 +49,14 @@ router.post(
   allowRoles("coreTeam", "administrator"),
   guideUpload.single("file"),
   uploadGuideVersion
+);
+// Creates a new guide and uploads its first document.
+router.post(
+  "/manage/create",
+  authenticate,
+  allowRoles("coreTeam", "administrator"),
+  guideUpload.single("file"),
+  createGuide
 );
 
 // Gets acknowledgement compliance for one guide version.

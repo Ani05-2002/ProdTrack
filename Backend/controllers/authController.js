@@ -239,7 +239,9 @@ const login = async (req, res) => {
 
       return res.status(401).json({
         success: false,
-        message: "Invalid email or password",
+        // message: "Invalid email or password",
+        // Username and email are both accepted for login.
+        message: "Invalid username/email or password",
       });
     }
 

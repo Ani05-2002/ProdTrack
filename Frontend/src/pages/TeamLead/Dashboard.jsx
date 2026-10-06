@@ -6,18 +6,18 @@ import {
   Paper, Typography, Skeleton, Avatar,
 } from "@mui/material";
 
-import PeopleAltRoundedIcon        from "@mui/icons-material/PeopleAltRounded";
+import PeopleAltRoundedIcon from "@mui/icons-material/PeopleAltRounded";
 import AssignmentTurnedInRoundedIcon from "@mui/icons-material/AssignmentTurnedInRounded";
-import AccessTimeRoundedIcon        from "@mui/icons-material/AccessTimeRounded";
-import VerifiedRoundedIcon          from "@mui/icons-material/VerifiedRounded";
+import AccessTimeRoundedIcon from "@mui/icons-material/AccessTimeRounded";
+import VerifiedRoundedIcon from "@mui/icons-material/VerifiedRounded";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
-const FONT        = '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+const FONT = '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 const CARD_SHADOW = "0 1px 3px rgba(16,30,54,.07), 0 4px 16px rgba(16,30,54,.06)";
-const LINE        = "#dfe4ec";
-const LINE2       = "#e8ecf3";
-const MUTED       = "#6a7585";
-const HEAD        = "#1a2434";
+const LINE = "#dfe4ec";
+const LINE2 = "#e8ecf3";
+const MUTED = "#6a7585";
+const HEAD = "#1a2434";
 
 // ─── Shared sub-components ────────────────────────────────────────────────────
 function StatCard({ icon, iconBg, iconColor, label, value, trend, trendColor, loading }) {
@@ -97,7 +97,7 @@ function ProductivityChart({ bars, loading }) {
   if (loading) {
     return (
       <Box sx={{ px: 2.5, pt: 3, pb: 2, display: "flex", alignItems: "flex-end", gap: 1, height: 220 }}>
-        {[1,2,3,4,5,6,7].map((i) => (
+        {[1, 2, 3, 4, 5, 6, 7].map((i) => (
           <Skeleton key={i} variant="rounded" width="100%" height={`${40 + i * 15}px`} sx={{ borderRadius: "6px 6px 0 0" }} />
         ))}
       </Box>
@@ -157,15 +157,15 @@ function CompletionSplit({ split, loading }) {
   }
 
   const completed = split?.completed ?? 0;
-  const pending   = split?.pending   ?? 0;
-  const inReview  = split?.inReview  ?? 0;
-  const total     = completed + pending + inReview || 1;
-  const pct       = split?.completionPct ?? 0;
+  const pending = split?.pending ?? 0;
+  const inReview = split?.inReview ?? 0;
+  const total = completed + pending + inReview || 1;
+  const pct = split?.completionPct ?? 0;
 
   const DONUT = [
     { label: "Completed", value: completed, color: "#20a36b" },
-    { label: "Pending",   value: pending,   color: "#e09a20" },
-    { label: "In review", value: inReview,  color: "#3478ed" },
+    { label: "Pending", value: pending, color: "#e09a20" },
+    { label: "In review", value: inReview, color: "#3478ed" },
   ];
 
   let cumPct = 0;
@@ -233,12 +233,12 @@ function GuideChip({ value }) {
 
 function StatusChip({ value }) {
   const present = value === "PRESENT";
-  const leave   = value === "LEAVE";
+  const leave = value === "LEAVE";
   const style = present
     ? { bgcolor: "#e4f6ee", color: "#177a53", border: "1.5px solid #b7e3cc" }
     : leave
-    ? { bgcolor: "#fef3f2", color: "#c0392b", border: "1.5px solid #fbb" }
-    : { bgcolor: "#f3f4f6", color: MUTED, border: `1.5px solid ${LINE}` };
+      ? { bgcolor: "#fef3f2", color: "#c0392b", border: "1.5px solid #fbb" }
+      : { bgcolor: "#f3f4f6", color: MUTED, border: `1.5px solid ${LINE}` };
   return (
     <Box sx={{
       display: "inline-flex", alignItems: "center", justifyContent: "center",
@@ -280,7 +280,217 @@ function MemberRow({ initials, name, avatarColor, project, completedToday, pendi
     </Box>
   );
 }
+// ─── Project Daily Summary Table ──────────────────────────────────────────────
+const DAILY_SUMMARY_COL =
+  "1.1fr 1.8fr 1.2fr 1.2fr 1fr 1fr";
 
+function ProjectDailySummaryTable({
+  rows,
+  loading,
+  page,
+  setPage,
+  rowsPerPage,
+}) {
+
+  // Gets only the five records that belong to the current page.
+  const paginatedRows = rows.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage
+  );
+
+  return (
+    <PanelCard title="Project Daily Summary">
+      <Box sx={{ overflowX: "auto" }}>
+
+        {/* Table headings */}
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: DAILY_SUMMARY_COL,
+            minWidth: 850,
+            px: 2,
+            py: 1.2,
+            bgcolor: "#f8fafc",
+            borderBottom: `1px solid ${LINE2}`,
+          }}
+        >
+          {[
+            "DATE",
+            "PROJECT",
+            "RECEIVED",
+            "COMPLETED",
+            "BACKLOG",
+            "PENDING",
+          ].map((column) => (
+            <Typography
+              key={column}
+              sx={{
+                fontFamily: FONT,
+                fontSize: 11,
+                fontWeight: 800,
+                color: MUTED,
+                letterSpacing: "0.4px",
+              }}
+            >
+              {column}
+            </Typography>
+          ))}
+        </Box>
+
+        {/* Loading state */}
+        {loading ? (
+          [1, 2, 3].map((item) => (
+            <Box
+              key={item}
+              sx={{
+                px: 2,
+                py: 1.5,
+                borderBottom: `1px solid ${LINE2}`,
+              }}
+            >
+              <Skeleton variant="text" height={30} />
+            </Box>
+          ))
+        ) : rows.length === 0 ? (
+
+          // Empty state
+          <Box sx={{ px: 2, py: 2 }}>
+            <Typography
+              sx={{
+                fontFamily: FONT,
+                fontSize: 13,
+                color: MUTED,
+              }}
+            >
+              No project production data found.
+            </Typography>
+          </Box>
+
+        ) : (
+
+          // Date-wise and project-wise production rows
+          paginatedRows.map((row, index) => (
+            <Box
+              key={`${row.projectId}-${row.productionDate}-${index}`}
+              sx={{
+                display: "grid",
+                gridTemplateColumns: DAILY_SUMMARY_COL,
+                minWidth: 850,
+                alignItems: "center",
+                px: 2,
+                py: 1.3,
+                borderBottom: `1px solid ${LINE2}`,
+                "&:hover": {
+                  bgcolor: "#fafbff",
+                },
+              }}
+            >
+              {/* Production date */}
+              <Typography sx={{ fontFamily: FONT, fontSize: 13, color: HEAD }}>
+                {row.productionDate}
+              </Typography>
+
+              {/* Project name */}
+              <Typography
+                sx={{
+                  fontFamily: FONT,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: HEAD,
+                }}
+              >
+                {row.projectName}
+              </Typography>
+
+              {/* Documents received */}
+              <Typography sx={{ fontFamily: FONT, fontSize: 13, color: HEAD }}>
+                {row.received?.toLocaleString()}
+              </Typography>
+
+              {/* Documents completed */}
+              <Typography sx={{ fontFamily: FONT, fontSize: 13, color: HEAD }}>
+                {row.completed?.toLocaleString()}
+              </Typography>
+
+              {/* Previous backlog remaining */}
+              <Typography sx={{ fontFamily: FONT, fontSize: 13, color: HEAD }}>
+                {row.backlog?.toLocaleString()}
+              </Typography>
+
+              {/* Today's pending documents */}
+              <Typography
+                sx={{
+                  fontFamily: FONT,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: HEAD,
+                }}
+              >
+                {row.pending?.toLocaleString()}
+              </Typography>
+            </Box>
+          ))
+        )}
+      </Box>
+
+      {/* Project Daily Summary pagination footer */}
+      {!loading && rows.length > 0 && (
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            gap: 2,
+            px: 2,
+            py: 1.4,
+            borderTop: `1px solid ${LINE2}`,
+          }}
+        >
+          {/* Shows the current record range, for example 1–5 of 8. */}
+          <Typography
+            sx={{
+              fontFamily: FONT,
+              fontSize: 12.5,
+              color: MUTED,
+            }}
+          >
+            {page * rowsPerPage + 1}–
+            {Math.min((page + 1) * rowsPerPage, rows.length)} of {rows.length}
+          </Typography>
+
+          {/* Goes to the previous five records. */}
+          <Button
+            disabled={page === 0}
+            onClick={() => setPage((current) => current - 1)}
+            sx={{
+              minWidth: 30,
+              p: 0.5,
+              fontSize: 18,
+              textTransform: "none",
+            }}
+          >
+            ‹
+          </Button>
+
+          {/* Goes to the next five records. */}
+          <Button
+            disabled={(page + 1) * rowsPerPage >= rows.length}
+            onClick={() => setPage((current) => current + 1)}
+            sx={{
+              minWidth: 30,
+              p: 0.5,
+              fontSize: 18,
+              textTransform: "none",
+            }}
+          >
+            ›
+          </Button>
+        </Box>
+      )}
+
+    </PanelCard>
+  );
+}
 function TeamMembersTable({ members, loading, onNavigate }) {
   return (
     <PanelCard
@@ -288,7 +498,7 @@ function TeamMembersTable({ members, loading, onNavigate }) {
       action={<ViewLink label="Manage team" onClick={() => onNavigate("my-team")} />}
     >
       <Box sx={{ display: "grid", gridTemplateColumns: COL, minWidth: 860, px: 2, py: 1.2, bgcolor: "#f8fafc", borderBottom: `1px solid ${LINE2}` }}>
-        {["MEMBER","PROJECT","COMPLETED","PENDING","GUIDE ACK.","STATUS"].map((col) => (
+        {["MEMBER", "PROJECT", "COMPLETED", "PENDING", "GUIDE ACK.", "STATUS"].map((col) => (
           <Typography key={col} sx={{ fontFamily: FONT, fontSize: 11, fontWeight: 800, color: MUTED, letterSpacing: "0.4px" }}>
             {col}
           </Typography>
@@ -296,7 +506,7 @@ function TeamMembersTable({ members, loading, onNavigate }) {
       </Box>
       <Box sx={{ overflowX: "auto" }}>
         {loading ? (
-          [1,2,3].map((i) => (
+          [1, 2, 3].map((i) => (
             <Box key={i} sx={{ px: 2, py: 1.5, borderTop: `1px solid ${LINE2}` }}>
               <Skeleton variant="text" height={32} />
             </Box>
@@ -315,25 +525,31 @@ function TeamMembersTable({ members, loading, onNavigate }) {
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function Dashboard({ onNavigate }) {
-  const [summary,    setSummary]    = useState(null);
-  const [prodBars,   setProdBars]   = useState([]);
-  const [split,      setSplit]      = useState(null);
-  const [members,    setMembers]    = useState([]);
-  const [loading,    setLoading]    = useState(true);
+  const [summary, setSummary] = useState(null);
+  const [prodBars, setProdBars] = useState([]);
+  const [split, setSplit] = useState(null);
+  const [members, setMembers] = useState([]);
+  // Stores date-wise and project-wise production summary.
+  const [projectDailySummary, setProjectDailySummary] = useState([]);
+  const [projectSummaryPage, setProjectSummaryPage] = useState(0);
+  const PROJECT_SUMMARY_ROWS_PER_PAGE = 5;
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [s, p, cs, tm] = await Promise.all([
+        const [s, p, cs, tm, pds] = await Promise.all([
           apiRequest("/team-lead/dashboard"),
           apiRequest("/team-lead/dashboard/productivity"),
           apiRequest("/team-lead/dashboard/completion-split"),
           apiRequest("/team-lead/dashboard/team-members"),
+          apiRequest("/team-lead/dashboard/project-daily-summary"),
         ]);
         setSummary(s.dashboard);
         setProdBars(p.productivity ?? []);
         setSplit(cs.completionSplit);
         setMembers(tm.members ?? []);
+        setProjectDailySummary(pds.summary ?? []);
       } catch (err) {
         console.error("Team Lead Dashboard error:", err);
       } finally {
@@ -343,7 +559,7 @@ export default function Dashboard({ onNavigate }) {
     load();
   }, []);
 
-  const ackRate    = summary?.ackCompliance?.rate    ?? 0;
+  const ackRate = summary?.ackCompliance?.rate ?? 0;
   const ackPending = summary?.ackCompliance?.pending ?? 0;
 
   const STAT_CARDS = [
@@ -433,9 +649,22 @@ export default function Dashboard({ onNavigate }) {
           </PanelCard>
         </Grid>
       </Grid>
+      {/* PROJECT DAILY SUMMARY */}
+      <Box sx={{ mb: 2.5 }}>
+        <ProjectDailySummaryTable
+          rows={projectDailySummary}
+          loading={loading}
+          page={projectSummaryPage}
+          setPage={setProjectSummaryPage}
+          rowsPerPage={PROJECT_SUMMARY_ROWS_PER_PAGE}
+        />
+      </Box>
 
       {/* TEAM MEMBERS TABLE */}
-      <TeamMembersTable members={members} loading={loading} onNavigate={onNavigate} />
+      <TeamMembersTable
+        members={members}
+        loading={loading}
+        onNavigate={onNavigate} />
     </Box>
   );
 }

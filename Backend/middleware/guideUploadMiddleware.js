@@ -34,25 +34,49 @@ const storage = multer.diskStorage({
 });
 
 // Validates uploaded guide files before saving them.
+// Validates uploaded PDF and Microsoft Word guide files.
 const fileFilter = (req, file, cb) => {
   // Reads the uploaded file extension in lowercase.
   const extension = path.extname(file.originalname).toLowerCase();
 
-  // Accepts files that have a .pdf extension and a compatible PDF MIME type.
-  const isPdf =
-    extension === ".pdf" &&
-    (
-      file.mimetype === "application/pdf" ||
-      file.mimetype === "application/octet-stream"
-    );
+  // Defines the accepted extensions and their MIME types.
+  const allowedTypes = {
+    // Allows PDF guide files.
+    ".pdf": ["application/pdf"],
 
-  // Allows valid PDF guide files.
-  if (isPdf) {
+    // Allows old Microsoft Word guide files.
+    ".doc": ["application/msword"],
+
+    // Allows modern Microsoft Word guide files.
+    ".docx": [
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ],
+
+    // Allows old Microsoft Excel guide files.
+    ".xls": [
+      "application/vnd.ms-excel",
+    ],
+
+    // Allows modern Microsoft Excel guide files.
+    ".xlsx": [
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ],
+  };
+
+  // Checks that both the extension and MIME type are allowed.
+  const isValidFile = allowedTypes[extension]?.includes(file.mimetype);
+
+  // Accepts supported guide files.
+  if (isValidFile) {
     return cb(null, true);
   }
 
-  // Rejects every non-PDF upload.
-  return cb(new Error("Only PDF guide files are allowed"));
+  // Rejects unsupported file types.
+  return cb(
+    new Error(
+      "Only PDF, DOC, DOCX, XLS and XLSX guide files are allowed"
+    )
+  );
 };
 
 // Creates the reusable guide upload middleware.

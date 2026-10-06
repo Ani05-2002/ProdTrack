@@ -119,6 +119,9 @@ function UserMasterPage({
   // Stores the user currently being edited; null means Add User mode.
   const [selectedUser, setSelectedUser] = useState(null);
 
+  // Controls whether New Password fields are shown in Edit User mode.
+  const [changePassword, setChangePassword] = useState(false);
+
   // Tracks whether API data is currently loading.
   const [loading, setLoading] = useState(false);
 
@@ -194,29 +197,29 @@ function UserMasterPage({
   };
 
   // ==========================================================
-// LOAD DEPARTMENTS
-// ==========================================================
+  // LOAD DEPARTMENTS
+  // ==========================================================
 
-// Loads departments from the database for the Add/Edit User dialog.
-const loadDepartments = async () => {
-  try {
-    // Calls the new backend Department API.
-    const response = await apiRequest(
-      "/core-team/users/departments"
-    );
+  // Loads departments from the database for the Add/Edit User dialog.
+  const loadDepartments = async () => {
+    try {
+      // Calls the new backend Department API.
+      const response = await apiRequest(
+        "/core-team/users/departments"
+      );
 
-    // Stores the returned departments for the dropdown.
-    setDepartments(
-      response.departments || []
-    );
-  } catch (error) {
-    // Logs department loading errors without changing the existing UI.
-    console.error(
-      "Load departments error:",
-      error
-    );
-  }
-};
+      // Stores the returned departments for the dropdown.
+      setDepartments(
+        response.departments || []
+      );
+    } catch (error) {
+      // Logs department loading errors without changing the existing UI.
+      console.error(
+        "Load departments error:",
+        error
+      );
+    }
+  };
 
   // ==========================================================
   // INITIAL API LOAD
@@ -289,9 +292,9 @@ const loadDepartments = async () => {
   // Builds the same existing form fields but replaces static dropdown data with API data.
   const fields = useMemo(
     () => [
-          // Shows Employee ID only to Administrator while editing an existing user.
-    ...(administrator && selectedUser
-      ? [
+      // Shows Employee ID only to Administrator while editing an existing user.
+      ...(administrator && selectedUser
+        ? [
           {
             name: "employeeId",
             label: "Employee ID",
@@ -299,30 +302,82 @@ const loadDepartments = async () => {
             required: true,
           },
         ]
-      : []),
+        : []),
       {
         name: "employee",
         label: "Employee name",
         placeholder: "e.g. Aditya Rao",
         required: true,
       },
+      // Show username and password fields when Admin adds a user.
+      ...(administrator && !selectedUser
+        ? [
+          // Admin chooses the username.
+          {
+            name: "username",
+            label: "Username",
+            placeholder: "Enter username",
+            required: true,
+          },
+
+          // Admin creates the password.
+          {
+            name: "password",
+            label: "Password",
+            type: "password",
+            placeholder: "Enter password",
+            required: true,
+          },
+
+          // Admin confirms the password.
+          {
+            name: "confirmPassword",
+            label: "Confirm Password",
+            type: "password",
+            placeholder: "Confirm password",
+            required: true,
+          },
+        ]
+        : []),
+      // Shows new password fields only when editing a user and Change Password is enabled.
+      ...(administrator && selectedUser && changePassword
+        ? [
+          {
+            name: "password",
+            label: "New Password",
+            type: "password",
+            placeholder: "Enter new password",
+            required: true,
+          },
+          {
+            name: "confirmPassword",
+            label: "Confirm New Password",
+            type: "password",
+            placeholder: "Confirm new password",
+            required: true,
+          },
+        ]
+        : []),
+
+      // Email is optional in the Admin form.
+      // Role-specific validation is performed on submission.
       {
         name: "email",
         label: "Email",
         placeholder: "name@company.com",
         type: "email",
-        required: true,
+        required: !administrator,
       },
       // Shows the available database departments as a dropdown.
       // Shows departments loaded dynamically from the database.
       {
-         name: "department",
+        name: "department",
         label: "Department",
         placeholder: "Select department",
 
         // Converts API department objects into the existing dropdown's text options.
         options: departments.map(
-        (department) => department.name
+          (department) => department.name
         ),
       },
       {
@@ -339,25 +394,25 @@ const loadDepartments = async () => {
         ),
         required: true,
       },
-        // Shows Team Lead only while adding a new user.
-  ...(!selectedUser
-    ? [
-        {
-          name: "lead",
-          label: "Team lead",
-          placeholder:
-            teamLeads.length > 0
-              ? teamLeads[0].name
-              : "e.g. Rohan Mehta",
-          options: [
-            "None",
-            ...teamLeads.map(
-              (lead) => lead.name
-            ),
-          ],
-        },
-      ]
-    : []),
+      // Shows Team Lead only while adding a new user.
+      ...(!selectedUser
+        ? [
+          {
+            name: "lead",
+            label: "Team lead",
+            placeholder:
+              teamLeads.length > 0
+                ? teamLeads[0].name
+                : "e.g. Rohan Mehta",
+            options: [
+              "None",
+              ...teamLeads.map(
+                (lead) => lead.name
+              ),
+            ],
+          },
+        ]
+        : []),
       {
         name: "status",
         label: "Status",
@@ -381,7 +436,7 @@ const loadDepartments = async () => {
         ],
       },
     ],
-    [teamLeads, projects,departments,administrator, selectedUser]
+    [teamLeads, projects, departments, administrator, selectedUser, changePassword]
   );
 
 
@@ -390,8 +445,18 @@ const loadDepartments = async () => {
   // ==========================================================
 
   // Opens the existing dialog in Add User mode.
+  // Open Add User and close the Header search dropdown.
+  // Open the Add User form with no previously selected user.
   const handleAddUser = () => {
+    // Close and clear the Header search.
+    window.dispatchEvent(
+      new Event("prodtrack-close-search")
+    );
+
+    // Clear the selected user so this is a new-user form.
     setSelectedUser(null);
+
+    // Open the Add User dialog.
     setOpen(true);
   };
 
@@ -412,6 +477,7 @@ const loadDepartments = async () => {
     }
 
     setSelectedUser(user);
+    setChangePassword(false);
     setOpen(true);
   };
 
@@ -425,6 +491,9 @@ const loadDepartments = async () => {
     if (!selectedUser) {
       return {
         employee: "",
+        username: "",
+        password: "",
+        confirmPassword: "",
         email: "",
         department: "",
         designation: "",
@@ -455,7 +524,7 @@ const loadDepartments = async () => {
     if (
       projects.length > 0 &&
       selectedUser.project_ids?.length ===
-        projects.length
+      projects.length
     ) {
       projectValue = "All projects";
     }
@@ -463,6 +532,8 @@ const loadDepartments = async () => {
     return {
       employeeId: selectedUser.employee_id || "",
       employee: selectedUser.name || "",
+      password: "",
+      confirmPassword: "",
       email: selectedUser.email || "",
       department:
         selectedUser.department || "",
@@ -554,15 +625,15 @@ const loadDepartments = async () => {
         );
 
       // Finds the database department selected by its visible name.
-    const selectedDepartment =
-    departments.find(
-    (department) =>
-      department.name === values.department
-      );
+      const selectedDepartment =
+        departments.find(
+          (department) =>
+            department.name === values.department
+        );
 
-// Gets the real database department ID instead of using a hardcoded mapping.
-const departmentId =
-  selectedDepartment?.id || null;
+      // Gets the real database department ID instead of using a hardcoded mapping.
+      const departmentId =
+        selectedDepartment?.id || null;
       // Converts Team Lead selection into its user ID.
       const teamLeadId =
         getSelectedTeamLeadId(
@@ -581,19 +652,37 @@ const departmentId =
       // ======================================================
 
       if (selectedUser) {
+        // Validate the new password only when Administrator selected Change Password.
+        if (administrator && changePassword) {
+          // Both password fields are required.
+          if (!values.password || !values.confirmPassword) {
+            toast.error("Please enter and confirm the new password.");
+            return;
+          }
+
+          // New Password and Confirm New Password must match.
+          if (values.password !== values.confirmPassword) {
+            toast.error("New passwords do not match.");
+            return;
+          }
+        }
         // Builds the PATCH body using fields supported by updateUser().
         const updateBody = {
           name: values.employee,
           email: values.email,
-           ...(administrator
-          ? { employeeId: values.employeeId }
-          : {}),
+          ...(administrator
+            ? { employeeId: values.employeeId }
+            : {}),
           departmentId,
           designation:
             values.designation,
           roleId,
           status,
         };
+        // Sends a new password only when Administrator selected Change Password.
+        if (administrator && changePassword) {
+          updateBody.password = values.password;
+        }
 
         /*
          * Only updates project assignments when the user selected a
@@ -636,21 +725,67 @@ const departmentId =
       // CREATE NEW USER
       // ======================================================
 
-      // Generates the username from the entered email address.
-      const username =
-        generateUsernameFromEmail(
-          values.email
+      // Identify the selected role.
+      const isIndexer = values.role === "Indexer";
+
+      // Use the Admin-entered username.
+      // Keep automatic generation for the Core Team.
+      const username = administrator
+        ? String(values.username || "").trim()
+        : generateUsernameFromEmail(values.email);
+
+      // Use the Admin-entered password.
+      // Keep automatic generation for the Core Team.
+      const temporaryPassword = administrator
+        ? values.password
+        : generateTemporaryPassword();
+
+      // Convert an empty email to null.
+      const email =
+        String(values.email || "").trim() || null;
+
+      // Require a username for Admin-created accounts.
+      if (administrator && !username) {
+        toast.error("Please enter a username.");
+        return;
+      }
+
+      // Validate the username.
+      if (
+        administrator &&
+        !/^[a-zA-Z0-9._-]{3,60}$/.test(username)
+      ) {
+        toast.error(
+          "Username must contain 3–60 letters, numbers, dots, underscores or hyphens."
         );
+        return;
+      }
 
-      // Generates a temporary first-login password.
-      const temporaryPassword =
-        generateTemporaryPassword();
+      // Email is optional only for Admin-created Indexers.
+      if ((!administrator || !isIndexer) && !email) {
+        toast.error("Email is required for this role.");
+        return;
+      }
 
+      // Require the Admin to enter a password.
+      if (administrator && !temporaryPassword) {
+        toast.error("Please enter a password.");
+        return;
+      }
+
+      // Check that both passwords match.
+      if (
+        administrator &&
+        temporaryPassword !== values.confirmPassword
+      ) {
+        toast.error("Passwords do not match.");
+        return;
+      }
       // Builds the exact request body required by createUser().
       const createBody = {
         name: values.employee,
         username,
-        email: values.email,
+        email,
         password: temporaryPassword,
         roleId,
         departmentId,
@@ -682,10 +817,11 @@ const departmentId =
       await loadUsers();
 
       // Shows the generated credentials once because the current UI contains no username/password fields.
+      // Do not display Admin-created passwords in notifications.
       toast.success(
-        `User created successfully.\n\nEmployee ID: ${
-          response.user?.employee_id || ""
-        }\nUsername: ${username}\nTemporary Password: ${temporaryPassword}`
+        administrator
+          ? `User created successfully. Username: ${username}`
+          : `User created successfully. Username: ${username}`
       );
     } catch (error) {
       console.error(
@@ -771,6 +907,15 @@ const departmentId =
         initialValues={initialValues}
         // Sends Add/Edit values to the backend.
         onSubmit={handleSubmit}
+        // Shows a Change Password button only while Administrator is editing a user.
+        extraAction={
+          administrator && selectedUser
+            ? {
+              label: changePassword ? "Cancel password change" : "Change Password",
+              onClick: () => setChangePassword((current) => !current),
+            }
+            : null
+        }
         // Keeps the original Save user button label.
         submitLabel="Save user"
       />

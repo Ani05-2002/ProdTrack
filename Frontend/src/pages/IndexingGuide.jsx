@@ -117,85 +117,85 @@ export default function IndexingGuide({
     };
   }, [variant]);
   // =========================================================
-// LOAD GUIDE SECTIONS
-// =========================================================
+  // LOAD GUIDE SECTIONS
+  // =========================================================
 
-// Loads the preview sections whenever the selected guide version changes.
-useEffect(() => {
-  // Does not load sections for the compact dashboard card.
-  if (variant === "card") return;
+  // Loads the preview sections whenever the selected guide version changes.
+  useEffect(() => {
+    // Does not load sections for the compact dashboard card.
+    if (variant === "card") return;
 
-  // Clears section data when no guide version is selected.
-  if (!selectedVersionId) {
-    setGuideSections([]);
-    return;
-  }
-
-  let active = true;
-
-  // Loads all sections configured for the selected guide version.
-  const loadGuideSections = async () => {
-    try {
-      // Shows the loading state inside the guide preview.
-      setSectionsLoading(true);
-
-      // Clears any previous section-loading error.
-      setSectionsError("");
-
-      // Gets the sections for the currently selected guide version.
-      const data = await apiRequest(
-        `/guides/${selectedVersionId}/sections`
-      );
-
-      // Stops if the backend reports an unsuccessful request.
-      if (!data.success) {
-        throw new Error(
-          data.message || "Failed to load guide sections"
-        );
-      }
-
-      // Stops state updates if the component has already changed/unmounted.
-      if (!active) return;
-
-      // Stores all backend-driven guide sections.
-      setGuideSections(data.sections || []);
-
-      // Automatically selects Overview/the first available section.
-      setSelected(0);
-    } catch (err) {
-      // Stops state updates if this request is no longer active.
-      if (!active) return;
-
-      // Clears old sections when loading fails.
+    // Clears section data when no guide version is selected.
+    if (!selectedVersionId) {
       setGuideSections([]);
-
-      // Stores the error for the preview area.
-      setSectionsError(
-        err.message || "Failed to load guide sections"
-      );
-    } finally {
-      // Ends loading only while this request is still active.
-      if (active) {
-        setSectionsLoading(false);
-      }
+      return;
     }
-  };
 
-  // Starts loading the selected guide's sections.
-  loadGuideSections();
+    let active = true;
 
-  // Prevents an old request from updating the page after selection changes.
-  return () => {
-    active = false;
-  };
-}, [selectedVersionId, variant]);
+    // Loads all sections configured for the selected guide version.
+    const loadGuideSections = async () => {
+      try {
+        // Shows the loading state inside the guide preview.
+        setSectionsLoading(true);
+
+        // Clears any previous section-loading error.
+        setSectionsError("");
+
+        // Gets the sections for the currently selected guide version.
+        const data = await apiRequest(
+          `/guides/${selectedVersionId}/sections`
+        );
+
+        // Stops if the backend reports an unsuccessful request.
+        if (!data.success) {
+          throw new Error(
+            data.message || "Failed to load guide sections"
+          );
+        }
+
+        // Stops state updates if the component has already changed/unmounted.
+        if (!active) return;
+
+        // Stores all backend-driven guide sections.
+        setGuideSections(data.sections || []);
+
+        // Automatically selects Overview/the first available section.
+        setSelected(0);
+      } catch (err) {
+        // Stops state updates if this request is no longer active.
+        if (!active) return;
+
+        // Clears old sections when loading fails.
+        setGuideSections([]);
+
+        // Stores the error for the preview area.
+        setSectionsError(
+          err.message || "Failed to load guide sections"
+        );
+      } finally {
+        // Ends loading only while this request is still active.
+        if (active) {
+          setSectionsLoading(false);
+        }
+      }
+    };
+
+    // Starts loading the selected guide's sections.
+    loadGuideSections();
+
+    // Prevents an old request from updating the page after selection changes.
+    return () => {
+      active = false;
+    };
+  }, [selectedVersionId, variant]);
 
   const guide =
     variant === "card"
       ? providedGuide
       : guides.find(
-          (item) => String(item.version_id) === selectedVersionId
-        );
+        (item) => String(item.version_id) === selectedVersionId
+      );
 
 
   const handleAcknowledge = async () => {
@@ -240,42 +240,73 @@ useEffect(() => {
       setSaving(false);
     }
   };
+console.log("CURRENT GUIDE:", guide);
+// Downloads the selected guide file.
+// Downloads the selected guide file.
+const handleDownload = async () => {
+  // Stops when no guide is selected or a download is already running.
+  if (!guide || downloading) return;
 
-  const handleDownload = async () => {
-    if (!guide || downloading) return;
+  try {
+    // Starts the download loading state.
+    setDownloading(true);
 
-    try {
-      setDownloading(true);
-      setError("");
+    // Clears any previous error.
+    setError("");
 
-      const blob = await apiDownload(
-        `/guides/${guide.version_id}/download`
-      );
+    // Gets the guide file from the authenticated backend API.
+    const blob = await apiDownload(
+      `/guides/${guide.version_id}/download`
+    );
 
-      const fileName = `${guide.name}-${guide.version}`
-        .replace(/[^a-zA-Z0-9._-]+/g, "-");
+    // Gets the original file extension.
+    const extension =
+      guide.file_path
+        ?.split(/[\\/]/)
+        .pop()
+        ?.match(/\.(pdf|doc|docx|xls|xlsx)$/i)?.[0]
+        ?.toLowerCase() || "";
 
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
+    // Creates a safe filename for the downloaded guide.
+    const fileName = `${guide.name}-${guide.version}`
+      .replace(/[^a-zA-Z0-9._-]+/g, "-");
 
-      link.href = url;
-      link.download = `${fileName}.pdf`;
+    // Creates a temporary URL containing the downloaded file.
+    const downloadUrl = window.URL.createObjectURL(blob);
 
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+    // Creates a temporary HTML download link.
+    const link = document.createElement("a");
 
-      // Release the temporary URL after the browser starts downloading.
-      window.setTimeout(() => {
-        window.URL.revokeObjectURL(url);
-      }, 10000);
-    } catch (err) {
-      setError(err.message || "Failed to download guide");
-    } finally {
-      setDownloading(false);
-    }
-  };
+    // Assigns the file URL.
+    link.href = downloadUrl;
 
+    // Assigns the filename.
+    link.download = `${fileName}${extension}`;
+
+    // Adds the link to the current page.
+    document.body.appendChild(link);
+
+    // Triggers the browser download.
+    link.click();
+
+    // Removes the temporary link.
+    document.body.removeChild(link);
+
+    // Cleans up the temporary file URL.
+    window.setTimeout(() => {
+      window.URL.revokeObjectURL(downloadUrl);
+    }, 1000);
+  } catch (err) {
+    // Logs the actual error for debugging.
+    console.error("Guide Download Error:", err);
+
+    // Shows the download error on the page.
+    setError(err.message || "Failed to download guide");
+  } finally {
+    // Restores the Download button.
+    setDownloading(false);
+  }
+};
   const handleViewHistory = async () => {
     if (!guide || historyLoading) return;
 
@@ -446,7 +477,7 @@ useEffect(() => {
         ))}
       </Box>
 
-  {/* HEADER */}
+      {/* HEADER */}
       <Box
         sx={{
           display: "flex",
@@ -502,11 +533,11 @@ useEffect(() => {
               "&:hover": { backgroundColor: "#2458cf", boxShadow: "none" },
             }}
           >
-            Download
+             {downloading ? "Downloading..." : "Download"}
           </Button>
         </Box>
       </Box>
-      
+
       {/* ACKNOWLEDGEMENT */}
       <Alert
         severity={guide.acknowledged ? "success" : "warning"}
@@ -677,7 +708,7 @@ useEffect(() => {
             )}
           </Box>
 
-                    {/* CONTENT */}
+          {/* CONTENT */}
           <Box
             sx={{
               flex: 1,
@@ -827,8 +858,8 @@ useEffect(() => {
                       <TableCell>
                         {item.updated_date
                           ? new Date(item.updated_date).toLocaleDateString(
-                              "en-IN"
-                            )
+                            "en-IN"
+                          )
                           : "—"}
                       </TableCell>
 

@@ -119,6 +119,7 @@ export const apiRequest = async (endpoint, options = {}) => {
 };
 
 export const apiDownload = async (endpoint) => {
+  console.log("API DOWNLOAD STARTED:", endpoint);
   const token = getToken();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30000);
@@ -152,7 +153,17 @@ export const apiDownload = async (endpoint) => {
     throw new Error(buildErrorMessage(response, data) || "Failed to download file");
   }
 
-  return response.blob();
+  // Converts the successful file response into a browser Blob.
+  const blob = await response.blob();
+
+  // Logs the downloaded file information for debugging.
+  console.log("API DOWNLOAD BLOB:", {
+    size: blob.size,
+    type: blob.type,
+  });
+
+  // Returns the completed Blob to the Indexing Guide page.
+  return blob;
 };
 
 export { API_URL, AUTH_EVENT };

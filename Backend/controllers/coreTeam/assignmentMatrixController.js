@@ -160,25 +160,14 @@ const getAssignmentMatrix = async (req, res) => {
 
 
       // Team Leads inherit projects from their Indexers.
+      // Team Leads use direct project assignments and can be edited in Assignment Matrix.
       else if (role === "lead") {
-        const direct = directMap[user.id]
-          ? [...directMap[user.id]]
-          : [];
-
-        const inherited =
-          inheritedMap[user.id]
-            ? [...inheritedMap[user.id]]
-            : [];
-
         projectIds = [
-          ...new Set([
-            ...direct,
-            ...inherited,
-          ]),
+          ...(directMap[user.id] || []),
         ];
 
-        editable = false;
-        accessType = "inherited";
+        editable = true;
+        accessType = "direct";
       }
 
 
@@ -340,7 +329,14 @@ const saveAssignmentMatrix = async (
         });
       }
 
-      if (normalizeRoleCode(userRows[0].role) !== "indexer") {
+      // Allows Assignment Matrix changes only for Indexers and Team Leads.
+      // Core Team and Administrator keep automatic access to all projects.
+      const userRole = normalizeRoleCode(userRows[0].role);
+
+      if (
+        userRole !== "indexer" &&
+        userRole !== "lead"
+      ) {
         return res.status(403).json({
           success: false,
           message:

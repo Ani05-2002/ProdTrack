@@ -15,6 +15,7 @@ const {
   getPendingCorrections,
   getGuideCompliance,
   getMissingEntries,
+  getProjectDailySummary,
 } = require("../../controllers/coreTeam/dashboardController");
 
 // Creates an Express router for Core Team dashboard APIs.
@@ -70,6 +71,14 @@ router.get(
   authenticate,
   allowRoles("coreTeam"),
   getMissingEntries
+);
+
+// Gets date-wise and project-wise Received, Completed, Backlog and Pending.
+router.get(
+  "/dashboard/project-daily-summary",
+  authenticate,
+  allowRoles("coreTeam"),
+  getProjectDailySummary
 );
 
 // Exports the router so index.js can register the Core Team APIs.

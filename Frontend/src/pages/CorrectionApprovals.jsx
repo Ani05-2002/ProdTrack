@@ -61,7 +61,7 @@ const correctionStatusStyles = {
   },
 };
 
-function IndexerCorrectionRequestsIndexer({ user , onNavigate,}) {
+function IndexerCorrectionRequestsIndexer({ user, onNavigate, }) {
   const toast = useToast();
   const [requestsIndexer, setRequestsIndexer] = useState([]);
   const [indexerPage, setIndexerPage] = useState(0);
@@ -78,35 +78,35 @@ function IndexerCorrectionRequestsIndexer({ user , onNavigate,}) {
     .toUpperCase();
 
   const loadMyCorrectionRequests = async () => {
-      try {
-        const data = await apiRequest(
-          "/indexer/corrections/my"
-        );
+    try {
+      const data = await apiRequest(
+        "/indexer/corrections/my"
+      );
 
-        const formattedRequests = (
-          data.requests || []
-        ).map((request) => ({
-          id: request.request_id || request.id,
-          project: request.project_name,
-          date: request.production_date,
-          field: request.field_name,
-          change:
-              `${request.old_value ?? "—"} → ` +
-              `${request.new_value ?? "—"}`,
-          status: String(
-            request.status || "pending"
-          ).toUpperCase(),
-        }));
+      const formattedRequests = (
+        data.requests || []
+      ).map((request) => ({
+        id: request.request_id || request.id,
+        project: request.project_name,
+        date: request.production_date,
+        field: request.field_name,
+        change:
+          `${request.old_value ?? "—"} → ` +
+          `${request.new_value ?? "—"}`,
+        status: String(
+          request.status || "pending"
+        ).toUpperCase(),
+      }));
 
-        setRequestsIndexer(formattedRequests);
-      } catch (error) {
-        console.error(
-          "Load Indexer corrections error:",
-          error
-        );
-        toast.error(error.message);
-      }
-    };
+      setRequestsIndexer(formattedRequests);
+    } catch (error) {
+      console.error(
+        "Load Indexer corrections error:",
+        error
+      );
+      toast.error(error.message);
+    }
+  };
 
   useEffect(() => {
     loadMyCorrectionRequests();
@@ -542,17 +542,17 @@ function CorrectionsCoreTeam({
   const { confirm, ConfirmElement } = useConfirm();
   const [rows, setRows] = useState([]);
   const [approvalSummary, setApprovalSummary] = useState({
-  awaitingReview: 0,
-  approvedMonth: 0,
-  rejectedMonth: 0,
-  averageTurnaroundHours: 0,
-});
+    awaitingReview: 0,
+    approvedMonth: 0,
+    rejectedMonth: 0,
+    averageTurnaroundHours: 0,
+  });
   const [correctionPage, setCorrectionPage] = useState(0);
   const CORRECTION_ROWS_PER_PAGE = 10;
 
-useEffect(() => {
-  const loadPendingRequests = async () => {
-    if (
+  useEffect(() => {
+    const loadPendingRequests = async () => {
+      if (
         ![
           "teamLead",
           "coreTeam",
@@ -561,31 +561,31 @@ useEffect(() => {
       ) {
         return;
       }
-    try {
-      const data = await apiRequest("/team-lead/approvals");
+      try {
+        const data = await apiRequest("/team-lead/approvals");
 
-      const backendRows = (data.requests || []).map((request) => [
-        request.project_name,
-        request.production_date,
-        request.field_name,
-        `${request.old_value ?? "—"} → ${request.new_value ?? "—"}`,
-        request.employee_name,
-        String(request.status || "pending").toUpperCase(),
-        request.request_id || request.id,
-      ]);
+        const backendRows = (data.requests || []).map((request) => [
+          request.project_name,
+          request.production_date,
+          request.field_name,
+          `${request.old_value ?? "—"} → ${request.new_value ?? "—"}`,
+          request.employee_name,
+          String(request.status || "pending").toUpperCase(),
+          request.request_id || request.id,
+        ]);
 
-      setRows(backendRows);
-    } catch (error) {
-      console.error("Load correction approvals error:", error);
-      toast.error(error.message);
-    }
-  };
+        setRows(backendRows);
+      } catch (error) {
+        console.error("Load correction approvals error:", error);
+        toast.error(error.message);
+      }
+    };
 
- loadPendingRequests();
-}, [roleKey]);
+    loadPendingRequests();
+  }, [roleKey]);
 
-const loadApprovalSummary = async () => {
-  if (
+  const loadApprovalSummary = async () => {
+    if (
       ![
         "teamLead",
         "coreTeam",
@@ -594,73 +594,73 @@ const loadApprovalSummary = async () => {
     ) {
       return;
     }
-  try {
-    const data = await apiRequest(
-      "/team-lead/approvals/summary"
-    );
+    try {
+      const data = await apiRequest(
+        "/team-lead/approvals/summary"
+      );
 
-    setApprovalSummary(data.summary);
-  } catch (error) {
-    console.error("Load approval summary error:", error);
-  }
-};
+      setApprovalSummary(data.summary);
+    } catch (error) {
+      console.error("Load approval summary error:", error);
+    }
+  };
 
-useEffect(() => {
-  loadApprovalSummary();
-}, [roleKey]);
+  useEffect(() => {
+    loadApprovalSummary();
+  }, [roleKey]);
 
-const updateStatus = async (rowIndex, newStatus) => {
-  const requestId = rows[rowIndex]?.[6];
+  const updateStatus = async (rowIndex, newStatus) => {
+    const requestId = rows[rowIndex]?.[6];
 
-  if (!requestId) {
-    toast.warning("Correction request ID is missing");
-    return;
-  }
+    if (!requestId) {
+      toast.warning("Correction request ID is missing");
+      return;
+    }
 
-  const isDanger = newStatus === "REJECTED";
-  const confirmed = await confirm({
-    title: newStatus === "APPROVED" ? "Approve correction?" : "Reject correction?",
-    message: `${newStatus === "APPROVED" ? "Approve" : "Reject"} the correction request from ${rows[rowIndex]?.[4] || "this employee"}?`,
-    confirmLabel: newStatus === "APPROVED" ? "Approve" : "Reject",
-    danger: isDanger,
-  });
+    const isDanger = newStatus === "REJECTED";
+    const confirmed = await confirm({
+      title: newStatus === "APPROVED" ? "Approve correction?" : "Reject correction?",
+      message: `${newStatus === "APPROVED" ? "Approve" : "Reject"} the correction request from ${rows[rowIndex]?.[4] || "this employee"}?`,
+      confirmLabel: newStatus === "APPROVED" ? "Approve" : "Reject",
+      danger: isDanger,
+    });
 
-  if (!confirmed) return;
+    if (!confirmed) return;
 
-  const action =
-    newStatus === "APPROVED"
-      ? "approve"
-      : "reject";
+    const action =
+      newStatus === "APPROVED"
+        ? "approve"
+        : "reject";
 
-  try {
-    const data = await apiRequest(
-      `/team-lead/approvals/${requestId}/${action}`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          reviewComment:
-            newStatus === "APPROVED"
-              ? "Approved from Team Lead approvals page"
-              : "Rejected from Team Lead approvals page",
-        }),
-      }
-    );
+    try {
+      const data = await apiRequest(
+        `/team-lead/approvals/${requestId}/${action}`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            reviewComment:
+              newStatus === "APPROVED"
+                ? "Approved from Team Lead approvals page"
+                : "Rejected from Team Lead approvals page",
+          }),
+        }
+      );
 
-    setRows((currentRows) =>
-      currentRows.map((row, index) =>
-        index === rowIndex
-          ? [...row.slice(0, 5), newStatus, row[6]]
-          : row
-      )
-    );
+      setRows((currentRows) =>
+        currentRows.map((row, index) =>
+          index === rowIndex
+            ? [...row.slice(0, 5), newStatus, row[6]]
+            : row
+        )
+      );
 
-    toast.success(data.message);
-    await loadApprovalSummary();
-  } catch (error) {
-    console.error("Update correction status error:", error);
-    toast.error(error.message);
-  }
-};
+      toast.success(data.message);
+      await loadApprovalSummary();
+    } catch (error) {
+      console.error("Update correction status error:", error);
+      toast.error(error.message);
+    }
+  };
 
   const workflowSteps = [
     "Indexer submits",
@@ -720,290 +720,296 @@ const updateStatus = async (rowIndex, newStatus) => {
 
   return (
     <>
-    <CorePageShell
-      breadcrumb={roleLabel}
-      title="Correction requests"
-      description="Review and approve/reject correction requests raised on locked entries."
-      actionLabel={null}
-    >
-      {/* WORKFLOW */}
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: 1,
-          mb: 2.5,
-        }}
+      <CorePageShell
+        breadcrumb={roleLabel}
+        title="Correction requests"
+        description="Review and approve/reject correction requests raised on locked entries."
+        actionLabel={null}
       >
-        {workflowSteps.map((step, index) => (
-          <Box
-            key={step}
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 1,
-            }}
-          >
+        {/* WORKFLOW */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 1,
+            mb: 2.5,
+          }}
+        >
+          {workflowSteps.map((step, index) => (
             <Box
+              key={step}
               sx={{
-                px: 2.2,
-                py: 1.4,
-                borderRadius: "11px",
-                border: "1px solid #dbe3ec",
-                backgroundColor: index === 1 ? "#3478ed" : "#ffffff",
-                color: index === 1 ? "#ffffff" : "#1A2434",
-                fontSize: 13,
-                fontWeight: 700,
-                whiteSpace: "nowrap",
+                display: "flex",
+                alignItems: "center",
+                gap: 1,
               }}
             >
-              {step}
-            </Box>
-
-            {index < workflowSteps.length - 1 && (
-              <Typography
+              <Box
                 sx={{
-                  color: "#6A7585",
-                  fontSize: 18,
+                  px: 2.2,
+                  py: 1.4,
+                  borderRadius: "11px",
+                  border: "1px solid #dbe3ec",
+                  backgroundColor: index === 1 ? "#3478ed" : "#ffffff",
+                  color: index === 1 ? "#ffffff" : "#1A2434",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  whiteSpace: "nowrap",
                 }}
               >
-                →
-              </Typography>
-            )}
-          </Box>
-        ))}
-      </Box>
+                {step}
+              </Box>
 
-      {/* METRIC CARDS */}
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: {
-            xs: "1fr",
-            sm: "repeat(2, 1fr)",
-            lg: "repeat(4, 1fr)",
-          },
-          gap: 2,
-          mb: 2.5,
-        }}
-      >
-        {metrics.map((metric) => (
-          <Paper
-            key={metric.label}
-            elevation={0}
-            sx={{
-              minHeight: 98,
-              p: 2,
-              display: "flex",
-              alignItems: "center",
-              gap: 1.5,
-              border: "1px solid #dbe3ec",
-              borderRadius: "12px",
-              boxShadow: "0 2px 5px rgba(16,35,61,.08)",
-            }}
-          >
-            <Box
-              sx={{
-                width: 46,
-                height: 46,
-                flexShrink: 0,
-                display: "grid",
-                placeItems: "center",
-                borderRadius: "12px",
-                backgroundColor: metric.background,
-                color: metric.iconColor,
-              }}
-            >
-              {metric.icon}
-            </Box>
-
-            <Box>
-              <Typography
-                sx={{
-                  color: "#6A7585",
-                  fontSize: 12.5,
-                }}
-              >
-                {metric.label}
-              </Typography>
-
-              <Typography
-                sx={{
-                  color: "#1A2434",
-                  fontSize: 25,
-                  fontWeight: 800,
-                  lineHeight: 1.2,
-                }}
-              >
-                {metric.value}
-              </Typography>
-            </Box>
-          </Paper>
-        ))}
-      </Box>
-
-      {/* CORRECTION TABLE */}
-      <TableContainer
-        component={Paper}
-        elevation={0}
-        sx={{
-          border: "1px solid #dbe3ec",
-          borderRadius: "12px",
-          overflowX: "auto",
-        }}
-      >
-        <Table size="small" sx={{ minWidth: 1050 }}>
-          <TableHead>
-            <TableRow sx={{ backgroundColor: "#f8fafc" }}>
-              {[
-                "PROJECT",
-                "PROD. DATE",
-                "FIELD",
-                "OLD → NEW",
-                "REQUESTED BY",
-                "STATUS",
-                "ACTION",
-              ].map((heading) => (
-                <TableCell
-                  key={heading}
+              {index < workflowSteps.length - 1 && (
+                <Typography
                   sx={{
-                    py: 1.5,
                     color: "#6A7585",
-                    fontSize: 11,
-                    fontWeight: 700,
+                    fontSize: 18,
                   }}
                 >
-                  {heading}
-                </TableCell>
-              ))}
-            </TableRow>
-          </TableHead>
+                  →
+                </Typography>
+              )}
+            </Box>
+          ))}
+        </Box>
 
-          <TableBody>
-            {rows.slice(correctionPage * CORRECTION_ROWS_PER_PAGE, (correctionPage + 1) * CORRECTION_ROWS_PER_PAGE).map((row, rowIndex) => {
-              const globalIndex = correctionPage * CORRECTION_ROWS_PER_PAGE + rowIndex;
-              return (<TableRow key={row[6] || `${row[0]}-${rowIndex}`} hover>
-                <TableCell>{row[0]}</TableCell>
+        {/* METRIC CARDS */}
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: {
+              xs: "1fr",
+              sm: "repeat(2, 1fr)",
+              lg: "repeat(4, 1fr)",
+            },
+            gap: 2,
+            mb: 2.5,
+          }}
+        >
+          {metrics.map((metric) => (
+            <Paper
+              key={metric.label}
+              elevation={0}
+              sx={{
+                minHeight: 98,
+                p: 2,
+                display: "flex",
+                alignItems: "center",
+                gap: 1.5,
+                border: "1px solid #dbe3ec",
+                borderRadius: "12px",
+                boxShadow: "0 2px 5px rgba(16,35,61,.08)",
+              }}
+            >
+              <Box
+                sx={{
+                  width: 46,
+                  height: 46,
+                  flexShrink: 0,
+                  display: "grid",
+                  placeItems: "center",
+                  borderRadius: "12px",
+                  backgroundColor: metric.background,
+                  color: metric.iconColor,
+                }}
+              >
+                {metric.icon}
+              </Box>
 
-                <TableCell>{row[1]}</TableCell>
+              <Box>
+                <Typography
+                  sx={{
+                    color: "#6A7585",
+                    fontSize: 12.5,
+                  }}
+                >
+                  {metric.label}
+                </Typography>
 
-                <TableCell>{row[2]}</TableCell>
+                <Typography
+                  sx={{
+                    color: "#1A2434",
+                    fontSize: 25,
+                    fontWeight: 800,
+                    lineHeight: 1.2,
+                  }}
+                >
+                  {metric.value}
+                </Typography>
+              </Box>
+            </Paper>
+          ))}
+        </Box>
 
-                <TableCell sx={{ color: "#6A7585" }}>{row[3]}</TableCell>
-
-                <TableCell>
-                  <Box
+        {/* CORRECTION TABLE */}
+        <TableContainer
+          component={Paper}
+          elevation={0}
+          sx={{
+            border: "1px solid #dbe3ec",
+            borderRadius: "12px",
+            overflowX: "auto",
+          }}
+        >
+          <Table size="small" sx={{ minWidth: 1050 }}>
+            <TableHead>
+              <TableRow sx={{ backgroundColor: "#f8fafc" }}>
+                {[
+                  "PROJECT",
+                  "PROD. DATE",
+                  "FIELD",
+                  "OLD → NEW",
+                  "REQUESTED BY",
+                  "STATUS",
+                  "ACTION",
+                ].map((heading) => (
+                  <TableCell
+                    key={heading}
                     sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 1,
-                      whiteSpace: "nowrap",
+                      py: 1.5,
+                      color: "#6A7585",
+                      fontSize: 11,
+                      fontWeight: 700,
                     }}
                   >
-                    <Avatar
-                      sx={{
-                        width: 32,
-                        height: 32,
-                        bgcolor: "#5b5ce2",
-                        color: "#ffffff",
-                        fontSize: 11,
-                        fontWeight: 800,
-                      }}
-                    >
-                      {row[4]
-                        .split(" ")
-                        .map((name) => name[0])
-                        .join("")
-                        .slice(0, 2)
-                        .toUpperCase()}
-                    </Avatar>
+                    {heading}
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
 
-                    <Typography
-                      sx={{
-                        fontSize: 13,
-                        color: "#1A2434",
-                      }}
-                    >
-                      {row[4]}
-                    </Typography>
-                  </Box>
-                </TableCell>
+            <TableBody>
+              {rows.slice(correctionPage * CORRECTION_ROWS_PER_PAGE, (correctionPage + 1) * CORRECTION_ROWS_PER_PAGE).map((row, rowIndex) => {
+                const globalIndex = correctionPage * CORRECTION_ROWS_PER_PAGE + rowIndex;
+                return (<TableRow key={row[6] || `${row[0]}-${rowIndex}`} hover>
+                  <TableCell>{row[0]}</TableCell>
 
-                <TableCell>
-                  <Chip
-                    label={row[5]}
-                    size="small"
-                    sx={{
-                      ...statusColors[row[5]],
-                      height: 25,
-                      fontSize: 10,
-                      fontWeight: 800,
-                    }}
-                  />
-                </TableCell>
+                  <TableCell>{row[1]}</TableCell>
 
-                <TableCell>
-                  {row[5] === "PENDING" && (
+                  <TableCell>
+                    {row[2] === "docs_completed"
+                      ? "Documents Completed"
+                      : row[2] === "batches_processed"
+                        ? "Batches Processed"
+                        : row[2]}
+                  </TableCell>
+
+                  <TableCell sx={{ color: "#6A7585" }}>{row[3]}</TableCell>
+
+                  <TableCell>
                     <Box
                       sx={{
                         display: "flex",
                         alignItems: "center",
-                        gap: 0.7,
+                        gap: 1,
+                        whiteSpace: "nowrap",
                       }}
                     >
-                      <Button
-                        variant="contained"
-                        size="small"
-                        onClick={() => updateStatus(globalIndex, "APPROVED")}
+                      <Avatar
                         sx={{
-                          minWidth: 84,
-                          height: 38,
-                          borderRadius: "10px",
-                          textTransform: "none",
-                          fontWeight: 700,
-                          boxShadow: "none",
+                          width: 32,
+                          height: 32,
+                          bgcolor: "#5b5ce2",
+                          color: "#ffffff",
+                          fontSize: 11,
+                          fontWeight: 800,
                         }}
                       >
-                        Approve
-                      </Button>
+                        {row[4]
+                          .split(" ")
+                          .map((name) => name[0])
+                          .join("")
+                          .slice(0, 2)
+                          .toUpperCase()}
+                      </Avatar>
 
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        onClick={() => updateStatus(globalIndex, "REJECTED")}
+                      <Typography
                         sx={{
-                          minWidth: 70,
-                          height: 38,
-                          borderRadius: "10px",
-                          textTransform: "none",
-                          color: "#17233a",
-                          borderColor: "#dbe3ec",
-                          fontWeight: 500,
+                          fontSize: 13,
+                          color: "#1A2434",
                         }}
                       >
-                        Reject
-                      </Button>
+                        {row[4]}
+                      </Typography>
                     </Box>
-                  )}
-                </TableCell>
-              </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </TableContainer>
-      {Math.ceil(rows.length / CORRECTION_ROWS_PER_PAGE) > 1 && (
-        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 1, px: 2, py: 1, borderTop: "1px solid #dbe3ec" }}>
-          <Typography sx={{ fontSize: 12, color: "#6A7585" }}>
-            {correctionPage * CORRECTION_ROWS_PER_PAGE + 1}–{Math.min((correctionPage + 1) * CORRECTION_ROWS_PER_PAGE, rows.length)} of {rows.length}
-          </Typography>
-          <Button size="small" disabled={correctionPage === 0} onClick={() => setCorrectionPage((p) => p - 1)} sx={{ minWidth: 28, height: 28, p: 0, fontSize: 16, color: "#6A7585" }}>‹</Button>
-          <Button size="small" disabled={correctionPage >= Math.ceil(rows.length / CORRECTION_ROWS_PER_PAGE) - 1} onClick={() => setCorrectionPage((p) => p + 1)} sx={{ minWidth: 28, height: 28, p: 0, fontSize: 16, color: "#6A7585" }}>›</Button>
-        </Box>
-      )}
-    </CorePageShell>
-    {ConfirmElement}
+                  </TableCell>
+
+                  <TableCell>
+                    <Chip
+                      label={row[5]}
+                      size="small"
+                      sx={{
+                        ...statusColors[row[5]],
+                        height: 25,
+                        fontSize: 10,
+                        fontWeight: 800,
+                      }}
+                    />
+                  </TableCell>
+
+                  <TableCell>
+                    {row[5] === "PENDING" && (
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 0.7,
+                        }}
+                      >
+                        <Button
+                          variant="contained"
+                          size="small"
+                          onClick={() => updateStatus(globalIndex, "APPROVED")}
+                          sx={{
+                            minWidth: 84,
+                            height: 38,
+                            borderRadius: "10px",
+                            textTransform: "none",
+                            fontWeight: 700,
+                            boxShadow: "none",
+                          }}
+                        >
+                          Approve
+                        </Button>
+
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={() => updateStatus(globalIndex, "REJECTED")}
+                          sx={{
+                            minWidth: 70,
+                            height: 38,
+                            borderRadius: "10px",
+                            textTransform: "none",
+                            color: "#17233a",
+                            borderColor: "#dbe3ec",
+                            fontWeight: 500,
+                          }}
+                        >
+                          Reject
+                        </Button>
+                      </Box>
+                    )}
+                  </TableCell>
+                </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        {Math.ceil(rows.length / CORRECTION_ROWS_PER_PAGE) > 1 && (
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 1, px: 2, py: 1, borderTop: "1px solid #dbe3ec" }}>
+            <Typography sx={{ fontSize: 12, color: "#6A7585" }}>
+              {correctionPage * CORRECTION_ROWS_PER_PAGE + 1}–{Math.min((correctionPage + 1) * CORRECTION_ROWS_PER_PAGE, rows.length)} of {rows.length}
+            </Typography>
+            <Button size="small" disabled={correctionPage === 0} onClick={() => setCorrectionPage((p) => p - 1)} sx={{ minWidth: 28, height: 28, p: 0, fontSize: 16, color: "#6A7585" }}>‹</Button>
+            <Button size="small" disabled={correctionPage >= Math.ceil(rows.length / CORRECTION_ROWS_PER_PAGE) - 1} onClick={() => setCorrectionPage((p) => p + 1)} sx={{ minWidth: 28, height: 28, p: 0, fontSize: 16, color: "#6A7585" }}>›</Button>
+          </Box>
+        )}
+      </CorePageShell>
+      {ConfirmElement}
     </>
   );
 }
@@ -1141,7 +1147,7 @@ export default function CorrectionApprovals(props) {
         roleLabel={props.roleLabel}{...props} />;
     case "coreTeam":
       return <CorrectionsCoreTeam roleKey={props.roleKey}
-            roleLabel={props.roleLabel}{...props} />;
+        roleLabel={props.roleLabel}{...props} />;
     case "administrator":
       return <CorrectionsCoreTeam roleKey={props.roleKey}
         roleLabel={props.roleLabel}{...props} />;

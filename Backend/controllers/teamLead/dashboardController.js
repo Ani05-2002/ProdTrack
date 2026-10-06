@@ -78,21 +78,21 @@ const getTeamLeadDashboard = async (req, res) => {
       [teamLeadId]
     );
 
-    const totalPairs  = Number(ackRows[0].total_pairs)  || 0;
-    const ackedPairs  = Number(ackRows[0].acked_pairs)  || 0;
-    const ackRate     = totalPairs > 0 ? Math.round((ackedPairs / totalPairs) * 100) : 100;
+    const totalPairs = Number(ackRows[0].total_pairs) || 0;
+    const ackedPairs = Number(ackRows[0].acked_pairs) || 0;
+    const ackRate = totalPairs > 0 ? Math.round((ackedPairs / totalPairs) * 100) : 100;
 
     return res.status(200).json({
       success: true,
       dashboard: {
         teamSize,
-        completedToday:   Number(prodRows[0].completed_today),
+        completedToday: Number(prodRows[0].completed_today),
         pendingApprovals: Number(corrRows[0].pending_approvals),
         ackCompliance: {
-          rate:         ackRate,
+          rate: ackRate,
           acknowledged: ackedPairs,
-          total:        totalPairs,
-          pending:      totalPairs - ackedPairs,
+          total: totalPairs,
+          pending: totalPairs - ackedPairs,
         },
       },
     });
@@ -108,7 +108,7 @@ const getTeamLeadDashboard = async (req, res) => {
 const getTeamProductivity = async (req, res) => {
   try {
     const teamLeadId = req.user.id;
-    const memberIds  = await getTeamMemberIds(teamLeadId);
+    const memberIds = await getTeamMemberIds(teamLeadId);
 
     if (memberIds.length === 0) {
       return res.status(200).json({ success: true, productivity: [] });
@@ -151,7 +151,7 @@ const getTeamProductivity = async (req, res) => {
 const getCompletionSplit = async (req, res) => {
   try {
     const teamLeadId = req.user.id;
-    const memberIds  = await getTeamMemberIds(teamLeadId);
+    const memberIds = await getTeamMemberIds(teamLeadId);
 
     if (memberIds.length === 0) {
       return res.status(200).json({
@@ -175,10 +175,10 @@ const getCompletionSplit = async (req, res) => {
       memberIds
     );
 
-    const received   = Number(rows[0].received);
-    const completed  = Number(rows[0].completed);
-    const inReview   = Number(rows[0].in_review);
-    const pending    = Math.max(received - completed, 0);
+    const received = Number(rows[0].received);
+    const completed = Number(rows[0].completed);
+    const inReview = Number(rows[0].in_review);
+    const pending = Math.max(received - completed, 0);
     const completionPct = received > 0 ? Math.round((completed / received) * 100) : 0;
 
     return res.status(200).json({
@@ -206,7 +206,7 @@ const getDashboardTeamMembers = async (req, res) => {
          u.full_name,
          u.designation,
          COALESCE(SUM(de.docs_completed), 0)                             AS completed_today,
-         COALESCE(SUM(de.docs_received - de.docs_completed), 0)         AS pending_today,
+        COALESCE(SUM(de.docs_completed), 0) AS completed_today,    0 AS pending_today,
          (SELECT GROUP_CONCAT(DISTINCT p.project_name ORDER BY p.project_name SEPARATOR ', ')
           FROM project_assignment pa2
           JOIN project p ON p.project_id = pa2.project_id AND p.status = 'active'
@@ -226,7 +226,7 @@ const getDashboardTeamMembers = async (req, res) => {
       return res.status(200).json({ success: true, members: [] });
     }
 
-    const memberIds    = members.map((m) => m.user_id);
+    const memberIds = members.map((m) => m.user_id);
     const placeholders = memberIds.map(() => "?").join(",");
 
     // attendance today
@@ -261,37 +261,37 @@ const getDashboardTeamMembers = async (req, res) => {
     guideRows.forEach((r) => { guideMap[r.user_id] = Number(r.pending_acks); });
 
     // Assign initials colour consistently
-    const COLOURS = ["#4f73e3","#3aab8e","#5b5ce2","#e05a3a","#7c4dbd","#d97706","#0891b2"];
+    const COLOURS = ["#4f73e3", "#3aab8e", "#5b5ce2", "#e05a3a", "#7c4dbd", "#d97706", "#0891b2"];
 
     const result = members.map((m, idx) => {
-      const attCode    = attMap[m.user_id] || "not_marked";
+      const attCode = attMap[m.user_id] || "not_marked";
       const pendingAck = guideMap[m.user_id] ?? 0;
-      const nameParts  = m.full_name.trim().split(" ");
-      const initials   = nameParts.length >= 2
+      const nameParts = m.full_name.trim().split(" ");
+      const initials = nameParts.length >= 2
         ? nameParts[0][0] + nameParts[nameParts.length - 1][0]
         : m.full_name.substring(0, 2).toUpperCase();
 
       // map attendance_status.code → display label
       const statusLabel =
-        attCode === "present"       ? "PRESENT"  :
-        attCode === "absent"        ? "ABSENT"   :
-        attCode === "planned_leave" ? "LEAVE"    :
-        attCode === "sick_leave"    ? "LEAVE"    :
-        attCode === "training"      ? "TRAINING" :
-        attCode === "holiday"       ? "HOLIDAY"  : "NOT MARKED";
+        attCode === "present" ? "PRESENT" :
+          attCode === "absent" ? "ABSENT" :
+            attCode === "planned_leave" ? "LEAVE" :
+              attCode === "sick_leave" ? "LEAVE" :
+                attCode === "training" ? "TRAINING" :
+                  attCode === "holiday" ? "HOLIDAY" : "NOT MARKED";
 
       return {
-        userId:        m.user_id,
-        empCode:       m.emp_code,
-        name:          m.full_name,
-        initials:      initials.toUpperCase(),
-        avatarColor:   COLOURS[idx % COLOURS.length],
-        designation:   m.designation || "",
-        project:       m.projects    || "—",
+        userId: m.user_id,
+        empCode: m.emp_code,
+        name: m.full_name,
+        initials: initials.toUpperCase(),
+        avatarColor: COLOURS[idx % COLOURS.length],
+        designation: m.designation || "",
+        project: m.projects || "—",
         completedToday: Number(m.completed_today),
-        pendingToday:   Number(m.pending_today),
-        guideAck:      pendingAck === 0 ? "DONE" : "PENDING",
-        status:        statusLabel,
+        pendingToday: Number(m.pending_today),
+        guideAck: pendingAck === 0 ? "DONE" : "PENDING",
+        status: statusLabel,
       };
     });
 
@@ -308,7 +308,7 @@ const getDashboardTeamMembers = async (req, res) => {
 const getTeamAvailability = async (req, res) => {
   try {
     const teamLeadId = req.user.id;
-    const memberIds  = await getTeamMemberIds(teamLeadId);
+    const memberIds = await getTeamMemberIds(teamLeadId);
 
     if (memberIds.length === 0) {
       return res.status(200).json({ success: true, summary: { totalMembers: 0, availableMembers: 0, onLeave: 0 }, members: [] });
@@ -328,13 +328,13 @@ const getTeamAvailability = async (req, res) => {
     );
 
     const onLeave = rows.filter((r) =>
-      ["planned_leave","sick_leave"].includes(r.att_code)
+      ["planned_leave", "sick_leave"].includes(r.att_code)
     ).length;
 
     const members = rows.map((r) => ({
       userId: r.user_id,
-      name:   r.full_name,
-      availabilityStatus: ["planned_leave","sick_leave"].includes(r.att_code) ? "ON_LEAVE" : "AVAILABLE",
+      name: r.full_name,
+      availabilityStatus: ["planned_leave", "sick_leave"].includes(r.att_code) ? "ON_LEAVE" : "AVAILABLE",
     }));
 
     return res.status(200).json({
@@ -354,7 +354,7 @@ const getTeamAvailability = async (req, res) => {
 const getAvailabilityProductivity = async (req, res) => {
   try {
     const teamLeadId = req.user.id;
-    const memberIds  = await getTeamMemberIds(teamLeadId);
+    const memberIds = await getTeamMemberIds(teamLeadId);
     const totalMembers = memberIds.length;
 
     if (totalMembers === 0) {
@@ -386,12 +386,12 @@ const getAvailabilityProductivity = async (req, res) => {
       memberIds
     );
 
-    const onLeave          = Number(leaveRows[0].on_leave);
+    const onLeave = Number(leaveRows[0].on_leave);
     const availableMembers = Math.max(totalMembers - onLeave, 0);
-    const receivedToday    = Number(prodRows[0].received_today);
-    const completedToday   = Number(prodRows[0].completed_today);
-    const completionRate   = receivedToday > 0 ? Math.round((completedToday / receivedToday) * 100) : 0;
-    const avgPerMember     = availableMembers > 0 ? Math.round(completedToday / availableMembers) : 0;
+    const receivedToday = Number(prodRows[0].received_today);
+    const completedToday = Number(prodRows[0].completed_today);
+    const completionRate = receivedToday > 0 ? Math.round((completedToday / receivedToday) * 100) : 0;
+    const avgPerMember = availableMembers > 0 ? Math.round(completedToday / availableMembers) : 0;
 
     return res.status(200).json({
       success: true,
@@ -403,6 +403,161 @@ const getAvailabilityProductivity = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 7. PROJECT DAILY SUMMARY
+// GET /api/team-lead/dashboard/project-daily-summary
+// Returns date-wise and project-wise Received, Completed, Backlog and Pending.
+// ─────────────────────────────────────────────────────────────────────────────
+const getProjectDailySummary = async (req, res) => {
+  try {
+    // Gets the currently logged-in Team Lead.
+    const teamLeadId = req.user.id;
+
+    // Uses the new backlog workflow only from 5 October 2026 onward.
+    const backlogWorkflowStartDate = "2026-10-05";
+
+    // Gets only projects directly assigned to this Team Lead.
+    const [projects] = await db.query(
+      `
+        SELECT
+          p.project_id,
+          p.project_name
+        FROM project_assignment pa
+        JOIN project p
+          ON p.project_id = pa.project_id
+        WHERE pa.user_id = ?
+          AND p.status = 'active'
+        ORDER BY p.project_name ASC
+      `,
+      [teamLeadId]
+    );
+
+    // Stores the final date-wise and project-wise dashboard rows.
+    const summary = [];
+
+    // Calculates the production summary separately for every assigned project.
+    for (const project of projects) {
+      const [dailyRows] = await db.query(
+        `
+          SELECT
+            de.production_date,
+
+            COALESCE(
+              SUM(
+                CASE
+                  WHEN r.code IN ('teamLead', 'team_lead', 'lead')
+                  THEN de.docs_received
+                  ELSE 0
+                END
+              ),
+              0
+            ) AS received,
+
+            COALESCE(
+              SUM(
+                CASE
+                  WHEN r.code = 'indexer'
+                  THEN de.docs_completed
+                  ELSE 0
+                END
+              ),
+              0
+            ) AS completed
+
+          FROM daily_entry de
+
+          JOIN users u
+            ON u.user_id = de.user_id
+
+          JOIN role r
+            ON r.role_id = u.role_id
+
+          JOIN entry_status es
+            ON es.status_id = de.status_id
+
+          WHERE de.project_id = ?
+            AND de.production_date >= ?
+            AND es.code IN ('submitted', 'reviewed', 'locked')
+
+          GROUP BY de.production_date
+
+          ORDER BY de.production_date ASC
+        `,
+        [
+          project.project_id,
+          backlogWorkflowStartDate,
+        ]
+      );
+
+      // Carries unfinished work from one production date into the next date.
+      let carriedBacklog = 0;
+
+      for (const row of dailyRows) {
+        const received = Number(row.received || 0);
+        const completed = Number(row.completed || 0);
+
+        // Uses today's completed work against previous backlog first.
+        const backlogCompleted = Math.min(
+          completed,
+          carriedBacklog
+        );
+
+        // Calculates previous backlog still remaining after today's completion.
+        const backlog = Math.max(
+          carriedBacklog - backlogCompleted,
+          0
+        );
+
+        // Calculates completion available for today's newly received work.
+        const todayCompleted = Math.max(
+          completed - backlogCompleted,
+          0
+        );
+
+        // Calculates pending work from today's newly received documents.
+        const pending = Math.max(
+          received - todayCompleted,
+          0
+        );
+
+        // Adds this project/date row to the dashboard response.
+        summary.push({
+          productionDate: row.production_date,
+          projectId: project.project_id,
+          projectName: project.project_name,
+          received,
+          completed,
+          backlog,
+          pending,
+        });
+
+        // Carries both remaining old backlog and today's pending to the next date.
+        carriedBacklog = backlog + pending;
+      }
+    }
+
+    // Shows newest production dates first on the dashboard.
+    summary.sort(
+      (a, b) =>
+        new Date(b.productionDate) -
+        new Date(a.productionDate)
+    );
+
+    return res.status(200).json({
+      success: true,
+      summary,
+    });
+  } catch (err) {
+    console.error("Project Daily Summary Error:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load project daily summary",
+      error: err.message,
+    });
+  }
+};
+
 module.exports = {
   getTeamLeadDashboard,
   getTeamProductivity,
@@ -410,4 +565,5 @@ module.exports = {
   getDashboardTeamMembers,
   getTeamAvailability,
   getAvailabilityProductivity,
+  getProjectDailySummary,
 };

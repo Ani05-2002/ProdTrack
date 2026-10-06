@@ -10,6 +10,7 @@ const {
   getPendingTeamEntries,
   reviewEntry,
   getProjectFields,
+  getProjectDailySummary,
 } = require("../controllers/dailyEntryController");
 
 const router = express.Router();
@@ -41,6 +42,14 @@ router.get(
   authenticate,
   allowRoles("indexer", "teamLead"),
   getProjectFields
+);
+
+// Returns project-wise Received, Completed and Pending for a selected date.
+router.get(
+  "/projects/:projectId/summary",
+  authenticate,
+  allowRoles("teamLead", "coreTeam", "admin"),
+  getProjectDailySummary
 );
 
 router.patch(

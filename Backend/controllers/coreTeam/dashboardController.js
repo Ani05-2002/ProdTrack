@@ -543,6 +543,156 @@ const getMissingEntries = async (req, res) => {
   }
 };
 
+// ============================================================
+// 7. PROJECT DAILY SUMMARY
+// ============================================================
+
+// Gets date-wise and project-wise Received, Completed, Backlog and Pending.
+const getProjectDailySummary = async (req, res) => {
+  try {
+    // Defines when the new production backlog workflow starts.
+    const backlogWorkflowStartDate = "2026-10-05";
+
+    // Gets production totals grouped by project and production date.
+    const [rows] = await db.query(
+      `
+        SELECT
+          de.project_id,
+          p.project_name,
+          de.production_date,
+
+          COALESCE(
+            SUM(
+              CASE
+                WHEN r.code IN ('teamLead', 'team_lead', 'lead')
+                THEN de.docs_received
+                ELSE 0
+              END
+            ),
+            0
+          ) AS received,
+
+          COALESCE(
+            SUM(
+              CASE
+                WHEN r.code = 'indexer'
+                THEN de.docs_completed
+                ELSE 0
+              END
+            ),
+            0
+          ) AS completed
+
+        FROM daily_entry de
+
+        INNER JOIN project p
+          ON p.project_id = de.project_id
+
+        INNER JOIN users u
+          ON u.user_id = de.user_id
+
+        INNER JOIN role r
+          ON r.role_id = u.role_id
+
+        INNER JOIN entry_status es
+          ON es.status_id = de.status_id
+
+        WHERE de.production_date >= ?
+          AND es.code IN ('submitted', 'reviewed', 'locked')
+
+        GROUP BY
+          de.project_id,
+          p.project_name,
+          de.production_date
+
+        ORDER BY
+          de.project_id ASC,
+          de.production_date ASC
+      `,
+      [backlogWorkflowStartDate]
+    );
+
+    // Stores the final date-wise and project-wise dashboard records.
+    const summary = [];
+
+    // Stores carried backlog separately for every project.
+    const projectBacklogs = {};
+
+    rows.forEach((row) => {
+      const projectId = Number(row.project_id);
+
+      const received = Number(row.received || 0);
+      const completed = Number(row.completed || 0);
+
+      // Gets backlog carried from previous dates for this project.
+      const previousBacklog =
+        projectBacklogs[projectId] || 0;
+
+      // Uses today's completion to clear old backlog first.
+      const backlogCompleted = Math.min(
+        completed,
+        previousBacklog
+      );
+
+      // Calculates old backlog still remaining.
+      const backlog = Math.max(
+        previousBacklog - backlogCompleted,
+        0
+      );
+
+      // Calculates completion remaining for today's received work.
+      const todayCompleted = Math.max(
+        completed - backlogCompleted,
+        0
+      );
+
+      // Calculates today's pending work.
+      const pending = Math.max(
+        received - todayCompleted,
+        0
+      );
+
+      // Saves this project/date result.
+      summary.push({
+        productionDate: row.production_date,
+        projectId,
+        projectName: row.project_name,
+        received,
+        completed,
+        backlog,
+        pending,
+      });
+
+      // Carries unfinished work into this project's next production date.
+      projectBacklogs[projectId] =
+        backlog + pending;
+    });
+
+    // Shows newest dates first on the dashboard.
+    summary.sort(
+      (a, b) =>
+        new Date(b.productionDate) -
+        new Date(a.productionDate)
+    );
+
+    return res.status(200).json({
+      success: true,
+      summary,
+    });
+  } catch (error) {
+    console.error(
+      "Core Team Project Daily Summary Error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load project daily summary",
+      error: error.message,
+    });
+  }
+};
+
 
 // ============================================================
 // EXPORTS
@@ -555,4 +705,5 @@ module.exports = {
   getPendingCorrections,
   getGuideCompliance,
   getMissingEntries,
+  getProjectDailySummary,
 };

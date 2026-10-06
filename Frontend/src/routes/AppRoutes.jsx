@@ -75,7 +75,7 @@ const commonPages = {
   notifications: Notifications,
 };
 
-export default function AppRoutes({ user, currentPage, onNavigate, onReviewGuide, searchSelection, }) {
+export default function AppRoutes({ user, currentPage, onNavigate, onReviewGuide, searchSelection,navigationData }) {
   const roleKey = user.roleKey;
   const Dashboard = dashboards[roleKey] ?? IndexerDashboard;
   // Reports are common for other roles but are not accessible to Indexer.
@@ -106,6 +106,7 @@ const Page = isIndexerRestrictedPage
       roleLabel={user.role}
       onNavigate={onNavigate}
       searchSelection={searchSelection}
+      navigationData={navigationData}
     />
   );
 }
