@@ -395,24 +395,16 @@ function UserMasterPage({
         required: true,
       },
       // Shows Team Lead only while adding a new user.
-      ...(!selectedUser
-        ? [
-          {
-            name: "lead",
-            label: "Team lead",
-            placeholder:
-              teamLeads.length > 0
-                ? teamLeads[0].name
-                : "e.g. Rohan Mehta",
-            options: [
-              "None",
-              ...teamLeads.map(
-                (lead) => lead.name
-              ),
-            ],
-          },
-        ]
-        : []),
+      // Shows Team Lead in both Add User and Edit User.
+      {
+        name: "lead",
+        label: "Team lead",
+        placeholder: "Select team lead",
+        options: [
+          "None",
+          ...teamLeads.map((lead) => lead.name),
+        ],
+      },
       {
         name: "status",
         label: "Status",
@@ -674,9 +666,9 @@ function UserMasterPage({
             ? { employeeId: values.employeeId }
             : {}),
           departmentId,
-          designation:
-            values.designation,
+          designation: values.designation,
           roleId,
+          teamLeadId,
           status,
         };
         // Sends a new password only when Administrator selected Change Password.

@@ -38,6 +38,7 @@ const getAdminDashboard = async (req, res) => {
         SUM(
           CASE
             WHEN r.code = 'indexer'
+            AND es.code IN ('reviewed', 'locked')
             THEN de.docs_completed
             ELSE 0
           END
@@ -78,6 +79,7 @@ const getAdminDashboard = async (req, res) => {
         SUM(
           CASE
             WHEN r.code = 'indexer'
+            AND es.code IN ('reviewed', 'locked')
             THEN de.docs_completed
             ELSE 0
           END
@@ -197,6 +199,7 @@ const getAdminDashboard = async (req, res) => {
         SUM(
           CASE
             WHEN r.code = 'indexer'
+            AND es.code IN ('reviewed', 'locked')
             THEN de.docs_completed
             ELSE 0
           END
@@ -362,6 +365,7 @@ const getAdminDashboard = async (req, res) => {
       SUM(
         CASE
           WHEN r.code = 'indexer'
+          AND es.code IN ('reviewed', 'locked')
           THEN de.docs_completed
           ELSE 0
         END
@@ -478,6 +482,7 @@ const getProjectDailySummary = async (req, res) => {
         SUM(
           CASE
             WHEN r.code = 'indexer'
+            AND es.code IN ('reviewed', 'locked')
             THEN de.docs_completed
             ELSE 0
           END
@@ -499,9 +504,10 @@ const getProjectDailySummary = async (req, res) => {
       COALESCE(
         SUM(
           CASE
-            WHEN r.code = 'indexer'
-            THEN de.batches_processed
-            ELSE 0
+           WHEN r.code = 'indexer'
+           AND es.code IN ('reviewed', 'locked')
+           THEN de.batches_processed
+           ELSE 0
           END
         ),
         0

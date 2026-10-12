@@ -39,10 +39,13 @@ const getTeamLeadDashboard = async (req, res) => {
     // ── Today's production totals for the whole team ──
     const [prodRows] = await db.query(
       `SELECT
-         COALESCE(SUM(docs_completed), 0) AS completed_today
-       FROM daily_entry
-       WHERE user_id IN (${placeholders})
-         AND production_date = CURDATE()`,
+     COALESCE(SUM(de.docs_completed), 0) AS completed_today
+   FROM daily_entry de
+   JOIN entry_status es
+     ON es.status_id = de.status_id
+   WHERE de.user_id IN (${placeholders})
+     AND de.production_date = CURDATE()
+     AND es.code IN ('reviewed', 'locked')`,
       memberIds
     );
 
@@ -118,23 +121,33 @@ const getTeamProductivity = async (req, res) => {
 
     const [rows] = await db.query(
       `SELECT
-         grp.prod_date                          AS production_date,
-         DAYNAME(grp.prod_date)                 AS day_name,
-         LEFT(DAYNAME(grp.prod_date), 3)        AS day_short,
-         grp.received,
-         grp.completed
-       FROM (
-         SELECT
-           DATE(production_date)              AS prod_date,
-           COALESCE(SUM(docs_received),  0)   AS received,
-           COALESCE(SUM(docs_completed), 0)   AS completed
-         FROM daily_entry
-         WHERE user_id IN (${placeholders})
-           AND production_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
-           AND production_date <= CURDATE()
-         GROUP BY DATE(production_date)
-       ) grp
-       ORDER BY grp.prod_date ASC`,
+     grp.prod_date AS production_date,
+     DAYNAME(grp.prod_date) AS day_name,
+     LEFT(DAYNAME(grp.prod_date), 3) AS day_short,
+     grp.received,
+     grp.completed
+   FROM (
+     SELECT
+       DATE(de.production_date) AS prod_date,
+       COALESCE(SUM(de.docs_received), 0) AS received,
+       COALESCE(
+         SUM(
+           CASE
+             WHEN es.code IN ('reviewed', 'locked')
+             THEN de.docs_completed
+             ELSE 0
+           END
+         ), 0
+       ) AS completed
+     FROM daily_entry de
+     JOIN entry_status es
+       ON es.status_id = de.status_id
+     WHERE de.user_id IN (${placeholders})
+       AND de.production_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+       AND de.production_date <= CURDATE()
+     GROUP BY DATE(de.production_date)
+   ) grp
+   ORDER BY grp.prod_date ASC`,
       memberIds
     );
 
@@ -165,13 +178,32 @@ const getCompletionSplit = async (req, res) => {
     // all-time totals per status
     const [rows] = await db.query(
       `SELECT
-         COALESCE(SUM(docs_received),  0)                                         AS received,
-         COALESCE(SUM(docs_completed), 0)                                         AS completed,
-         COALESCE(SUM(CASE WHEN es.code IN ('submitted','reviewed')
-                           THEN docs_completed ELSE 0 END), 0)                    AS in_review
-       FROM daily_entry de
-       JOIN entry_status es ON es.status_id = de.status_id
-       WHERE de.user_id IN (${placeholders})`,
+     COALESCE(SUM(de.docs_received), 0) AS received,
+
+     COALESCE(
+       SUM(
+         CASE
+           WHEN es.code IN ('reviewed', 'locked')
+           THEN de.docs_completed
+           ELSE 0
+         END
+       ), 0
+     ) AS completed,
+
+     COALESCE(
+       SUM(
+         CASE
+           WHEN es.code = 'submitted'
+           THEN de.docs_completed
+           ELSE 0
+         END
+       ), 0
+     ) AS in_review
+
+   FROM daily_entry de
+   JOIN entry_status es
+     ON es.status_id = de.status_id
+   WHERE de.user_id IN (${placeholders})`,
       memberIds
     );
 
@@ -205,16 +237,28 @@ const getDashboardTeamMembers = async (req, res) => {
          u.emp_code,
          u.full_name,
          u.designation,
-         COALESCE(SUM(de.docs_completed), 0)                             AS completed_today,
-        COALESCE(SUM(de.docs_completed), 0) AS completed_today,    0 AS pending_today,
+        COALESCE(
+  SUM(
+    CASE
+      WHEN es.code IN ('reviewed', 'locked')
+      THEN de.docs_completed
+      ELSE 0
+    END
+  ), 0
+) AS completed_today,
+
+0 AS pending_today,
          (SELECT GROUP_CONCAT(DISTINCT p.project_name ORDER BY p.project_name SEPARATOR ', ')
           FROM project_assignment pa2
           JOIN project p ON p.project_id = pa2.project_id AND p.status = 'active'
           WHERE pa2.user_id = u.user_id)                                  AS projects
        FROM users u
-       LEFT JOIN daily_entry de
-         ON de.user_id = u.user_id
-        AND de.production_date = CURDATE()
+      LEFT JOIN daily_entry de
+  ON de.user_id = u.user_id
+ AND de.production_date = CURDATE()
+
+LEFT JOIN entry_status es
+  ON es.status_id = de.status_id
        WHERE u.team_lead_id = ?
          AND u.status = 'active'
        GROUP BY u.user_id, u.emp_code, u.full_name, u.designation
@@ -376,15 +420,28 @@ const getAvailabilityProductivity = async (req, res) => {
       memberIds
     );
 
-    const [prodRows] = await db.query(
-      `SELECT
-         COALESCE(SUM(docs_received),  0) AS received_today,
-         COALESCE(SUM(docs_completed), 0) AS completed_today
-       FROM daily_entry
-       WHERE user_id IN (${placeholders})
-         AND production_date = CURDATE()`,
-      memberIds
-    );
+   const [prodRows] = await db.query(
+  `SELECT
+     COALESCE(SUM(de.docs_received), 0) AS received_today,
+
+     COALESCE(
+       SUM(
+         CASE
+           WHEN es.code IN ('reviewed', 'locked')
+           THEN de.docs_completed
+           ELSE 0
+         END
+       ), 0
+     ) AS completed_today
+
+   FROM daily_entry de
+   JOIN entry_status es
+     ON es.status_id = de.status_id
+
+   WHERE de.user_id IN (${placeholders})
+     AND de.production_date = CURDATE()`,
+  memberIds
+);
 
     const onLeave = Number(leaveRows[0].on_leave);
     const availableMembers = Math.max(totalMembers - onLeave, 0);
@@ -459,8 +516,9 @@ const getProjectDailySummary = async (req, res) => {
               SUM(
                 CASE
                   WHEN r.code = 'indexer'
+                  AND es.code IN ('reviewed', 'locked')
                   THEN de.docs_completed
-                  ELSE 0
+ELSE 0
                 END
               ),
               0
@@ -481,6 +539,7 @@ COALESCE(
   SUM(
     CASE
       WHEN r.code = 'indexer'
+      AND es.code IN ('reviewed', 'locked')
       THEN de.batches_processed
       ELSE 0
     END

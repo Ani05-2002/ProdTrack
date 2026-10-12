@@ -21,7 +21,37 @@ import {
   Typography,
 } from "@mui/material";
 
+const formatISTDateTime = (value) => {
+  if (!value) return "—";
 
+  const timestamp = String(value).trim();
+
+  // MySQL DATETIME values are already stored in IST.
+  const mysqlDateTime =
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})$/.exec(timestamp);
+
+  if (mysqlDateTime) {
+    const [, year, month, day, hour, minute, second] = mysqlDateTime;
+
+    const date = new Date(
+      `${year}-${month}-${day}T${hour}:${minute}:${second}+05:30`
+    );
+
+    if (Number.isNaN(date.getTime())) return "—";
+
+    return date.toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  }
+
+  return "—";
+};
 const tabs = ["Activity", "Change History", "Login Events"];
 const AUDIT_ROWS_PER_PAGE = 10;
 
@@ -97,18 +127,15 @@ const formatAuditRow = (log) => {
   );
 
   const formattedTime =
-    Number.isNaN(createdDate.getTime())
-      ? "—"
-      : createdDate.toLocaleString(
-          "en-IN",
-          {
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          }
-        );
+  Number.isNaN(createdDate.getTime())
+    ? "—"
+    : createdDate.toLocaleString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
 
   const entity = [
     log.entity_type,
@@ -239,61 +266,42 @@ const handleExport = () => {
   URL.revokeObjectURL(url);
   setNotice(true);
 };
-const loginRows = loginEvents.map(
-  (event) => {
-    const userName =
-      event.user_name ||
-      event.username_tried ||
-      "Unknown user";
+const loginRows = loginEvents.map((event) => {
+  const userName =
+    event.user_name ||
+    event.username_tried ||
+    "Unknown user";
 
-    const initials = userName
-      .split(" ")
-      .filter(Boolean)
-      .map((part) => part[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase();
+  const initials = userName
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
-    const createdDate = new Date(
-      event.created_at
-    );
+  // Format the login timestamp in IST
+  const formattedTime = formatISTDateTime(event.created_at);
 
-    const formattedTime =
-      Number.isNaN(createdDate.getTime())
-        ? "—"
-        : createdDate.toLocaleString(
-            "en-IN",
-            {
-              day: "2-digit",
-              month: "short",
-              year: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            }
-          );
+  const action =
+    Number(event.success) === 1
+      ? "LOGIN SUCCESS"
+      : "LOGIN FAILED";
 
-    const action =
-      Number(event.success) === 1
-        ? "LOGIN SUCCESS"
-        : "LOGIN FAILED";
+  const entity = [
+    String(event.method || "password").toUpperCase(),
+    event.ip_address || "Unknown IP",
+  ].join(" · ");
 
-    const entity = [
-      String(
-        event.method || "password"
-      ).toUpperCase(),
-      event.ip_address || "Unknown IP",
-    ].join(" · ");
-
-    return [
-      formattedTime,
-      initials || "UN",
-      userName,
-      action,
-      entity,
-      event.user_agent || "—",
-    ];
-  }
-);
+  return [
+    formattedTime,
+    initials || "UN",
+    userName,
+    action,
+    entity,
+    event.user_agent || "—",
+  ];
+});
 
 const rows =
   activeTab === 2

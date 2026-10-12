@@ -747,6 +747,7 @@ const getMyEntries = async (req, res) => {
 
         de.docs_received AS documents_received,
         de.docs_completed AS documents_completed,
+        de.batches_received,
         de.batches_processed,
         de.errors_flagged,
 
@@ -1957,6 +1958,7 @@ const getProjectDailySummary = async (req, res) => {
         SUM(
           CASE
             WHEN r.code = 'indexer'
+             AND es.code IN ('reviewed', 'locked')
             THEN de.docs_completed
             ELSE 0
           END
@@ -2007,6 +2009,7 @@ const getProjectDailySummary = async (req, res) => {
             SUM(
               CASE
                 WHEN r.code = 'indexer'
+                AND es.code IN ('reviewed', 'locked')
                 THEN de.docs_completed
                 ELSE 0
               END
@@ -2054,6 +2057,7 @@ const getProjectDailySummary = async (req, res) => {
         SUM(
           CASE
             WHEN r.code = 'indexer'
+            AND es.code IN ('reviewed', 'locked')
             THEN de.docs_completed
             ELSE 0
           END
@@ -2076,6 +2080,7 @@ const getProjectDailySummary = async (req, res) => {
           SUM(
             CASE
               WHEN r.code = 'indexer'
+              AND es.code IN ('reviewed', 'locked')
               THEN de.batches_processed
               ELSE 0
             END
@@ -2124,6 +2129,7 @@ const getProjectDailySummary = async (req, res) => {
         SUM(
           CASE
             WHEN r.code = 'indexer'
+            AND es.code IN ('reviewed', 'locked')
             THEN de.docs_completed
             ELSE 0
           END
@@ -2145,8 +2151,9 @@ COALESCE(
 COALESCE(
   SUM(
     CASE
-      WHEN r.code = 'indexer'
-      THEN de.batches_processed
+        WHEN r.code = 'indexer'
+        AND es.code IN ('reviewed', 'locked')
+        THEN de.batches_processed
       ELSE 0
     END
   ),

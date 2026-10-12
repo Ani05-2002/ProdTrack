@@ -1670,7 +1670,7 @@ function StatusChipTeamLead({ status }) {
 
 
 // Receives the project opened from the Team Lead Projects page.
-function TeamPendingEntries({ projectId, projectName }) {
+function TeamPendingEntries({ projectId, projectName, onReviewSuccess }) {
   const toast = useToast();
   const { confirm, ConfirmElement } = useConfirm();
   const [entries, setEntries] = useState([]);
@@ -1741,6 +1741,9 @@ function TeamPendingEntries({ projectId, projectName }) {
       );
 
       setMessage(`Entry #${entry.entry_id} marked as Reviewed.`);
+
+      // Notify the parent to refresh Project Daily Summary.
+      await onReviewSuccess?.();
     } catch (err) {
       setError(err.message || "Failed to review entry");
     } finally {
@@ -2082,6 +2085,7 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
           reportingCategory: entry.reporting_category || "—",
           batch: entry.batch_ref || "—",
           received: entry.documents_received,
+          batchesReceived: entry.batches_received,
           completed: entry.documents_completed,
           batchesProcessed: entry.batches_processed,
           status: String(entry.status || "").toUpperCase(),
@@ -2531,6 +2535,7 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
               String(formData.projectId)
           )?.project_name || ""
         }
+        onReviewSuccess={loadProjectSummary}
       />
       {/* =================================================
           ENTRY FORM
@@ -2838,6 +2843,7 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
                 "PROJECT",
                 "REPORTING CATEGORY",
                 "RECEIVED",
+                "BATCH RECEIVED",
                 "COMPLETED",
                 "STATUS",
                 "",
@@ -2861,13 +2867,13 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
           <TableBody>
             {entriesLoading && (
               <TableRow>
-                <TableCell colSpan={7}>Loading entries...</TableCell>
+                <TableCell colSpan={8}>Loading entries...</TableCell>
               </TableRow>
             )}
 
             {!entriesLoading && entriesError && (
               <TableRow>
-                <TableCell colSpan={7} sx={{ color: "error.main" }}>
+                <TableCell colSpan={8} sx={{ color: "error.main" }}>
                   {entriesError}
                 </TableCell>
               </TableRow>
@@ -2875,7 +2881,7 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
 
             {!entriesLoading && !entriesError && entries.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7}>
+                <TableCell colSpan={8}>
                   No entries yet. Save your first draft above.
                 </TableCell>
               </TableRow>
@@ -2917,6 +2923,15 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
                   }}
                 >
                   {entry.received}
+                </TableCell>
+                <TableCell
+                  sx={{
+                    fontSize: 13,
+                    color: "#334155",
+                    py: 1.15,
+                  }}
+                >
+                  {entry.batchesReceived ?? 0}
                 </TableCell>
                 <TableCell
                   sx={{
