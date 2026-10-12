@@ -11,6 +11,7 @@ const getIndexerEditPermission = async (
     return false;
   }
 
+
   // Normalizes the workflow status before checking the configured rule.
   const statusCode = String(entryStatus || "").toLowerCase();
 
@@ -50,6 +51,37 @@ const getIndexerEditPermission = async (
 
   // Returns true only when the Administrator permits Indexer editing.
   return configuredRule === "editable_by_indexer";
+};
+// Checks whether an Indexer can request a correction for a Locked entry
+// according to the Administrator Locking Rules.
+const getCorrectionRequestPermission = async (
+  executor,
+  entryStatus
+) => {
+  const statusCode = String(entryStatus || "").toLowerCase();
+
+  // Correction requests apply only to Locked entries.
+  if (statusCode !== "locked") {
+    return false;
+  }
+
+  const [rules] = await executor.query(
+    `
+      SELECT setting_value
+      FROM app_setting
+      WHERE setting_key = 'locked_entry_rule'
+      LIMIT 1
+    `
+  );
+
+  const configuredRule =
+    rules.length > 0
+      ? rules[0].setting_value
+      : "correction_request_required";
+
+  // Allow the button only when locked entries are allowed
+  // to create correction requests.
+  return configuredRule === "correction_request_required";
 };
 
 // Automatically locks Reviewed entries after the project's configured Auto Lock Time and Grace Period expire.
@@ -107,12 +139,11 @@ const applyAutomaticLocks = async () => {
         AND p.auto_lock_time IS NOT NULL
         AND p.status = 'active'
 
+       AND de.reviewed_at IS NOT NULL
+
         AND DATE_ADD(
-          TIMESTAMP(
-            de.production_date,
-            p.auto_lock_time
-          ),
-          INTERVAL COALESCE(p.grace_minutes, 0) MINUTE
+        de.reviewed_at,
+        INTERVAL COALESCE(p.grace_minutes, 0) MINUTE
         ) <= NOW()
 
       FOR UPDATE
@@ -289,6 +320,7 @@ const createEntry = async (req, res) => {
       reportingCategory,
       documentsReceived,
       documentsCompleted,
+      batchesReceived,
       batchesProcessed,
       errorsFlagged,
       notes,
@@ -309,6 +341,10 @@ const createEntry = async (req, res) => {
         : 0;
     // Converts the four current production fields into numbers.
     const completed = Number(documentsCompleted || 0);
+    const batchesReceivedCount =
+      req.user.role === "teamLead"
+        ? Number(batchesReceived ?? 0)
+        : 0;
     const processed = Number(batchesProcessed || 0);
     const errors = Number(errorsFlagged || 0);
 
@@ -316,6 +352,7 @@ const createEntry = async (req, res) => {
     const numericValues = [
       received,
       completed,
+      batchesReceivedCount,
       processed,
       errors,
     ];
@@ -405,7 +442,27 @@ const createEntry = async (req, res) => {
             : null;
       }
     }
+    // Validate that the selected reporting category belongs to the project.
+    if (categoryId !== null) {
+      const [allowedCategories] = await db.query(
+        `
+      SELECT 1
+      FROM project_reporting_category
+      WHERE project_id = ?
+        AND category_id = ?
+      LIMIT 1
+    `,
+        [Number(projectId), categoryId]
+      );
 
+      if (allowedCategories.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Selected reporting category is not assigned to this project",
+        });
+      }
+    }
     // Normalizes the requested workflow status.
     const statusCode = String(
       status || "draft"
@@ -481,13 +538,14 @@ const createEntry = async (req, res) => {
         category_id,
         docs_received,
         docs_completed,
+        batches_received,
         batches_processed,
         errors_flagged,
         remarks,
         status_id,
         submitted_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         Number(projectId),
@@ -497,6 +555,7 @@ const createEntry = async (req, res) => {
         categoryId,
         received,
         completed,
+        batchesReceivedCount,
         processed,
         errors,
         remarks || null,
@@ -869,6 +928,12 @@ const getMyEntries = async (req, res) => {
                 entry.status,
                 entry.locked_at
               ),
+
+            canRequestCorrection:
+              await getCorrectionRequestPermission(
+                db,
+                entry.status
+              ),
           };
         })
       );
@@ -922,6 +987,7 @@ const updateEntry = async (req, res) => {
       reportingCategory,
       documentsReceived,
       documentsCompleted,
+      batchesReceived,
       batchesProcessed,
       errorsFlagged,
       notes,
@@ -967,6 +1033,7 @@ const updateEntry = async (req, res) => {
     const numbers = [
       received,
       documentsCompleted,
+      req.user.role === "teamLead" ? batchesReceived : 0,
       batchesProcessed,
       errorsFlagged,
     ].map((value) => Number(value ?? 0));
@@ -975,6 +1042,7 @@ const updateEntry = async (req, res) => {
     const [
       validatedReceived,
       completed,
+      batchesReceivedCount,
       processed,
       errors,
     ] = numbers;
@@ -1144,7 +1212,26 @@ const updateEntry = async (req, res) => {
         "This active project is not assigned to you"
       );
     }
+    // Validate that the selected reporting category belongs to the project.
+    if (categoryId !== null) {
+      const [allowedCategories] = await connection.query(
+        `
+      SELECT 1
+      FROM project_reporting_category
+      WHERE project_id = ?
+        AND category_id = ?
+      LIMIT 1
+    `,
+        [selectedProjectId, categoryId]
+      );
 
+      if (allowedCategories.length === 0) {
+        reject(
+          400,
+          "Selected reporting category is not assigned to this project"
+        );
+      }
+    }
     // Checks mandatory guide acknowledgement before submitting the edited entry.
     if (statusCode === "submitted") {
       // Loads required guides still pending acknowledgement.
@@ -1195,6 +1282,7 @@ const updateEntry = async (req, res) => {
         category_id = ?,
         docs_received = ?,
         docs_completed = ?,
+        batches_received = ?,
         batches_processed = ?,
         errors_flagged = ?,
         remarks = ?,
@@ -1211,6 +1299,7 @@ const updateEntry = async (req, res) => {
         categoryId,
         received,
         completed,
+        batchesReceivedCount,
         processed,
         errors,
         remarks || null,
@@ -1446,11 +1535,12 @@ const getPendingTeamEntries = async (req, res) => {
         p.project_name,
         rc.name AS reporting_category,
 
-        de.docs_received AS documents_received,
-        de.docs_completed AS documents_completed,
-        de.batches_processed,
-        de.errors_flagged,
-        de.remarks AS notes,
+       de.docs_received AS documents_received,
+       de.docs_completed AS documents_completed,
+       de.batches_received,
+       de.batches_processed,
+       de.errors_flagged,
+       de.remarks AS notes,
 
         es.code AS status,
         de.submitted_at
@@ -1818,6 +1908,33 @@ const getProjectDailySummary = async (req, res) => {
         });
       }
     }
+    // Load the selected project and all assigned Reporting Categories.
+    const [projectCategories] = await db.query(
+      `
+    SELECT
+      p.project_id,
+      p.project_name,
+      rc.category_id,
+      rc.name AS category_name
+    FROM project p
+    LEFT JOIN project_reporting_category prc
+      ON prc.project_id = p.project_id
+    LEFT JOIN reporting_category rc
+      ON rc.category_id = prc.category_id
+    WHERE p.project_id = ?
+    ORDER BY rc.name ASC
+  `,
+      [projectId]
+    );
+
+    if (projectCategories.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Project not found",
+      });
+    }
+
+    const projectName = projectCategories[0].project_name;
     // Defines when the new Team Lead Received + Indexer Completed backlog workflow starts.
     const backlogWorkflowStartDate = "2026-10-05";
     // Calculates all received and completed work before the selected production date.
@@ -1916,6 +2033,147 @@ const getProjectDailySummary = async (req, res) => {
         productionDate,
       ]
     );
+    // Calculate today's Received and Completed for each Reporting Category.
+    const [categoryDailyRows] = await db.query(
+      `
+    SELECT
+      de.category_id,
+
+      COALESCE(
+        SUM(
+          CASE
+            WHEN r.code IN ('teamLead', 'team_lead', 'lead')
+            THEN de.docs_received
+            ELSE 0
+          END
+        ),
+        0
+      ) AS received,
+
+      COALESCE(
+        SUM(
+          CASE
+            WHEN r.code = 'indexer'
+            THEN de.docs_completed
+            ELSE 0
+          END
+        ),
+        0
+             ) AS completed,
+
+        COALESCE(
+          SUM(
+            CASE
+              WHEN r.code IN ('teamLead', 'team_lead', 'lead')
+              THEN de.batches_received
+              ELSE 0
+            END
+          ),
+          0
+        ) AS batchesReceived,
+
+        COALESCE(
+          SUM(
+            CASE
+              WHEN r.code = 'indexer'
+              THEN de.batches_processed
+              ELSE 0
+            END
+          ),
+          0
+        ) AS batchesProcessed
+
+      FROM daily_entry de
+
+    JOIN users u
+      ON u.user_id = de.user_id
+
+    JOIN role r
+      ON r.role_id = u.role_id
+
+    JOIN entry_status es
+      ON es.status_id = de.status_id
+
+    WHERE de.project_id = ?
+      AND de.production_date = ?
+      AND es.code IN ('submitted', 'reviewed', 'locked')
+
+    GROUP BY de.category_id
+  `,
+      [projectId, productionDate]
+    );
+    // Calculate previous Received and Completed for each Reporting Category.
+    const [categoryPreviousRows] = await db.query(
+      `
+    SELECT
+      de.production_date,
+      de.category_id,
+
+      COALESCE(
+        SUM(
+          CASE
+            WHEN r.code IN ('teamLead', 'team_lead', 'lead')
+            THEN de.docs_received
+            ELSE 0
+          END
+        ),
+        0
+      ) AS received,
+
+      COALESCE(
+        SUM(
+          CASE
+            WHEN r.code = 'indexer'
+            THEN de.docs_completed
+            ELSE 0
+          END
+        ),
+        0
+     ) AS completed,
+
+COALESCE(
+  SUM(
+    CASE
+      WHEN r.code IN ('teamLead', 'team_lead', 'lead')
+      THEN de.batches_received
+      ELSE 0
+    END
+  ),
+  0
+) AS batchesReceived,
+
+COALESCE(
+  SUM(
+    CASE
+      WHEN r.code = 'indexer'
+      THEN de.batches_processed
+      ELSE 0
+    END
+  ),
+  0
+) AS batchesProcessed
+
+FROM daily_entry de
+
+    JOIN users u
+      ON u.user_id = de.user_id
+
+    JOIN role r
+      ON r.role_id = u.role_id
+
+    JOIN entry_status es
+      ON es.status_id = de.status_id
+
+    WHERE de.project_id = ?
+      AND de.production_date >= ?
+      AND de.production_date < ?
+      AND es.code IN ('submitted', 'reviewed', 'locked')
+
+    GROUP BY de.production_date, de.category_id
+ORDER BY de.production_date ASC, de.category_id ASC
+  `,
+      [projectId, backlogWorkflowStartDate, productionDate]
+    );
     // Converts all production totals before the selected date into numbers.
     const previousReceived = Number(previousRows[0]?.received || 0);
     const previousCompleted = Number(previousRows[0]?.completed || 0);
@@ -1953,12 +2211,106 @@ const getProjectDailySummary = async (req, res) => {
       received - todayCompleted,
       0
     );
+    // Build a separate daily summary for every assigned Reporting Category.
+    const categorySummaries = projectCategories
+      .filter((category) => category.category_id !== null)
+      .map((category) => {
+        const categoryId = Number(category.category_id);
+
+        const daily = categoryDailyRows.find(
+          (row) => Number(row.category_id) === categoryId
+        );
+
+        const previousEntries = categoryPreviousRows.filter(
+          (row) => Number(row.category_id) === categoryId
+        );
+        const categoryReceived = Number(daily?.received || 0);
+        const categoryCompleted = Number(daily?.completed || 0);
+
+        // Batch values for the selected reporting category
+        const batchesReceived = Number(daily?.batchesReceived || 0);
+        const batchesProcessed = Number(daily?.batchesProcessed || 0);
+
+        // Calculate pending batches
+        // Calculate pending batches carried forward from previous dates.
+        let previousPendingBatches = 0;
+
+        for (const entry of previousEntries) {
+          const dayBatchesReceived = Number(entry.batchesReceived || 0);
+          const dayBatchesProcessed = Number(entry.batchesProcessed || 0);
+
+          previousPendingBatches = Math.max(
+            0,
+            previousPendingBatches +
+            dayBatchesReceived -
+            dayBatchesProcessed
+          );
+        }
+
+        // Add today's received batches and subtract today's processed batches.
+        const pendingBatches = Math.max(
+          0,
+          previousPendingBatches + batchesReceived - batchesProcessed
+        );
+
+        // Calculate unfinished work from previous dates.
+        // Get previous received documents for this category
+        // Calculate previous backlog chronologically for this category.
+        let previousBacklog = 0;
+
+        for (const entry of previousEntries) {
+          const dayReceived = Number(entry.received || 0);
+          const dayCompleted = Number(entry.completed || 0);
+
+          previousBacklog = Math.max(
+            previousBacklog + dayReceived - dayCompleted,
+            0
+          );
+        }
+
+        // Apply today's completed work to previous backlog first.
+        const backlogCompleted = Math.min(
+          categoryCompleted,
+          previousBacklog
+        );
+
+        const backlog = Math.max(
+          previousBacklog - backlogCompleted,
+          0
+        );
+
+        // Remaining completed work applies to today's received work.
+        const todayCompleted = Math.max(
+          categoryCompleted - backlogCompleted,
+          0
+        );
+
+        const pending = Math.max(
+          categoryReceived - todayCompleted,
+          0
+        );
+
+        return {
+          categoryId,
+          categoryName: category.category_name,
+          received: categoryReceived,
+          completed: categoryCompleted,
+          backlog,
+          pending,
+          batchesReceived,
+          batchesProcessed,
+          pendingBatches,
+        };
+      });
     // Returns the calculated project/day production totals.
     // Returns today's production totals together with backlog information.
     return res.status(200).json({
       success: true,
       projectId,
+      projectName,
       productionDate,
+
+      // Existing overall project totals
       received,
       completed,
       previousBacklog,
@@ -1966,6 +2318,9 @@ const getProjectDailySummary = async (req, res) => {
       backlog,
       todayCompleted,
       pending,
+
+      // New category-wise totals
+      categorySummaries,
     });
   } catch (error) {
     console.error(

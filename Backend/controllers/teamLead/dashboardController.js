@@ -441,6 +441,8 @@ const getProjectDailySummary = async (req, res) => {
         `
           SELECT
             de.production_date,
+            de.category_id,
+            rc.name AS category_name,
 
             COALESCE(
               SUM(
@@ -462,9 +464,34 @@ const getProjectDailySummary = async (req, res) => {
                 END
               ),
               0
-            ) AS completed
+           ) AS completed,
 
-          FROM daily_entry de
+COALESCE(
+  SUM(
+    CASE
+      WHEN r.code IN ('teamLead', 'team_lead', 'lead')
+      THEN de.batches_received
+      ELSE 0
+    END
+  ),
+  0
+) AS batchesReceived,
+
+COALESCE(
+  SUM(
+    CASE
+      WHEN r.code = 'indexer'
+      THEN de.batches_processed
+      ELSE 0
+    END
+  ),
+  0
+) AS batchesProcessed
+
+FROM daily_entry de
+
+          LEFT JOIN reporting_category rc
+            ON rc.category_id = de.category_id
 
           JOIN users u
             ON u.user_id = de.user_id
@@ -479,9 +506,14 @@ const getProjectDailySummary = async (req, res) => {
             AND de.production_date >= ?
             AND es.code IN ('submitted', 'reviewed', 'locked')
 
-          GROUP BY de.production_date
+          GROUP BY
+            de.production_date,
+            de.category_id,
+            rc.name
 
-          ORDER BY de.production_date ASC
+          ORDER BY
+            de.production_date ASC,
+            rc.name ASC
         `,
         [
           project.project_id,
@@ -490,11 +522,33 @@ const getProjectDailySummary = async (req, res) => {
       );
 
       // Carries unfinished work from one production date into the next date.
-      let carriedBacklog = 0;
-
+      // Stores carried backlog separately for each Reporting Category.
+      const categoryBacklogs = new Map();
+      // Stores unfinished batches separately for each Reporting Category.
+      const categoryPendingBatches = new Map();
       for (const row of dailyRows) {
+        const categoryId = row.category_id;
+        const categoryKey = String(categoryId ?? "uncategorized");
         const received = Number(row.received || 0);
         const completed = Number(row.completed || 0);
+        const carriedBacklog = categoryBacklogs.get(categoryKey) || 0;
+        // Batch totals for this production date and reporting category.
+        const batchesReceived = Number(row.batchesReceived || 0);
+        const batchesProcessed = Number(row.batchesProcessed || 0);
+
+        // Calculate same-day pending batches.
+        // Get unfinished batches carried forward from previous dates.
+        const previousPendingBatches =
+          categoryPendingBatches.get(categoryKey) || 0;
+
+        // Calculate pending batches including previous unfinished batches.
+        const pendingBatches = Math.max(
+          0,
+          previousPendingBatches + batchesReceived - batchesProcessed
+        );
+
+        // Carry the remaining batches forward to the next production date.
+        categoryPendingBatches.set(categoryKey, pendingBatches);
 
         // Uses today's completed work against previous backlog first.
         const backlogCompleted = Math.min(
@@ -525,14 +579,21 @@ const getProjectDailySummary = async (req, res) => {
           productionDate: row.production_date,
           projectId: project.project_id,
           projectName: project.project_name,
+
+          categoryId,
+          categoryName: row.category_name || "Uncategorized",
+
           received,
           completed,
           backlog,
           pending,
-        });
 
-        // Carries both remaining old backlog and today's pending to the next date.
-        carriedBacklog = backlog + pending;
+          batchesReceived,
+          batchesProcessed,
+          pendingBatches,
+        });
+        // Carry this category's unfinished work into its next production date.
+        categoryBacklogs.set(categoryKey, backlog + pending);
       }
     }
 

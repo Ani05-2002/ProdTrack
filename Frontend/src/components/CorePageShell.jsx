@@ -4,7 +4,15 @@ import {
   Avatar,
   Box,
   Button,
+  Checkbox,
   Chip,
+  FormControlLabel,
+  FormGroup,
+  FormControl,
+  InputLabel,
+  ListItemText,
+  OutlinedInput,
+  Select,
   Dialog,
   DialogActions,
   DialogContent,
@@ -597,7 +605,10 @@ export function CoreFormDialog({
     (fields || []).forEach((field) => {
       if (field.required) {
         const val = values[field.name];
-        if (!val || String(val).trim() === "") {
+        if (
+          val == null ||
+          (Array.isArray(val) ? val.length === 0 : String(val).trim() === "")
+        ) {
           newErrors[field.name] = true;
         }
       }
@@ -677,113 +688,153 @@ export function CoreFormDialog({
             </Typography>
 
             {/* Input box with no MUI floating label — just a clean placeholder. */}
-            <TextField
-              autoFocus={index === 0}
-              id={`field-${field.name}`}
-              placeholder={field.placeholder}
-              // Distinguish Add User inputs from login inputs.
-              name={
-                field.name === "username"
-                  ? "new-user-username"
-                  : field.name === "password"
-                    ? "new-user-password"
-                    : field.name === "confirmPassword"
-                      ? "new-user-confirm-password"
-                      : field.name
-              }
+            {/* Multiple selection using checkboxes */}
+            {field.type === "multiselect" ? (
+              <FormControl fullWidth size="small" error={Boolean(errors[field.name])}>
+                <Select
+                  multiple
+                  displayEmpty
+                  value={Array.isArray(values[field.name]) ? values[field.name] : []}
+                  onChange={(event) => update(field.name, event.target.value)}
+                  input={<OutlinedInput />}
+                  renderValue={(selected) =>
+                    selected.length === 0
+                      ? "Select categories"
+                      : selected.join(", ")
+                  }
+                  MenuProps={{
+                    PaperProps: { style: { maxHeight: 280 } },
+                  }}
+                >
+                  {(field.options || []).map((option) => (
+                    <MenuItem key={option} value={option}>
+                      <Checkbox
+                        size="small"
+                        checked={
+                          Array.isArray(values[field.name]) &&
+                          values[field.name].includes(option)
+                        }
+                      />
+                      <ListItemText primary={option} />
+                    </MenuItem>
+                  ))}
+                </Select>
 
-              // Prevent Chrome from inserting saved login credentials.
-              autoComplete={
-                field.name === "password" ||
-                  field.name === "confirmPassword"
-                  ? "new-password"
-                  : "off"
-              }
-              // Show or hide each password field independently.
-              type={
-                field.name === "password"
-                  ? showPassword
-                    ? "text"
-                    : "password"
-                  : field.name === "confirmPassword"
-                    ? showConfirmPassword
+                {errors[field.name] && (
+                  <Typography color="error" variant="caption">
+                    {field.label} is required.
+                  </Typography>
+                )}
+              </FormControl>
+            ) : (
+              <TextField
+                autoFocus={index === 0}
+                id={`field-${field.name}`}
+                placeholder={field.placeholder}
+                // Distinguish Add User inputs from login inputs.
+                name={
+                  field.name === "username"
+                    ? "new-user-username"
+                    : field.name === "password"
+                      ? "new-user-password"
+                      : field.name === "confirmPassword"
+                        ? "new-user-confirm-password"
+                        : field.name
+                }
+
+                // Prevent Chrome from inserting saved login credentials.
+                autoComplete={
+                  field.name === "password" ||
+                    field.name === "confirmPassword"
+                    ? "new-password"
+                    : "off"
+                }
+                // Show or hide each password field independently.
+                type={
+                  field.name === "password"
+                    ? showPassword
                       ? "text"
                       : "password"
-                    : field.options
-                      ? "text"
-                      : field.type || "text"
-              }
-              // Display an eye button for password fields only.
-              InputProps={
-                field.name === "password" || field.name === "confirmPassword"
-                  ? {
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton
-                          type="button"
-                          onClick={() => {
-                            if (field.name === "password") {
-                              setShowPassword((prev) => !prev);
-                            } else {
-                              setShowConfirmPassword((prev) => !prev);
-                            }
-                          }}
-                          onMouseDown={(event) => event.preventDefault()}
-                          edge="end"
-                          sx={{
-                            color: "#667085",
-                            visibility: "visible",
-                            opacity: 1,
-                          }}
-                        >
-                          {(field.name === "password"
-                            ? showPassword
-                            : showConfirmPassword) ? (
-                            <VisibilityOff fontSize="small" />
-                          ) : (
-                            <Visibility fontSize="small" />
-                          )}
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  }
-                  : undefined
-              }
-              value={values[field.name] || ""}
-              onChange={(event) => update(field.name, event.target.value)}
-              select={Boolean(field.options)}
-              fullWidth
-              size="small"
-              error={Boolean(errors[field.name])}
-              helperText={errors[field.name] ? `${field.label} is required.` : ""}
-              // No label prop — label is rendered above as a Typography element.
-              // InputLabelProps={{ shrink: false }}
-              sx={{
-                "& .MuiOutlinedInput-root": {
-                  borderRadius: 1.2,
-                  bgcolor: "#fff",
-                },
-                "& .MuiInputBase-input::placeholder": {
-                  color: "#9ca3af",
-                  opacity: 1,
-                  fontSize: 13.5,
-                },
-              }}
+                    : field.name === "confirmPassword"
+                      ? showConfirmPassword
+                        ? "text"
+                        : "password"
+                      : field.options
+                        ? "text"
+                        : field.type || "text"
+                }
+                // Display an eye button for password fields only.
+                InputProps={
+                  field.name === "password" || field.name === "confirmPassword"
+                    ? {
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            type="button"
+                            onClick={() => {
+                              if (field.name === "password") {
+                                setShowPassword((prev) => !prev);
+                              } else {
+                                setShowConfirmPassword((prev) => !prev);
+                              }
+                            }}
+                            onMouseDown={(event) => event.preventDefault()}
+                            edge="end"
+                            sx={{
+                              color: "#667085",
+                              visibility: "visible",
+                              opacity: 1,
+                            }}
+                          >
+                            {(field.name === "password"
+                              ? showPassword
+                              : showConfirmPassword) ? (
+                              <VisibilityOff fontSize="small" />
+                            ) : (
+                              <Visibility fontSize="small" />
+                            )}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }
+                    : undefined
+                }
+                value={values[field.name] || ""}
+                onChange={(event) => update(field.name, event.target.value)}
+                select={Boolean(field.options)}
+                fullWidth
+                size="small"
+                error={Boolean(errors[field.name])}
+                helperText={errors[field.name] ? `${field.label} is required.` : ""}
+                // No label prop — label is rendered above as a Typography element.
+                // InputLabelProps={{ shrink: false }}
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    borderRadius: 1.2,
+                    bgcolor: "#fff",
+                  },
+                  "& .MuiInputBase-input::placeholder": {
+                    color: "#9ca3af",
+                    opacity: 1,
+                    fontSize: 13.5,
+                  },
+                }}
 
-            >
-              {field.options && (
-                <MenuItem value="">
-                  <Box component="span" sx={{ color: "#9ca3af" }}>
-                    {field.placeholder || "Select..."}
-                  </Box>
-                </MenuItem>
-              )}
-              {field.options?.map((option) => (
-                <MenuItem key={option} value={option}>
-                  {option}
-                </MenuItem>
-              ))}
-            </TextField>
+              >
+                {field.options && (
+                  <MenuItem value="">
+                    <Box component="span" sx={{ color: "#9ca3af" }}>
+                      {field.placeholder || "Select..."}
+                    </Box>
+                  </MenuItem>
+                )}
+                {field.options?.map((option) => (
+                  <MenuItem key={option} value={option}>
+                    {option}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
             {/* Shows the eye button only for Password and Confirm Password fields. */}
             {(field.name === "password" || field.name === "confirmPassword") && (
               <IconButton

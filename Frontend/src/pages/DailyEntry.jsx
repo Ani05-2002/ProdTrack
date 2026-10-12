@@ -261,6 +261,7 @@ function IndexerDailyEntryIndexer({
               month: "short",
             }
           ),
+          reportingCategory: entry.reporting_category || "—",
           project: entry.project_name,
           completed: entry.documents_completed,
           batchesProcessed: entry.batches_processed,
@@ -268,6 +269,7 @@ function IndexerDailyEntryIndexer({
 
           // Preserves the backend-calculated edit permission for this entry.
           canEdit: Boolean(entry.canEdit),
+          canRequestCorrection: Boolean(entry.canRequestCorrection),
         }))
       );
     } catch (error) {
@@ -900,6 +902,41 @@ function IndexerDailyEntryIndexer({
             </TextField>
           </Field>
 
+          {/* Project-wide Daily Target */}
+          <Field label="Daily Target (Documents)">
+            <TextField
+              value={
+                !formData.projectId
+                  ? "Select a project"
+                  : (() => {
+                    const selectedProject = projects.find(
+                      (project) =>
+                        String(project.project_id || project.id) ===
+                        String(formData.projectId)
+                    );
+
+                    return selectedProject?.daily_target == null
+                      ? "Not Set"
+                      : String(selectedProject.daily_target);
+                  })()
+              }
+              fullWidth
+              size="small"
+              slotProps={{
+                input: {
+                  readOnly: true,
+                },
+              }}
+              sx={{
+                ...inputSx,
+                "& .MuiOutlinedInput-root": {
+                  ...inputSx["& .MuiOutlinedInput-root"],
+                  bgcolor: "#f8fafc",
+                },
+              }}
+            />
+          </Field>
+
           {/* Reporting Category */}
           <Field label="Reporting category">
             <TextField
@@ -917,13 +954,17 @@ function IndexerDailyEntryIndexer({
               </MenuItem>
 
               {/* Allowed reporting categories for Indexer Daily Entry. */}
-              <MenuItem value="Implant Indexing">
-                Implant Indexing
-              </MenuItem>
-
-              <MenuItem value="QC Review">
-                QC Review
-              </MenuItem>
+              {(
+                projects.find(
+                  (project) =>
+                    String(project.project_id || project.id) ===
+                    String(formData.projectId)
+                )?.category_names || []
+              ).map((categoryName) => (
+                <MenuItem key={categoryName} value={categoryName}>
+                  {categoryName}
+                </MenuItem>
+              ))}
             </TextField>
           </Field>
 
@@ -1024,6 +1065,7 @@ function IndexerDailyEntryIndexer({
               {[
                 "DATE",
                 "PROJECT",
+                "REPORTING CATEGORY",
                 "COMPLETED",
                 "BATCHES PROCESSED",
                 "STATUS",
@@ -1067,6 +1109,15 @@ function IndexerDailyEntryIndexer({
                   }}
                 >
                   {entry.project}
+                </TableCell>
+                <TableCell
+                  sx={{
+                    fontSize: 14,
+                    color: "#334155",
+                    py: 1.15,
+                  }}
+                >
+                  {entry.reportingCategory}
                 </TableCell>
                 <TableCell
                   sx={{
@@ -1131,6 +1182,7 @@ function IndexerDailyEntryIndexer({
                       onClick={() =>
                         handleRequestCorrection(entry)
                       }
+                      disabled={!entry.canRequestCorrection}
                       sx={{
                         // Gives Request correction a clear clickable button appearance.
                         minWidth: "auto",
@@ -1875,10 +1927,12 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
   const [saving, setSaving] = useState(false);
   // Stores the calculated Received, Completed and Pending totals for the selected project/date.
   const [projectSummary, setProjectSummary] = useState({
+    projectName: "",
     received: 0,
     completed: 0,
     backlog: 0,
     pending: 0,
+    categorySummaries: [],
   });
 
   // Tracks while the project summary is being loaded.
@@ -1896,6 +1950,9 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
     projectId: "",
     reportingCategory: "",
     documentsReceived: "",
+    documentsCompleted: "",
+    batchesReceived: "",
+
     notes: "",
   });
   useEffect(() => {
@@ -1937,17 +1994,13 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
 
   const handleProjectChange = (event) => {
     const projectId = event.target.value;
-    const selectedProject = projects.find(
-      (project) => String(project.project_id || project.id) === String(projectId)
-    );
 
     setFormData((current) => ({
       ...current,
       projectId,
-      reportingCategory: selectedProject?.reporting_category || "",
+      reportingCategory: "",
     }));
   };
-
   const handleInputChange = (event) => {
     const { name, value } = event.target;
 
@@ -1979,19 +2032,25 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
       );
 
       setProjectSummary({
+        projectName: data.projectName || "",
         received: Number(data.received || 0),
         completed: Number(data.completed || 0),
         backlog: Number(data.backlog || 0),
         pending: Number(data.pending || 0),
+        categorySummaries: Array.isArray(data.categorySummaries)
+          ? data.categorySummaries
+          : [],
       });
     } catch (error) {
       console.error("Project summary loading error:", error);
 
       setProjectSummary({
+        projectName: "",
         received: 0,
         completed: 0,
         backlog: 0,
         pending: 0,
+        categorySummaries: [],
       });
     } finally {
       setSummaryLoading(false);
@@ -2020,6 +2079,7 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
           raw: entry,
           date: entry.production_date,
           project: entry.project_name,
+          reportingCategory: entry.reporting_category || "—",
           batch: entry.batch_ref || "—",
           received: entry.documents_received,
           completed: entry.documents_completed,
@@ -2051,6 +2111,8 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
       projectId: original.project_id,
       reportingCategory: original.reporting_category || "",
       documentsReceived: original.documents_received ?? "",
+      documentsCompleted: "",
+      batchesReceived: original.batches_received ?? "",
       notes: original.notes || "",
     });
 
@@ -2075,6 +2137,7 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
     // Team Lead only enters the project's received document count.
     const numbers = {
       documentsReceived: Number(formData.documentsReceived || 0),
+      batchesReceived: Number(formData.batchesReceived || 0),
     };
 
     if (
@@ -2104,6 +2167,7 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
             productionDate: formData.productionDate,
             reportingCategory: formData.reportingCategory,
             documentsReceived: numbers.documentsReceived,
+            batchesReceived: numbers.batchesReceived,
             notes: formData.notes,
             status,
           }),
@@ -2120,13 +2184,16 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
       await loadProjectSummary();
 
 
-    } catch (error) {// Clears the Team Lead entry values after saving.
+      // Clears the Team Lead entry values after saving.
       setFormData((current) => ({
         ...current,
         reportingCategory: "",
         documentsReceived: "",
+        documentsCompleted: "",
+        batchesReceived: "",
         notes: "",
       }));
+    } catch (error) {
       toast.error(error.message || "Failed to save draft");
     } finally {
       setSaving(false);
@@ -2455,8 +2522,15 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
       {/* TEAM MEMBERS' SUBMITTED ENTRIES FOR REVIEW */}
       {/* Shows pending Indexer entries only for the project opened by the Team Lead. */}
       <TeamPendingEntries
-        projectId={navigationData?.projectId}
-        projectName={navigationData?.projectName}
+        key={formData.projectId}
+        projectId={formData.projectId}
+        projectName={
+          projects.find(
+            (project) =>
+              String(project.project_id || project.id) ===
+              String(formData.projectId)
+          )?.project_name || ""
+        }
       />
       {/* =================================================
           ENTRY FORM
@@ -2542,13 +2616,17 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
                 Select reporting category
               </MenuItem>
 
-              <MenuItem value="Implant Indexing">
-                Implant Indexing
-              </MenuItem>
-
-              <MenuItem value="QC Review">
-                QC Review
-              </MenuItem>
+              {(
+                projects.find(
+                  (project) =>
+                    String(project.project_id || project.id) ===
+                    String(formData.projectId)
+                )?.category_names || []
+              ).map((categoryName) => (
+                <MenuItem key={categoryName} value={categoryName}>
+                  {categoryName}
+                </MenuItem>
+              ))}
             </TextField>
           </Field>
 
@@ -2564,17 +2642,18 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
             />
           </Field>
 
-          {/* <Field label="Documents completed">
+          <Field label="Batches Received">
             <TextField
-              name="documentsCompleted"
+              name="batchesReceived"
               type="number"
-              value={formData.documentsCompleted}
+              value={formData.batchesReceived ?? ""}
               onChange={handleInputChange}
               fullWidth
               size="small"
+              inputProps={{ min: 0 }}
               sx={inputSx}
             />
-          </Field> */}
+          </Field>
           {/* 
           <Field label="Wrong entry">
             <TextField
@@ -2613,76 +2692,110 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
       <Card
         elevation={0}
         sx={{
-          borderRadius: "14px",
+          borderRadius: "12px",
           border: "1px solid #dbe3ec",
           bgcolor: "#fff",
-          p: 2.5,
-          mb: 2.5,
+          p: 1.5,
+          mb: 2,
         }}
       >
         <Typography
           sx={{
-            fontSize: 17,
+            fontSize: 16,
             fontWeight: 800,
             color: "#0f172a",
-            mb: 2,
+            mb: 1.5,
           }}
         >
           Project Daily Summary
         </Typography>
 
-        <Box
-          sx={{
-            display: "grid",
+        <Box sx={{ mt: 1 }}>
+          <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
+            {projectSummary.projectName || "Select a Project"}
+          </Typography>
 
-            // Keeps Received, Completed, Backlog and Pending on the same row.
-            gridTemplateColumns: "repeat(4, 1fr)",
+          {(projectSummary.categorySummaries ?? []).length === 0 ? (
+            <Alert severity="info">
+              No reporting categories or production data available.
+            </Alert>
+          ) : (
+            (projectSummary.categorySummaries ?? []).map((category) => (
+              <Box key={category.categoryId} sx={{ mb: 2 }}>
+                <Typography
+                  variant="subtitle1"
+                  fontWeight={700}
+                  sx={{ mb: 1.5 }}
+                >
+                  {category.categoryName}
+                </Typography>
 
-            gap: 2,
-          }}
-        >
-          {/* Received total entered by Team Lead */}
-          <Box>
-            <Typography sx={{ fontSize: 12, color: "#64748b" }}>
-              Documents Received
-            </Typography>
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: {
+                      xs: "repeat(2, minmax(0, 1fr))",
+                      md: "repeat(4, minmax(0, 1fr))",
+                    },
+                    gap: 1.5,
+                  }}
+                >
+                  {[
+                    {
+                      label: "Documents Received",
+                      value: category.received,
+                    },
+                    {
+                      label: "Documents Completed",
+                      value: category.completed,
+                    },
+                    {
+                      label: "Backlog",
+                      value: category.backlog,
+                    },
+                    {
+                      label: "Pending",
+                      value: category.pending,
+                    },
+                    {
+                      label: "Batches Received",
+                      value: category.batchesReceived,
+                    },
+                    {
+                      label: "Batches Processed",
+                      value: category.batchesProcessed,
+                    },
+                    {
+                      label: "Pending Batches",
+                      value: category.pendingBatches,
+                    },
+                  ].map((item) => (
+                    <Card
+                      key={item.label}
+                      variant="outlined"
+                      sx={{
+                        p: 1.5,
+                        borderRadius: 2,
+                        minHeight: 65,
+                      }}
+                    >
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ fontSize: 11, mb: 0.5, display: "block" }}
+                      >
+                        {item.label}
+                      </Typography>
 
-            <Typography sx={{ fontSize: 24, fontWeight: 800 }}>
-              {summaryLoading ? "..." : projectSummary.received}
-            </Typography>
-          </Box>
-
-          {/* Completed total submitted by all Indexers */}
-          <Box>
-            <Typography sx={{ fontSize: 12, color: "#64748b" }}>
-              Documents Completed
-            </Typography>
-
-            <Typography sx={{ fontSize: 24, fontWeight: 800 }}>
-              {summaryLoading ? "..." : projectSummary.completed}
-            </Typography>
-          </Box>
-          {/* Previous unfinished work still remaining as backlog */}
-          <Box>
-            <Typography sx={{ fontSize: 12, color: "#64748b" }}>
-              Backlog
-            </Typography>
-
-            <Typography sx={{ fontSize: 24, fontWeight: 800 }}>
-              {summaryLoading ? "..." : projectSummary.backlog}
-            </Typography>
-          </Box>
-
-          {/* Remaining work for this project/date */}
-          <Box>
-            <Typography sx={{ fontSize: 12, color: "#64748b" }}>
-              Pending
-            </Typography>
-
-            <Typography sx={{ fontSize: 24, fontWeight: 800 }}>
-              {summaryLoading ? "..." : projectSummary.pending}
-            </Typography>
-          </Box>
+                      <Typography sx={{ fontSize: 19, fontWeight: 700 }}>
+                        {Number(item.value || 0).toLocaleString()}
+                      </Typography>
+                    </Card>
+                  ))}
+                </Box>
+              </Box>
+            ))
+          )}
         </Box>
       </Card>
 
@@ -2723,7 +2836,7 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
               {[
                 "DATE",
                 "PROJECT",
-                "BATCH",
+                "REPORTING CATEGORY",
                 "RECEIVED",
                 "COMPLETED",
                 "STATUS",
@@ -2778,7 +2891,6 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
                 >
                   {entry.date}
                 </TableCell>
-
                 <TableCell
                   sx={{
                     fontSize: 13,
@@ -2788,17 +2900,15 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
                 >
                   {entry.project}
                 </TableCell>
-
                 <TableCell
                   sx={{
                     fontSize: 13,
-                    color: "#64748b",
+                    color: "#334155",
                     py: 1.15,
                   }}
                 >
-                  {entry.batch}
+                  {entry.reportingCategory}
                 </TableCell>
-
                 <TableCell
                   sx={{
                     fontSize: 13,
@@ -2808,7 +2918,6 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
                 >
                   {entry.received}
                 </TableCell>
-
                 <TableCell
                   sx={{
                     fontSize: 13,
@@ -2818,14 +2927,11 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
                 >
                   {entry.completed}
                 </TableCell>
-                <TableCell>
-                  {entry.batchesProcessed}
+                <TableCell sx={{ py: 1.15 }}
+                >
+                  <StatusChipTeamLead status={entry.status}
+                  />
                 </TableCell>
-
-                <TableCell sx={{ py: 1.15 }}>
-                  <StatusChipTeamLead status={entry.status} />
-                </TableCell>
-
                 <TableCell sx={{ py: 0.8 }}>
                   {entry.status === "DRAFT" && (
                     <Button
@@ -2846,18 +2952,6 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
                     >
                       Edit
                     </Button>
-                  )}
-
-                  {entry.status === "LOCKED" && (
-                    <Typography
-                      sx={{
-                        fontSize: 11,
-                        color: "#64748b",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      Request correction
-                    </Typography>
                   )}
                 </TableCell>
               </TableRow>

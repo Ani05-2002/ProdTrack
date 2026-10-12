@@ -13,7 +13,23 @@ const getMyProjects = async (req, res) => {
         p.project_code,
         p.project_name,
         p.client_name,
+        p.daily_target,
         rc.name AS reporting_category,
+        (
+        SELECT COALESCE(JSON_ARRAYAGG(prc.category_id), JSON_ARRAY())
+        FROM project_reporting_category prc
+        WHERE prc.project_id = p.project_id
+        ) AS category_ids,
+         (
+          SELECT COALESCE(
+          JSON_ARRAYAGG(rc2.name),
+          JSON_ARRAY()
+          )
+          FROM project_reporting_category prc2
+          INNER JOIN reporting_category rc2
+          ON rc2.category_id = prc2.category_id
+          WHERE prc2.project_id = p.project_id
+         ) AS category_names,
         p.status,
         p.start_date,
         p.end_date,
@@ -79,20 +95,13 @@ END AS backlog_percentage
           WHERE assigned.user_id = ?
             AND assigned.project_id = p.project_id
         )
-        OR EXISTS (
-          SELECT 1
-          FROM users teammate
-          INNER JOIN project_assignment assigned
-            ON assigned.user_id = teammate.user_id
-          WHERE teammate.team_lead_id = ?
-            AND assigned.project_id = p.project_id
-        )
 
       GROUP BY
         p.project_id,
         p.project_code,
         p.project_name,
         p.client_name,
+        p.daily_target,
         rc.name,
         p.status,
         p.start_date,
@@ -101,7 +110,7 @@ END AS backlog_percentage
 
       ORDER BY p.project_name ASC
       `,
-      [userId, userId, userId, userId, userId]
+      [userId, userId, userId, userId,]
     );
 
     return res.status(200).json({

@@ -163,18 +163,18 @@ const getAdminDashboard = async (req, res) => {
 
     // ── 2. BACKLOG BY PROJECT ──────────────────────────────────────────────
     // Calculates project backlog without unsigned subtraction errors.
-    
+
     // Calculate percentage for progress bar (backlog / total_received * 100)
-    
+
     // Stores the running unfinished work separately for each project.
 
 
 
-// Creates the final Backlog by Project response.
-// Gets project-wise production data for Backlog by Project
-// using the new Daily Entry workflow.
-const [backlogRows] = await db.query(
-  `
+    // Creates the final Backlog by Project response.
+    // Gets project-wise production data for Backlog by Project
+    // using the new Daily Entry workflow.
+    const [backlogRows] = await db.query(
+      `
     SELECT
       p.project_id,
       p.project_name AS name,
@@ -232,80 +232,80 @@ const [backlogRows] = await db.query(
       p.project_id ASC,
       de.production_date ASC
   `,
-  [latestProductionDate]
-);
-// Stores the running unfinished work separately for each project.
-const backlogProjectState = {};
+      [latestProductionDate]
+    );
+    // Stores the running unfinished work separately for each project.
+    const backlogProjectState = {};
 
-// Stores the latest calculated backlog for each project.
-const latestProjectBacklog = {};
+    // Stores the latest calculated backlog for each project.
+    const latestProjectBacklog = {};
 
-backlogRows.forEach((row) => {
-  const projectId = Number(row.project_id);
-  const received = Number(row.received || 0);
-  const completed = Number(row.completed || 0);
+    backlogRows.forEach((row) => {
+      const projectId = Number(row.project_id);
+      const received = Number(row.received || 0);
+      const completed = Number(row.completed || 0);
 
-  // Gets unfinished work carried from the previous production date.
-  const previousBacklog = backlogProjectState[projectId] || 0;
+      // Gets unfinished work carried from the previous production date.
+      const previousBacklog = backlogProjectState[projectId] || 0;
 
-  // Today's completed work clears previous backlog first.
-  const backlogCompleted = Math.min(completed, previousBacklog);
+      // Today's completed work clears previous backlog first.
+      const backlogCompleted = Math.min(completed, previousBacklog);
 
-  // Old backlog still remaining after today's completion.
-  const remainingBacklog = Math.max(
-    previousBacklog - backlogCompleted,
-    0
-  );
+      // Old backlog still remaining after today's completion.
+      const remainingBacklog = Math.max(
+        previousBacklog - backlogCompleted,
+        0
+      );
 
-  // Remaining completion is applied to today's received work.
-  const todayCompleted = Math.max(
-    completed - backlogCompleted,
-    0
-  );
+      // Remaining completion is applied to today's received work.
+      const todayCompleted = Math.max(
+        completed - backlogCompleted,
+        0
+      );
 
-  // Today's unfinished received work becomes pending.
-  const pending = Math.max(
-    received - todayCompleted,
-    0
-  );
+      // Today's unfinished received work becomes pending.
+      const pending = Math.max(
+        received - todayCompleted,
+        0
+      );
 
-  // Carries both remaining backlog and today's pending to the next date.
-  backlogProjectState[projectId] =
-    remainingBacklog + pending;
+      // Carries both remaining backlog and today's pending to the next date.
+      backlogProjectState[projectId] =
+        remainingBacklog + pending;
 
-  // Keeps the latest calculated values for this project.
-  latestProjectBacklog[projectId] = {
-    name: row.name,
-    total: remainingBacklog,
-    received,
-  };
-});
+      // Keeps the latest calculated values for this project.
+      latestProjectBacklog[projectId] = {
+        name: row.name,
+        total: remainingBacklog,
+        received,
+      };
+    });
 
-// Finds the largest backlog for proportional progress-bar widths.
-const maxBacklog = Math.max(
-  ...Object.values(latestProjectBacklog).map(
-    (project) => project.total
-  ),
-  1
-);
+    // Finds the largest backlog for proportional progress-bar widths.
+    const maxBacklog = Math.max(
+      ...Object.values(latestProjectBacklog).map(
+        (project) => project.total
+      ),
+      1
+    );
 
-// Creates the final Backlog by Project response.
-const backlog = Object.values(latestProjectBacklog)
-  .map((project) => ({
-    name: project.name,
-    total: project.total,
-    received: project.received,
-    pct:
-      project.received > 0
-        ? Math.round(
-            (project.total / project.received) * 100
-          )
-        : 0,
-    barPct: Math.round(
-      (project.total / maxBacklog) * 100
-    ),
-  }))
-  .sort((a, b) => b.total - a.total);
+    // Creates the final Backlog by Project response.
+    const backlog = Object.values(latestProjectBacklog)
+      .map((project) => ({
+        name: project.name,
+        total: project.total,
+        received: project.received,
+        pct:
+          project.received > 0
+            ? Math.round(
+              (project.total / project.received) * 100
+            )
+            : 0,
+        barPct: Math.round(
+          (project.total / maxBacklog) * 100
+        ),
+      }))
+      .sort((a, b) => b.total - a.total);
 
     // ── 3. KPI CARDS ──────────────────────────────────────────────────────
     // Pending corrections
@@ -401,7 +401,7 @@ const backlog = Object.values(latestProjectBacklog)
 
   ORDER BY month_start ASC
 `);
-console.log("ADMIN MONTHLY TREND:", trendRows);
+    console.log("ADMIN MONTHLY TREND:", trendRows);
     // ── BUILD RESPONSE ─────────────────────────────────────────────────────
     return res.status(200).json({
       success: true,
@@ -456,119 +456,177 @@ const getProjectDailySummary = async (req, res) => {
     // Gets Received and Completed grouped by project and production date.
     const [rows] = await db.query(
       `
-        SELECT
-          de.project_id,
-          p.project_name,
-          de.production_date,
+    SELECT
+      de.project_id,
+      p.project_name,
+      de.production_date,
+      de.category_id,
+      rc.name AS category_name,
 
-          COALESCE(
-            SUM(
-              CASE
-                WHEN r.code IN ('teamLead', 'team_lead', 'lead')
-                THEN de.docs_received
-                ELSE 0
-              END
-            ),
-            0
-          ) AS received,
+      COALESCE(
+        SUM(
+          CASE
+            WHEN r.code IN ('teamLead', 'team_lead', 'lead')
+            THEN de.docs_received
+            ELSE 0
+          END
+        ),
+        0
+      ) AS received,
 
-          COALESCE(
-            SUM(
-              CASE
-                WHEN r.code = 'indexer'
-                THEN de.docs_completed
-                ELSE 0
-              END
-            ),
-            0
-          ) AS completed
+      COALESCE(
+        SUM(
+          CASE
+            WHEN r.code = 'indexer'
+            THEN de.docs_completed
+            ELSE 0
+          END
+        ),
+        0
+      ) AS completed,
 
-        FROM daily_entry de
+      COALESCE(
+        SUM(
+          CASE
+            WHEN r.code IN ('teamLead', 'team_lead', 'lead')
+            THEN de.batches_received
+            ELSE 0
+          END
+        ),
+        0
+      ) AS batchesReceived,
 
-        INNER JOIN project p
-          ON p.project_id = de.project_id
+      COALESCE(
+        SUM(
+          CASE
+            WHEN r.code = 'indexer'
+            THEN de.batches_processed
+            ELSE 0
+          END
+        ),
+        0
+      ) AS batchesProcessed
 
-        INNER JOIN users u
-          ON u.user_id = de.user_id
+    FROM daily_entry de
 
-        INNER JOIN role r
-          ON r.role_id = u.role_id
+    INNER JOIN project p
+      ON p.project_id = de.project_id
 
-        INNER JOIN entry_status es
-          ON es.status_id = de.status_id
+    LEFT JOIN reporting_category rc
+      ON rc.category_id = de.category_id
 
-        WHERE de.production_date >= ?
-          AND es.code IN ('submitted', 'reviewed', 'locked')
+    INNER JOIN users u
+      ON u.user_id = de.user_id
 
-        GROUP BY
-          de.project_id,
-          p.project_name,
-          de.production_date
+    INNER JOIN role r
+      ON r.role_id = u.role_id
 
-        ORDER BY
-          de.project_id ASC,
-          de.production_date ASC
-      `,
+    INNER JOIN entry_status es
+      ON es.status_id = de.status_id
+
+    WHERE de.production_date >= ?
+      AND es.code IN ('submitted', 'reviewed', 'locked')
+
+    GROUP BY
+      de.project_id,
+      p.project_name,
+      de.production_date,
+      de.category_id,
+      rc.name
+
+    ORDER BY
+      de.project_id ASC,
+      de.production_date ASC,
+      de.category_id ASC
+  `,
       [backlogWorkflowStartDate]
     );
 
     // Stores the final Project Daily Summary records.
-    const summary = [];
+  // Stores the final Project Daily Summary records.
+const summary = [];
 
-    // Stores carried backlog separately for every project.
-    const projectBacklogs = {};
+// Tracks document backlog separately for each project and category.
+const categoryBacklogs = new Map();
 
-    rows.forEach((row) => {
-      // Converts the project ID into a number.
-      const projectId = Number(row.project_id);
+// Tracks pending batches separately for each project and category.
+const categoryPendingBatches = new Map();
 
-      // Converts database values into numbers.
-      const received = Number(row.received || 0);
-      const completed = Number(row.completed || 0);
+for (const row of rows) {
+  const projectId = Number(row.project_id);
+  const categoryId = row.category_id;
 
-      // Gets backlog carried from previous dates for this project.
-      const previousBacklog =
-        projectBacklogs[projectId] || 0;
+  // Unique key for each project and reporting category.
+  const categoryKey = `${projectId}:${categoryId ?? "uncategorized"}`;
 
-      // Uses today's completion to clear previous backlog first.
-      const backlogCompleted = Math.min(
-        completed,
-        previousBacklog
-      );
+  const received = Number(row.received || 0);
+  const completed = Number(row.completed || 0);
 
-      // Calculates previous backlog still remaining.
-      const backlog = Math.max(
-        previousBacklog - backlogCompleted,
-        0
-      );
+  const batchesReceived = Number(row.batchesReceived || 0);
+  const batchesProcessed = Number(row.batchesProcessed || 0);
 
-      // Gets completion remaining after clearing old backlog.
-      const todayCompleted = Math.max(
-        completed - backlogCompleted,
-        0
-      );
+  // Previous document backlog.
+  const previousBacklog = categoryBacklogs.get(categoryKey) || 0;
 
-      // Calculates pending work from today's Received count.
-      const pending = Math.max(
-        received - todayCompleted,
-        0
-      );
+  // Complete previous backlog first.
+  const backlogCompleted = Math.min(
+    completed,
+    previousBacklog
+  );
 
-      // Adds the calculated record to the response.
-      summary.push({
-        productionDate: row.production_date,
-        projectId,
-        projectName: row.project_name,
-        received,
-        completed,
-        backlog,
-        pending,
-      });
+  const backlog = Math.max(
+    previousBacklog - backlogCompleted,
+    0
+  );
 
-      // Carries remaining unfinished work to the project's next date.
-      projectBacklogs[projectId] =
-        backlog + pending;
-    });
+  const todayCompleted = Math.max(
+    completed - backlogCompleted,
+    0
+  );
+
+  // Today's pending documents.
+  const pending = Math.max(
+    received - todayCompleted,
+    0
+  );
+
+  // Previous unfinished batches.
+  const previousPendingBatches =
+    categoryPendingBatches.get(categoryKey) || 0;
+
+  // Pending batches include previous days and today's activity.
+  const pendingBatches = Math.max(
+    0,
+    previousPendingBatches +
+      batchesReceived -
+      batchesProcessed
+  );
+
+  // Add the calculated row to the dashboard response.
+  summary.push({
+    productionDate: row.production_date,
+    projectId,
+    projectName: row.project_name,
+
+    categoryId,
+    categoryName: row.category_name || "Uncategorized",
+
+    received,
+    completed,
+    backlog,
+    pending,
+
+    batchesReceived,
+    batchesProcessed,
+    pendingBatches,
+  });
+
+  // Carry unfinished documents to the next production date.
+  categoryBacklogs.set(categoryKey, backlog + pending);
+
+  // Carry unfinished batches to the next production date.
+  categoryPendingBatches.set(categoryKey, pendingBatches);
+}
 
     // Displays the newest production dates first.
     summary.sort(

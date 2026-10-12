@@ -1539,7 +1539,7 @@ const createGuide = async (req, res) => {
     if (!version || !req.file) {
       return res.status(400).json({
         success: false,
-        message: "Version and PDF or Word file are required",
+       message: "Version and PDF, Word, or Excel file are required",
       });
     }
 

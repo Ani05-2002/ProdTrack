@@ -64,8 +64,8 @@ const getCoreTeamDashboard = async (req, res) => {
     const completionRate =
       totalReceived > 0
         ? Math.round(
-            (totalCompleted / totalReceived) * 100
-          )
+          (totalCompleted / totalReceived) * 100
+        )
         : 0;
 
 
@@ -108,21 +108,21 @@ const getCoreTeamDashboard = async (req, res) => {
 const getMonthlyProductionTrend = async (req, res) => {
   try {
     // Confirms that this exact monthly-trend controller is being executed.
-console.log("NEW MONTHLY TREND CONTROLLER RUNNING");
+    console.log("NEW MONTHLY TREND CONTROLLER RUNNING");
 
-// Confirms which MySQL database the backend connection is actually using.
-const [dbInfo] = await db.query("SELECT DATABASE() AS database_name");
+    // Confirms which MySQL database the backend connection is actually using.
+    const [dbInfo] = await db.query("SELECT DATABASE() AS database_name");
 
-// Prints the backend's active database name in the terminal.
-console.log("BACKEND DATABASE:", dbInfo[0].database_name);
+    // Prints the backend's active database name in the terminal.
+    console.log("BACKEND DATABASE:", dbInfo[0].database_name);
 
-// Checks how many daily-entry rows the backend can currently see.
-const [entryCount] = await db.query(
-  "SELECT COUNT(*) AS total FROM daily_entry"
-);
+    // Checks how many daily-entry rows the backend can currently see.
+    const [entryCount] = await db.query(
+      "SELECT COUNT(*) AS total FROM daily_entry"
+    );
 
-// Prints the number of daily-entry rows visible to the backend.
-console.log("DAILY ENTRY COUNT:", entryCount[0].total);
+    // Prints the number of daily-entry rows visible to the backend.
+    console.log("DAILY ENTRY COUNT:", entryCount[0].total);
 
     const [trend] = await db.query(`
       SELECT
@@ -165,7 +165,7 @@ console.log("DAILY ENTRY COUNT:", entryCount[0].total);
         month_key ASC
     `);
     // Shows exactly what MySQL returned for the monthly trend query.
-        console.log("MONTHLY TREND DB RESULT:", trend);
+    console.log("MONTHLY TREND DB RESULT:", trend);
 
 
 
@@ -424,8 +424,8 @@ const getGuideCompliance = async (req, res) => {
     const complianceRate =
       totalRequired > 0
         ? Math.round(
-            (acknowledged / totalRequired) * 100
-          )
+          (acknowledged / totalRequired) * 100
+        )
         : 100;
 
 
@@ -556,117 +556,179 @@ const getProjectDailySummary = async (req, res) => {
     // Gets production totals grouped by project and production date.
     const [rows] = await db.query(
       `
-        SELECT
-          de.project_id,
-          p.project_name,
-          de.production_date,
+    SELECT
+      de.project_id,
+      p.project_name,
+      de.production_date,
+      de.category_id,
+      rc.name AS category_name,
 
-          COALESCE(
-            SUM(
-              CASE
-                WHEN r.code IN ('teamLead', 'team_lead', 'lead')
-                THEN de.docs_received
-                ELSE 0
-              END
-            ),
-            0
-          ) AS received,
+      COALESCE(
+        SUM(
+          CASE
+            WHEN r.code IN ('teamLead', 'team_lead', 'lead')
+            THEN de.docs_received
+            ELSE 0
+          END
+        ),
+        0
+      ) AS received,
 
-          COALESCE(
-            SUM(
-              CASE
-                WHEN r.code = 'indexer'
-                THEN de.docs_completed
-                ELSE 0
-              END
-            ),
-            0
-          ) AS completed
+      COALESCE(
+        SUM(
+          CASE
+            WHEN r.code = 'indexer'
+            THEN de.docs_completed
+            ELSE 0
+          END
+        ),
+        0
+      ) AS completed,
 
-        FROM daily_entry de
+      COALESCE(
+        SUM(
+          CASE
+            WHEN r.code IN ('teamLead', 'team_lead', 'lead')
+            THEN de.batches_received
+            ELSE 0
+          END
+        ),
+        0
+      ) AS batchesReceived,
 
-        INNER JOIN project p
-          ON p.project_id = de.project_id
+      COALESCE(
+        SUM(
+          CASE
+            WHEN r.code = 'indexer'
+            THEN de.batches_processed
+            ELSE 0
+          END
+        ),
+        0
+      ) AS batchesProcessed
 
-        INNER JOIN users u
-          ON u.user_id = de.user_id
+    FROM daily_entry de
 
-        INNER JOIN role r
-          ON r.role_id = u.role_id
+    INNER JOIN project p
+      ON p.project_id = de.project_id
 
-        INNER JOIN entry_status es
-          ON es.status_id = de.status_id
+    LEFT JOIN reporting_category rc
+      ON rc.category_id = de.category_id
 
-        WHERE de.production_date >= ?
-          AND es.code IN ('submitted', 'reviewed', 'locked')
+    INNER JOIN users u
+      ON u.user_id = de.user_id
 
-        GROUP BY
-          de.project_id,
-          p.project_name,
-          de.production_date
+    INNER JOIN role r
+      ON r.role_id = u.role_id
 
-        ORDER BY
-          de.project_id ASC,
-          de.production_date ASC
-      `,
+    INNER JOIN entry_status es
+      ON es.status_id = de.status_id
+
+    WHERE de.production_date >= ?
+      AND es.code IN ('submitted', 'reviewed', 'locked')
+
+    GROUP BY
+      de.project_id,
+      p.project_name,
+      de.production_date,
+      de.category_id,
+      rc.name
+
+    ORDER BY
+      de.project_id ASC,
+      de.production_date ASC,
+      de.category_id ASC
+  `,
       [backlogWorkflowStartDate]
     );
 
-    // Stores the final date-wise and project-wise dashboard records.
-    const summary = [];
+   // Stores the final Project Daily Summary records.
+const summary = [];
 
-    // Stores carried backlog separately for every project.
-    const projectBacklogs = {};
+// Tracks document backlog separately for each project and category.
+const categoryBacklogs = new Map();
 
-    rows.forEach((row) => {
-      const projectId = Number(row.project_id);
+// Tracks pending batches separately for each project and category.
+const categoryPendingBatches = new Map();
 
-      const received = Number(row.received || 0);
-      const completed = Number(row.completed || 0);
+for (const row of rows) {
+  const projectId = Number(row.project_id);
+  const categoryId = row.category_id;
 
-      // Gets backlog carried from previous dates for this project.
-      const previousBacklog =
-        projectBacklogs[projectId] || 0;
+  // Unique key for each project and reporting category.
+  const categoryKey = `${projectId}:${categoryId ?? "uncategorized"}`;
 
-      // Uses today's completion to clear old backlog first.
-      const backlogCompleted = Math.min(
-        completed,
-        previousBacklog
-      );
+  const received = Number(row.received || 0);
+  const completed = Number(row.completed || 0);
 
-      // Calculates old backlog still remaining.
-      const backlog = Math.max(
-        previousBacklog - backlogCompleted,
-        0
-      );
+  const batchesReceived = Number(row.batchesReceived || 0);
+  const batchesProcessed = Number(row.batchesProcessed || 0);
 
-      // Calculates completion remaining for today's received work.
-      const todayCompleted = Math.max(
-        completed - backlogCompleted,
-        0
-      );
+  // Get document backlog from previous dates.
+  const previousBacklog =
+    categoryBacklogs.get(categoryKey) || 0;
 
-      // Calculates today's pending work.
-      const pending = Math.max(
-        received - todayCompleted,
-        0
-      );
+  // Use today's completed documents against old backlog first.
+  const backlogCompleted = Math.min(
+    completed,
+    previousBacklog
+  );
 
-      // Saves this project/date result.
-      summary.push({
-        productionDate: row.production_date,
-        projectId,
-        projectName: row.project_name,
-        received,
-        completed,
-        backlog,
-        pending,
-      });
+  // Remaining backlog from previous dates.
+  const backlog = Math.max(
+    previousBacklog - backlogCompleted,
+    0
+  );
 
-      // Carries unfinished work into this project's next production date.
-      projectBacklogs[projectId] =
-        backlog + pending;
-    });
+  // Completed documents available for today's received work.
+  const todayCompleted = Math.max(
+    completed - backlogCompleted,
+    0
+  );
+
+  // Today's pending documents.
+  const pending = Math.max(
+    received - todayCompleted,
+    0
+  );
+
+  // Get unfinished batches from previous dates.
+  const previousPendingBatches =
+    categoryPendingBatches.get(categoryKey) || 0;
+
+  // Calculate cumulative Pending Batches.
+  const pendingBatches = Math.max(
+    0,
+    previousPendingBatches +
+      batchesReceived -
+      batchesProcessed
+  );
+
+  // Add this record to the Core Team Dashboard response.
+  summary.push({
+    productionDate: row.production_date,
+    projectId,
+    projectName: row.project_name,
+
+    categoryId,
+    categoryName: row.category_name || "Uncategorized",
+
+    received,
+    completed,
+    backlog,
+    pending,
+
+    batchesReceived,
+    batchesProcessed,
+    pendingBatches,
+  });
+
+  // Carry unfinished documents into the next production date.
+  categoryBacklogs.set(categoryKey, backlog + pending);
+
+  // Carry unfinished batches into the next production date.
+  categoryPendingBatches.set(categoryKey, pendingBatches);
+}
 
     // Shows newest dates first on the dashboard.
     summary.sort(

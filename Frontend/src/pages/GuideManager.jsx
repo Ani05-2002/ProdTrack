@@ -1437,7 +1437,7 @@ function GuideManagerCoreTeam() {
                 },
               }}
             >
-              {selectedFileName || "Choose guide file (PDF or Word)"}
+              {selectedFileName || "Choose guide file (PDF, Word or Excel)"}
               <input
                 hidden
                 type="file"

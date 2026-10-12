@@ -240,73 +240,74 @@ export default function IndexingGuide({
       setSaving(false);
     }
   };
-console.log("CURRENT GUIDE:", guide);
-// Downloads the selected guide file.
-// Downloads the selected guide file.
-const handleDownload = async () => {
-  // Stops when no guide is selected or a download is already running.
-  if (!guide || downloading) return;
+  console.log("CURRENT GUIDE:", guide);
+  // Downloads the selected guide file.
+  // Downloads the selected guide file.
+  const handleDownload = async () => {
+    // Stops when no guide is selected or a download is already running.
+    if (!guide || downloading) return;
 
-  try {
-    // Starts the download loading state.
-    setDownloading(true);
+    try {
+      // Starts the download loading state.
+      setDownloading(true);
 
-    // Clears any previous error.
-    setError("");
+      // Clears any previous error.
+      setError("");
 
-    // Gets the guide file from the authenticated backend API.
-    const blob = await apiDownload(
-      `/guides/${guide.version_id}/download`
-    );
+      // Gets the guide file from the authenticated backend API.
+      const blob = await apiDownload(
+        `/guides/${guide.version_id}/download`
+      );
 
-    // Gets the original file extension.
-    const extension =
-      guide.file_path
-        ?.split(/[\\/]/)
-        .pop()
-        ?.match(/\.(pdf|doc|docx|xls|xlsx)$/i)?.[0]
-        ?.toLowerCase() || "";
+      // Gets the original file extension.
+      // Gets the original file extension from the uploaded guide path.
+      const extension =
+        guide.file_path
+          ?.split(/[\\/]/)
+          .pop()
+          ?.match(/\.(pdf|doc|docx|xls|xlsx)$/i)?.[0]
+          ?.toLowerCase() || "";
 
-    // Creates a safe filename for the downloaded guide.
-    const fileName = `${guide.name}-${guide.version}`
-      .replace(/[^a-zA-Z0-9._-]+/g, "-");
+      // Creates a safe filename for the downloaded guide.
+      const fileName = `${guide.name}-${guide.version}`
+        .replace(/[^a-zA-Z0-9._-]+/g, "-");
 
-    // Creates a temporary URL containing the downloaded file.
-    const downloadUrl = window.URL.createObjectURL(blob);
+      // Creates a temporary URL containing the downloaded file.
+      const downloadUrl = window.URL.createObjectURL(blob);
 
-    // Creates a temporary HTML download link.
-    const link = document.createElement("a");
+      // Creates a temporary HTML download link.
+      const link = document.createElement("a");
 
-    // Assigns the file URL.
-    link.href = downloadUrl;
+      // Assigns the file URL.
+      link.href = downloadUrl;
 
-    // Assigns the filename.
-    link.download = `${fileName}${extension}`;
+      // Assigns the filename.
+      link.download = `${fileName}${extension}`;
 
-    // Adds the link to the current page.
-    document.body.appendChild(link);
+      // Adds the link to the current page.
+      document.body.appendChild(link);
 
-    // Triggers the browser download.
-    link.click();
+      // Triggers the browser download.
+      link.click();
 
-    // Removes the temporary link.
-    document.body.removeChild(link);
+      // Removes the temporary link.
+      document.body.removeChild(link);
 
-    // Cleans up the temporary file URL.
-    window.setTimeout(() => {
-      window.URL.revokeObjectURL(downloadUrl);
-    }, 1000);
-  } catch (err) {
-    // Logs the actual error for debugging.
-    console.error("Guide Download Error:", err);
+      // Cleans up the temporary file URL.
+      window.setTimeout(() => {
+        window.URL.revokeObjectURL(downloadUrl);
+      }, 1000);
+    } catch (err) {
+      // Logs the actual error for debugging.
+      console.error("Guide Download Error:", err);
 
-    // Shows the download error on the page.
-    setError(err.message || "Failed to download guide");
-  } finally {
-    // Restores the Download button.
-    setDownloading(false);
-  }
-};
+      // Shows the download error on the page.
+      setError(err.message || "Failed to download guide");
+    } finally {
+      // Restores the Download button.
+      setDownloading(false);
+    }
+  };
   const handleViewHistory = async () => {
     if (!guide || historyLoading) return;
 
@@ -533,7 +534,7 @@ const handleDownload = async () => {
               "&:hover": { backgroundColor: "#2458cf", boxShadow: "none" },
             }}
           >
-             {downloading ? "Downloading..." : "Download"}
+            {downloading ? "Downloading..." : "Download"}
           </Button>
         </Box>
       </Box>

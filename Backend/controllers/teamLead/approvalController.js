@@ -2,34 +2,45 @@ const db = require("../../config/db");
 // Checks whether the logged-in role can approve/reject corrections
 // according to the rule saved by Administrator in Locking Rules.
 const canReviewCorrection = async (role) => {
-  // Administrator and Core Team can always approve/reject corrections
-  // regardless of what rule is saved in Locking Rules.
-  if (role === "administrator" || role === "coreTeam") {
+  // Administrator always keeps access.
+  if (role === "administrator") {
     return true;
   }
 
-  // Team Lead access depends on the correction_approver_rule setting.
-  if (role === "teamLead") {
-    const [rows] = await db.query(
-      `
-        SELECT setting_value
-        FROM app_setting
-        WHERE setting_key = 'correction_approver_rule'
-        LIMIT 1
-      `
-    );
+  // Gets the current Correction Approver rule.
+  const [rows] = await db.query(
+    `
+      SELECT setting_value
+      FROM app_setting
+      WHERE setting_key = 'correction_approver_rule'
+      LIMIT 1
+    `
+  );
 
-    // Falls back to allowing Team Lead when the setting is missing.
-    const rule = rows[0]?.setting_value || "team_lead_only";
+  // Uses Team Lead only as the safe fallback.
+  const rule = rows[0]?.setting_value || "team_lead_only";
 
-    // Team Lead is allowed under both supported rule modes.
-    return (
-      rule === "team_lead_only" ||
-      rule === "team_lead_then_core_team"
-    );
+  // Team Lead only:
+  // Team Lead can approve/reject.
+  // Core Team cannot approve/reject.
+  if (rule === "team_lead_only") {
+    return role === "teamLead";
   }
 
-  // All other roles are blocked.
+  // Core Team only:
+  // Core Team can approve/reject.
+  // Team Lead cannot approve/reject.
+  if (rule === "core_team_only") {
+    return role === "coreTeam";
+  }
+
+  // Team Lead then Core Team:
+  // Both roles participate in the approval workflow.
+  if (rule === "team_lead_then_core_team") {
+    return role === "teamLead" || role === "coreTeam";
+  }
+
+  // Blocks unknown roles/rules.
   return false;
 };
 

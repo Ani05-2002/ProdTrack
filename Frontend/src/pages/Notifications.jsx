@@ -3,6 +3,7 @@ import {
   Box,
   Paper,
   Typography,
+  Button,
 } from "@mui/material";
 import apiRequest from "../lib/api.js";
 import { useToast } from "../components/ToastProvider.jsx";
@@ -21,8 +22,11 @@ import LockRoundedIcon from "@mui/icons-material/LockRounded";
 export default function Notifications({ user }) {
 
   const toast = useToast();
-  const [notifications, setNotifications] =
-    useState([]);
+  const [notifications, setNotifications] = useState([]);
+
+  // Pagination: show 10 notifications per page.
+  const [notificationsPage, setNotificationsPage] = useState(0);
+  const NOTIFICATIONS_PER_PAGE = 10;
 
   useEffect(() => {
     const loadNotifications = async () => {
@@ -105,7 +109,7 @@ export default function Notifications({ user }) {
             title: notification.title,
             message: notification.message,
             time,
-            isRead:true,
+            isRead: true,
           };
         });
 
@@ -205,110 +209,182 @@ export default function Notifications({ user }) {
           boxShadow: "0 2px 6px rgba(16,35,61,.08)",
         }}
       >
-        {notifications.map(
-          (
-            {
-              id,
-              icon: Icon,
-              color,
-              title,
-              message,
-              time,
-              isRead,
-            },
-            index
-          ) => (
-            <Box
-              key={id}
-              onClick={() =>
-                handleNotificationClick(id, isRead)
-              }
-              sx={{
-                minHeight: 68,
-                px: {
-                  xs: 1.5,
-                  sm: 2.2,
-                },
-                py: 1.35,
-                display: "flex",
-                alignItems: "center",
-                gap: {
-                  xs: 1.2,
-                  sm: 1.8,
-                },
-                borderBottom:
-                  index < notifications.length - 1
-                    ? "1px solid #e3e8ef"
-                    : "none",
-              }}
-            >
-              {/* MUI ICON */}
-
+        {notifications
+          .slice(
+            notificationsPage * NOTIFICATIONS_PER_PAGE,
+            (notificationsPage + 1) * NOTIFICATIONS_PER_PAGE
+          )
+          .map(
+            (
+              {
+                id,
+                icon: Icon,
+                color,
+                title,
+                message,
+                time,
+                isRead,
+              },
+              index
+            ) => (
               <Box
+                key={id}
+                onClick={() =>
+                  handleNotificationClick(id, isRead)
+                }
                 sx={{
-                  width: 30,
-                  height: 30,
+                  minHeight: 68,
+                  px: {
+                    xs: 1.5,
+                    sm: 2.2,
+                  },
+                  py: 1.35,
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "center",
-                  color,
-                  flexShrink: 0,
+                  gap: {
+                    xs: 1.2,
+                    sm: 1.8,
+                  },
+                  borderBottom:
+                    index <
+                      Math.min(
+                        NOTIFICATIONS_PER_PAGE,
+                        notifications.length -
+                        notificationsPage * NOTIFICATIONS_PER_PAGE
+                      ) - 1
+                      ? "1px solid #e3e8ef"
+                      : "none",
                 }}
               >
-                <Icon
-                  sx={{
-                    fontSize: 23,
-                  }}
-                />
-              </Box>
+                {/* MUI ICON */}
 
-              {/* CONTENT */}
-
-              <Box
-                sx={{
-                  minWidth: 0,
-                  flex: 1,
-                }}
-              >
-                <Typography
+                <Box
                   sx={{
-                    fontSize: 13.5,
-                    fontWeight: 800,
-                    color: "#1A2434",
-                  }}
-                >
-                  {title}
-                </Typography>
-
-                <Typography
-                  sx={{
-                    fontSize: 12.5,
-                    color: "#6A7585",
-                    mt: 0.35,
+                    width: 30,
+                    height: 30,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color,
+                    flexShrink: 0,
                   }}
                 >
-                  {message}
+                  <Icon
+                    sx={{
+                      fontSize: 23,
+                    }}
+                  />
+                </Box>
+
+                {/* CONTENT */}
+
+                <Box
+                  sx={{
+                    minWidth: 0,
+                    flex: 1,
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      fontSize: 13.5,
+                      fontWeight: 800,
+                      color: "#1A2434",
+                    }}
+                  >
+                    {title}
+                  </Typography>
+
+                  <Typography
+                    sx={{
+                      fontSize: 12.5,
+                      color: "#6A7585",
+                      mt: 0.35,
+                    }}
+                  >
+                    {message}
+                  </Typography>
+                </Box>
+
+                {/* TIME */}
+
+                <Typography
+                  sx={{
+                    color: "#667085",
+                    fontSize: 12,
+                    whiteSpace: "nowrap",
+                    alignSelf: "flex-start",
+                    mt: 0.2,
+                    flexShrink: 0,
+                  }}
+                >
+                  {time}
                 </Typography>
               </Box>
-
-              {/* TIME */}
-
-              <Typography
-                sx={{
-                  color: "#667085",
-                  fontSize: 12,
-                  whiteSpace: "nowrap",
-                  alignSelf: "flex-start",
-                  mt: 0.2,
-                  flexShrink: 0,
-                }}
-              >
-                {time}
-              </Typography>
-            </Box>
-          )
-        )}
+            )
+          )}
       </Paper>
+      {/* NOTIFICATIONS PAGINATION */}
+      {notifications.length > 0 && (
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "flex-end",
+            alignItems: "center",
+            gap: 1,
+            px: 2,
+            py: 1.5,
+            mt: 0.5,
+            border: "1px solid #dbe3ec",
+            borderRadius: 1.5,
+            bgcolor: "#fff",
+          }}
+        >
+          <Typography
+            sx={{
+              fontSize: 12,
+              color: "#64748b",
+            }}
+          >
+            {notificationsPage * NOTIFICATIONS_PER_PAGE + 1}–
+            {Math.min(
+              (notificationsPage + 1) * NOTIFICATIONS_PER_PAGE,
+              notifications.length
+            )}{" "}
+            of {notifications.length}
+          </Typography>
+
+          <Button
+            size="small"
+            disabled={notificationsPage === 0}
+            onClick={() =>
+              setNotificationsPage((page) => page - 1)
+            }
+            sx={{
+              minWidth: 28,
+              color: "#64748b",
+            }}
+          >
+            ‹
+          </Button>
+
+          <Button
+            size="small"
+            disabled={
+              (notificationsPage + 1) * NOTIFICATIONS_PER_PAGE >=
+              notifications.length
+            }
+            onClick={() =>
+              setNotificationsPage((page) => page + 1)
+            }
+            sx={{
+              minWidth: 28,
+              color: "#64748b",
+            }}
+          >
+            ›
+          </Button>
+        </Box>
+      )}
     </Box>
   );
 }

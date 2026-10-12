@@ -282,9 +282,9 @@ function KpiCard({ label, value, note, color, action, nav, onNavigate, loading }
   );
 }
 
-// Defines the column widths for the Project Daily Summary table.
+// Defines column widths for all 10 Project Daily Summary fields.
 const DAILY_SUMMARY_COL =
-  "1.1fr 1.8fr 1.2fr 1.2fr 1fr 1fr";
+  "1.1fr 1.8fr 1.6fr 1fr 1fr 1fr 1fr 1.3fr 1.3fr 1.3fr";
 
 // Displays the Administrator Project Daily Summary.
 function ProjectDailySummaryTable({
@@ -307,7 +307,7 @@ function ProjectDailySummaryTable({
           sx={{
             display: "grid",
             gridTemplateColumns: DAILY_SUMMARY_COL,
-            minWidth: 850,
+            minWidth: 1450,
             px: 2,
             py: 1.2,
             bgcolor: "#f8fafc",
@@ -317,10 +317,14 @@ function ProjectDailySummaryTable({
           {[
             "DATE",
             "PROJECT",
+            "REPORTING CATEGORY",
             "RECEIVED",
             "COMPLETED",
             "BACKLOG",
             "PENDING",
+            "BATCHES RECEIVED",
+            "BATCHES PROCESSED",
+            "PENDING BATCHES",
           ].map((column) => (
             <Typography
               key={column}
@@ -346,11 +350,11 @@ function ProjectDailySummaryTable({
         ) : (
           paginatedRows.map((row, index) => (
             <Box
-              key={`${row.projectId}-${row.productionDate}-${index}`}
+              key={`${row.projectId}-${row.categoryId ?? "none"}-${row.productionDate}-${index}`}
               sx={{
                 display: "grid",
                 gridTemplateColumns: DAILY_SUMMARY_COL,
-                minWidth: 850,
+                minWidth: 1450,
                 alignItems: "center",
                 px: 2,
                 py: 1.3,
@@ -371,6 +375,10 @@ function ProjectDailySummaryTable({
                 }}
               >
                 {row.projectName}
+              </Typography>
+              {/* Displays Reporting Category. */}
+              <Typography sx={{ fontSize: 13, color: HEAD }}>
+                {row.categoryName || "Uncategorized"}
               </Typography>
 
               {/* Displays documents received. */}
@@ -397,6 +405,26 @@ function ProjectDailySummaryTable({
                 }}
               >
                 {Number(row.pending || 0).toLocaleString()}
+              </Typography>
+              {/* Batches Received */}
+              <Typography sx={{ fontSize: 13, color: HEAD }}>
+                {Number(row.batchesReceived || 0).toLocaleString()}
+              </Typography>
+
+              {/* Batches Processed */}
+              <Typography sx={{ fontSize: 13, color: HEAD }}>
+                {Number(row.batchesProcessed || 0).toLocaleString()}
+              </Typography>
+
+              {/* Pending Batches — includes previous unfinished batches */}
+              <Typography
+                sx={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: HEAD,
+                }}
+              >
+                {Number(row.pendingBatches || 0).toLocaleString()}
               </Typography>
             </Box>
           ))

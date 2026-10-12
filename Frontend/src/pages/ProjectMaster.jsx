@@ -138,7 +138,7 @@ function ProjectMasterCoreTeam({
       // Displays a useful error message.
       setErrorMessage(
         error.message ||
-          "Failed to load reporting categories",
+        "Failed to load reporting categories",
       );
     }
   };
@@ -168,7 +168,7 @@ function ProjectMasterCoreTeam({
       // Displays a useful error message.
       setErrorMessage(
         error.message ||
-          "Failed to load Team Leads",
+        "Failed to load Team Leads",
       );
     }
   };
@@ -219,7 +219,14 @@ function ProjectMasterCoreTeam({
         project.client_name || "—",
 
         // Displays reporting-category name.
-        project.reporting_category || "—",
+        (project.category_ids || [])
+          .map((id) =>
+            categories.find(
+              (category) => Number(category.category_id) === Number(id)
+            )?.name
+          )
+          .filter(Boolean)
+          .join(", ") || "—",
 
         // Displays formatted auto-lock time.
         formatTimeForTable(
@@ -234,7 +241,7 @@ function ProjectMasterCoreTeam({
           project.status || "inactive",
         ).toUpperCase(),
       ]),
-    [projects],
+    [projects, categories],
   );
 
 
@@ -272,14 +279,18 @@ function ProjectMasterCoreTeam({
       // Reporting category field with live backend options.
       {
         name: "category",
-        label: "Reporting category",
-        placeholder: "Select category",
-        options: categories.map(
-          (category) => category.name,
-        ),
+        label: "Reporting categories",
+        type: "multiselect",
+        options: categories.map((category) => category.name),
         required: true,
       },
-
+      // Project-wide daily document completion target.
+      {
+        name: "dailyTarget",
+        label: "Daily Target (Documents)",
+        placeholder: "e.g. 200",
+        type: "number",
+      },
       // Auto-lock timing field.
       {
         name: "lock",
@@ -416,8 +427,9 @@ function ProjectMasterCoreTeam({
         code: "",
         name: "",
         client: "",
-        category: "",
+        category: [],
         lock: "",
+        dailyTarget: "",
         team: "",
         status: "",
       };
@@ -433,19 +445,24 @@ function ProjectMasterCoreTeam({
 
       client:
         selectedProject.client_name || "",
-
-      category:
-        selectedProject.reporting_category ||
-        "",
+      category: categories
+        .filter((category) =>
+          (selectedProject.category_ids || []).map(Number).includes(Number(category.category_id))
+        )
+        .map((category) => category.name),
 
       lock:
         selectedProject.auto_lock_time
           ? selectedProject.auto_lock_time.slice(
-              0,
-              5,
-            )
+            0,
+            5,
+          )
           : "",
-
+      // Displays the saved project-wide daily target when editing.
+      dailyTarget:
+        selectedProject.daily_target == null
+          ? ""
+          : String(selectedProject.daily_target),
       // Team Lead is left empty because the current projects API returns team size rather than assigned lead ID/name.
       team: "",
 
@@ -454,7 +471,7 @@ function ProjectMasterCoreTeam({
           ? "Inactive"
           : "Active",
     };
-  }, [edit, selectedProject]);
+  }, [edit, selectedProject, categories]);
 
 
   // ============================================================
@@ -467,12 +484,11 @@ function ProjectMasterCoreTeam({
   ) => {
     try {
       // Finds the reporting-category object selected by its displayed name.
-      const selectedCategory =
-        categories.find(
-          (category) =>
-            category.name ===
-            formValues.category,
-        );
+      const selectedCategoryIds = categories
+        .filter((category) =>
+          (formValues.category || []).includes(category.name)
+        )
+        .map((category) => Number(category.category_id));
 
       // Finds the selected Team Lead object by its displayed name.
       const selectedTeamLead =
@@ -494,10 +510,16 @@ function ProjectMasterCoreTeam({
         // Sends client name or null when empty.
         clientName:
           formValues.client?.trim() || null,
-
         // Sends the selected reporting-category database ID.
-        categoryId:
-          selectedCategory.category_id,
+        categoryIds: selectedCategoryIds,
+
+        // Sends the shared daily target for the entire project.
+        dailyTarget:
+          formValues.dailyTarget === "" ||
+            formValues.dailyTarget === null ||
+            formValues.dailyTarget === undefined
+            ? null
+            : Number(formValues.dailyTarget),
 
         // Converts the HTML time value into MySQL-compatible HH:mm:ss.
         autoLockTime:
@@ -508,9 +530,9 @@ function ProjectMasterCoreTeam({
         // Sends the selected Team Lead database ID only when a Team Lead was selected.
         ...(formValues.team
           ? {
-              teamLeadId:
-                selectedTeamLead?.id || null,
-            }
+            teamLeadId:
+              selectedTeamLead?.id || null,
+          }
           : {}),
 
         // Converts the UI status into the backend ENUM format.
@@ -582,7 +604,7 @@ function ProjectMasterCoreTeam({
       // Displays the backend error without changing the page UI.
       setErrorMessage(
         error.message ||
-          "Failed to save project",
+        "Failed to save project",
       );
     }
   };
