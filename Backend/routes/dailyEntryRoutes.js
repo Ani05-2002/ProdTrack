@@ -66,7 +66,6 @@ router.get(
   allowRoles("indexer"),
   getProjectTeamLeadCategories
 );
-
 router.patch(
   "/:id",
   authenticate,
