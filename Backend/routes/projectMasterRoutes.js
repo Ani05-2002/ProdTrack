@@ -71,7 +71,16 @@ router.post(
   updateProject
 );
 
+// Keep GET for backward compatibility.
 router.get(
+  "/projects/reporting-categories",
+  authenticate,
+  allowRoles("coreTeam", "administrator"),
+  getReportingCategories
+);
+
+// Allow POST requests to fetch reporting categories.
+router.post(
   "/projects/reporting-categories",
   authenticate,
   allowRoles("coreTeam", "administrator"),

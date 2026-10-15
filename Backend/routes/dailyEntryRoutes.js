@@ -60,7 +60,16 @@ router.get(
   getProjectIndexerCategories
 );
 // Returns Team Lead categories for the selected project.
+// Supports GET requests for existing frontend compatibility.
 router.get(
+  "/projects/:projectId/team-lead-categories",
+  authenticate,
+  allowRoles("indexer"),
+  getProjectTeamLeadCategories
+);
+
+// Supports POST requests for fetching Team Lead categories.
+router.post(
   "/projects/:projectId/team-lead-categories",
   authenticate,
   allowRoles("indexer"),

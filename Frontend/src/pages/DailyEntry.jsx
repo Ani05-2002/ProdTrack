@@ -242,8 +242,12 @@ function IndexerDailyEntryIndexer({
       if (!formData.projectId) return;
 
       try {
+        // Fetch Team Lead reporting categories using the POST method.
         const data = await apiRequest(
-          `/daily-entries/projects/${formData.projectId}/team-lead-categories`
+          `/daily-entries/projects/${formData.projectId}/team-lead-categories`,
+          {
+            method: "POST", // Use POST instead of the default GET.
+          }
         );
 
         setTeamLeadCategories(data.categories || []);

@@ -122,10 +122,13 @@ function ProjectMasterCoreTeam({
   const loadCategories = async () => {
     try {
       // Calls the reporting-category API.
+      // Fetch reporting categories using the POST method.
       const data = await apiRequest(
         "/core-team/projects/reporting-categories",
+        {
+          method: "POST", // Use POST instead of GET.
+        }
       );
-
       // Stores all available reporting categories.
       setCategories(data.categories || []);
     } catch (error) {
