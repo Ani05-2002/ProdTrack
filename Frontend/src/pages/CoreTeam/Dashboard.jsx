@@ -481,9 +481,9 @@ function BacklogRow({ name, pct, total }) {
 }
 
 
-// Defines the column widths for the Project Daily Summary table.
+// Give all ten columns enough width, especially Reporting Category.
 const DAILY_SUMMARY_COL =
-  "1.1fr 1.8fr 1.6fr 1fr 1fr 1fr 1fr 1.3fr 1.3fr 1.3fr";
+  "130px 210px 420px 110px 120px 100px 100px 170px 190px 170px";
 
 // Displays date-wise and project-wise production summary.
 function ProjectDailySummaryTable({
@@ -506,7 +506,7 @@ function ProjectDailySummaryTable({
           sx={{
             display: "grid",
             gridTemplateColumns: DAILY_SUMMARY_COL,
-            minWidth: 1450,
+            minWidth: 1850,
             px: 2,
             py: 1.2,
             bgcolor: "#f8fafc",
@@ -554,7 +554,7 @@ function ProjectDailySummaryTable({
               sx={{
                 display: "grid",
                 gridTemplateColumns: DAILY_SUMMARY_COL,
-                minWidth: 1450,
+                minWidth: 1850,
                 alignItems: "center",
                 px: 2,
                 py: 1.3,
@@ -579,8 +579,18 @@ function ProjectDailySummaryTable({
               >
                 {row.projectName}
               </Typography>
-              {/* Displays reporting category. */}
-              <Typography sx={{ fontSize: 13, color: HEAD }}>
+              {/* Display Reporting Category with proper spacing and wrapping. */}
+              <Typography
+                sx={{
+                  fontSize: 13,                
+                  width: "100%",              
+                  whiteSpace: "normal",       
+                  overflowWrap: "break-word", 
+                  lineHeight: 1.6,            
+                  pr: 3,                      
+                  boxSizing: "border-box",    
+                }}
+              >
                 {row.categoryName || "Uncategorized"}
               </Typography>
 

@@ -661,7 +661,6 @@ function UserMasterPage({
         // Builds the PATCH body using fields supported by updateUser().
         const updateBody = {
           name: values.employee,
-          email: values.email,
           ...(administrator
             ? { employeeId: values.employeeId }
             : {}),
@@ -671,6 +670,14 @@ function UserMasterPage({
           teamLeadId,
           status,
         };
+
+        // Only send email when the user actually changes it.
+        const originalEmail = String(selectedUser.email || "").trim();
+        const updatedEmail = String(values.email || "").trim();
+
+        if (updatedEmail !== originalEmail) {
+          updateBody.email = updatedEmail || null;
+        }
         // Sends a new password only when Administrator selected Change Password.
         if (administrator && changePassword) {
           updateBody.password = values.password;

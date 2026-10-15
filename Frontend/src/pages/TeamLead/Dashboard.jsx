@@ -281,8 +281,9 @@ function MemberRow({ initials, name, avatarColor, project, completedToday, pendi
   );
 }
 // ─── Project Daily Summary Table ──────────────────────────────────────────────
+// Use the same column widths as Admin and Core Team.
 const DAILY_SUMMARY_COL =
-  "1fr 1.6fr 1.3fr 1fr 1fr 1fr 1fr 1.2fr 1.2fr 1.2fr";
+  "130px 210px 420px 110px 120px 100px 100px 170px 190px 170px";
 
 function ProjectDailySummaryTable({
   rows,
@@ -307,7 +308,7 @@ function ProjectDailySummaryTable({
           sx={{
             display: "grid",
             gridTemplateColumns: DAILY_SUMMARY_COL,
-            minWidth: 1350,
+            minWidth: 1850,
             px: 2,
             py: 1.2,
             bgcolor: "#f8fafc",
@@ -379,7 +380,7 @@ function ProjectDailySummaryTable({
               sx={{
                 display: "grid",
                 gridTemplateColumns: DAILY_SUMMARY_COL,
-                minWidth: 1350,
+                minWidth: 1850,
                 alignItems: "center",
                 px: 2,
                 py: 1.3,
@@ -405,13 +406,20 @@ function ProjectDailySummaryTable({
               >
                 {row.projectName}
               </Typography>
-              {/* Reporting Category */}
+              {/* Display Reporting Category with the same layout as Admin. */}
               <Typography
                 sx={{
-                  fontFamily: FONT,
-                  fontSize: 13,
-                  fontWeight: 500,
-                  color: HEAD,
+                  fontFamily: FONT,          
+                  fontSize: 13,               
+                  fontWeight: 500,            
+                  color: HEAD,               
+                  minWidth: 0,               
+                  width: "100%",             
+                  whiteSpace: "normal",      
+                  overflowWrap: "break-word",
+                  lineHeight: 1.6,           
+                  pr: 3,                     
+                  boxSizing: "border-box",   
                 }}
               >
                 {row.categoryName || "Uncategorized"}

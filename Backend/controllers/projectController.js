@@ -26,9 +26,19 @@ const getMyProjects = async (req, res) => {
           JSON_ARRAY()
           )
           FROM project_reporting_category prc2
-          INNER JOIN reporting_category rc2
-          ON rc2.category_id = prc2.category_id
-          WHERE prc2.project_id = p.project_id
+INNER JOIN reporting_category rc2
+  ON rc2.category_id = prc2.category_id
+WHERE prc2.project_id = p.project_id
+  AND rc2.role_type = (
+    SELECT CASE
+      WHEN r.code IN ('teamLead', 'team_lead', 'lead')
+        THEN 'teamLead'
+      ELSE 'indexer'
+    END
+    FROM users u
+    INNER JOIN role r ON r.role_id = u.role_id
+    WHERE u.user_id = ?
+  )
          ) AS category_names,
         p.status,
         p.start_date,
@@ -110,7 +120,7 @@ END AS backlog_percentage
 
       ORDER BY p.project_name ASC
       `,
-      [userId, userId, userId, userId,]
+     [userId, userId, userId, userId, userId]
     );
 
     return res.status(200).json({

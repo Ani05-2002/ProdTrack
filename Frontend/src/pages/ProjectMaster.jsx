@@ -278,11 +278,21 @@ function ProjectMasterCoreTeam({
 
       // Reporting category field with live backend options.
       {
-        name: "category",
-        label: "Reporting categories",
+        name: "indexerCategories",
+        label: "Indexer Reporting Categories",
         type: "multiselect",
-        options: categories.map((category) => category.name),
+        options: categories
+          .filter((category) => category.role_type === "indexer")
+          .map((category) => category.name),
         required: true,
+      },
+      {
+        name: "teamLeadCategories",
+        label: "Team Lead Reporting Categories",
+        type: "multiselect",
+        options: categories
+          .filter((category) => category.role_type === "teamLead")
+          .map((category) => category.name),
       },
       // Project-wide daily document completion target.
       {
@@ -427,7 +437,8 @@ function ProjectMasterCoreTeam({
         code: "",
         name: "",
         client: "",
-        category: [],
+        indexerCategories: [],
+        teamLeadCategories: [],
         lock: "",
         dailyTarget: "",
         team: "",
@@ -445,9 +456,23 @@ function ProjectMasterCoreTeam({
 
       client:
         selectedProject.client_name || "",
-      category: categories
-        .filter((category) =>
-          (selectedProject.category_ids || []).map(Number).includes(Number(category.category_id))
+      indexerCategories: categories
+        .filter(
+          (category) =>
+            category.role_type === "indexer" &&
+            (selectedProject.category_ids || [])
+              .map(Number)
+              .includes(Number(category.category_id))
+        )
+        .map((category) => category.name),
+
+      teamLeadCategories: categories
+        .filter(
+          (category) =>
+            category.role_type === "teamLead" &&
+            (selectedProject.category_ids || [])
+              .map(Number)
+              .includes(Number(category.category_id))
         )
         .map((category) => category.name),
 
@@ -484,11 +509,26 @@ function ProjectMasterCoreTeam({
   ) => {
     try {
       // Finds the reporting-category object selected by its displayed name.
-      const selectedCategoryIds = categories
-        .filter((category) =>
-          (formValues.category || []).includes(category.name)
+      const selectedIndexerCategoryIds = categories
+        .filter(
+          (category) =>
+            category.role_type === "indexer" &&
+            (formValues.indexerCategories || []).includes(category.name)
         )
         .map((category) => Number(category.category_id));
+
+      const selectedTeamLeadCategoryIds = categories
+        .filter(
+          (category) =>
+            category.role_type === "teamLead" &&
+            (formValues.teamLeadCategories || []).includes(category.name)
+        )
+        .map((category) => Number(category.category_id));
+
+      const selectedCategoryIds = [
+        ...selectedIndexerCategoryIds,
+        ...selectedTeamLeadCategoryIds,
+      ];
 
       // Finds the selected Team Lead object by its displayed name.
       const selectedTeamLead =

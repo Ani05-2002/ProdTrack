@@ -23,6 +23,8 @@ import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Alert from "@mui/material/Alert";
+import Checkbox from "@mui/material/Checkbox";
+
 
 // =========================================================
 // SHARED: LABEL-ABOVE-INPUT FIELD WRAPPER
@@ -207,6 +209,8 @@ function IndexerDailyEntryIndexer({
   const toast = useToast();
   const [entries, setEntries] = useState([]);
   const [projects, setProjects] = useState([]);
+  const [indexerCategories, setIndexerCategories] = useState([]);
+  const [teamLeadCategories, setTeamLeadCategories] = useState([]);
   const [saving, setSaving] = useState(false);
   const [editingEntryId, setEditingEntryId] = useState(null);
   const [editingEntryStatus, setEditingEntryStatus] = useState(null);
@@ -226,12 +230,31 @@ function IndexerDailyEntryIndexer({
   const [formData, setFormData] = useState({
     productionDate: new Date().toISOString().slice(0, 10),
     projectId: "",
+    teamLeadCategoryId: "",
     reportingCategory: "",
     documentsCompleted: "",
     batchesProcessed: "",
     notes: "",
-  });
+  }); useEffect(() => {
+    const loadTeamLeadCategories = async () => {
+      setTeamLeadCategories([]);
 
+      if (!formData.projectId) return;
+
+      try {
+        const data = await apiRequest(
+          `/daily-entries/projects/${formData.projectId}/team-lead-categories`
+        );
+
+        setTeamLeadCategories(data.categories || []);
+      } catch (error) {
+        console.error("Failed to load categories:", error);
+        toast.error(error.message || "Failed to load categories");
+      }
+    };
+
+    loadTeamLeadCategories();
+  }, [formData.projectId, toast]);
   useEffect(() => {
     const loadProjects = async () => {
       try {
@@ -289,9 +312,11 @@ function IndexerDailyEntryIndexer({
     setFormData((current) => ({
       ...current,
       projectId,
+      teamLeadCategoryId: "",
       reportingCategory: "",
     }));
   };
+
   const handleInputChange = (event) => {
     const { name, value } = event.target;
 
@@ -314,7 +339,11 @@ function IndexerDailyEntryIndexer({
     setFormData({
       productionDate: original.production_date,
       projectId: original.project_id,
+      teamLeadCategoryId: original.teamLeadCategoryId ?? "",
       reportingCategory: original.reporting_category || "",
+      indexerCategoryIds: Array.isArray(original.indexerCategoryIds)
+        ? original.indexerCategoryIds.map(Number)
+        : [],
       documentsCompleted: original.documents_completed ?? "",
       batchesProcessed: original.batches_processed ?? "",
       notes: original.notes || "",
@@ -326,6 +355,10 @@ function IndexerDailyEntryIndexer({
 
     if (!formData.projectId || !formData.productionDate) {
       toast.warning("Select a project and production date.");
+      return;
+    }
+    if (!formData.teamLeadCategoryId) {
+      toast.warning("Please select a category.");
       return;
     }
 
@@ -935,6 +968,32 @@ function IndexerDailyEntryIndexer({
                 },
               }}
             />
+          </Field>
+          {/* Team Lead Categories */}
+          <Field label="Categories">
+            <TextField
+              select
+              name="teamLeadCategoryId"
+              value={formData.teamLeadCategoryId}
+              onChange={handleInputChange}
+              fullWidth
+              size="small"
+              sx={inputSx}
+              disabled={!formData.projectId}
+            >
+              <MenuItem value="">
+                Select category
+              </MenuItem>
+
+              {teamLeadCategories.map((category) => (
+                <MenuItem
+                  key={category.category_id}
+                  value={category.category_id}
+                >
+                  {category.name}
+                </MenuItem>
+              ))}
+            </TextField>
           </Field>
 
           {/* Reporting Category */}
@@ -1954,8 +2013,9 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
     reportingCategory: "",
     documentsReceived: "",
     documentsCompleted: "",
+    documentsPending: "",
     batchesReceived: "",
-
+    batchesPending: "",
     notes: "",
   });
   useEffect(() => {
@@ -2116,7 +2176,9 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
       reportingCategory: original.reporting_category || "",
       documentsReceived: original.documents_received ?? "",
       documentsCompleted: "",
+      documentsPending: original.documents_pending ?? "",
       batchesReceived: original.batches_received ?? "",
+      batchesPending: original.batches_pending ?? "",
       notes: original.notes || "",
     });
 
@@ -2142,15 +2204,27 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
     const numbers = {
       documentsReceived: Number(formData.documentsReceived || 0),
       batchesReceived: Number(formData.batchesReceived || 0),
+
+      documentsPending:
+        formData.documentsPending === ""
+          ? null
+          : Number(formData.documentsPending),
+
+      batchesPending:
+        formData.batchesPending === ""
+          ? null
+          : Number(formData.batchesPending),
     };
 
     if (
-      Object.values(numbers).some(
-        (value) =>
-          !Number.isInteger(value) ||
-          value < 0 ||
-          value > 4294967295
-      )
+      Object.values(numbers)
+        .filter((value) => value !== null)
+        .some(
+          (value) =>
+            !Number.isInteger(value) ||
+            value < 0 ||
+            value > 4294967295
+        )
     ) {
       toast.warning("Enter valid non-negative whole numbers.");
       return;
@@ -2172,6 +2246,8 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
             reportingCategory: formData.reportingCategory,
             documentsReceived: numbers.documentsReceived,
             batchesReceived: numbers.batchesReceived,
+            documentsPending: numbers.documentsPending,
+            batchesPending: numbers.batchesPending,
             notes: formData.notes,
             status,
           }),
@@ -2194,7 +2270,9 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
         reportingCategory: "",
         documentsReceived: "",
         documentsCompleted: "",
+        documentsPending: "",
         batchesReceived: "",
+        batchesPending: "",
         notes: "",
       }));
     } catch (error) {
@@ -2635,6 +2713,8 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
             </TextField>
           </Field>
 
+          {/* Indexer Reporting Categories - Multiple Selection */}
+
           <Field label="Documents received">
             <TextField
               name="documentsReceived"
@@ -2656,6 +2736,37 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
               fullWidth
               size="small"
               inputProps={{ min: 0 }}
+              sx={inputSx}
+            />
+          </Field>
+          {/* Documents Pending */}
+          <Field label="Documents Pending">
+            <TextField
+              name="documentsPending"
+              type="number"
+              value={formData.documentsPending}
+              onChange={handleInputChange}
+              fullWidth
+              size="small"
+              slotProps={{
+                htmlInput: { min: 0, step: 1 },
+              }}
+              sx={inputSx}
+            />
+          </Field>
+
+          {/* Batches Pending */}
+          <Field label="Batches Pending">
+            <TextField
+              name="batchesPending"
+              type="number"
+              value={formData.batchesPending}
+              onChange={handleInputChange}
+              fullWidth
+              size="small"
+              slotProps={{
+                htmlInput: { min: 0, step: 1 },
+              }}
               sx={inputSx}
             />
           </Field>

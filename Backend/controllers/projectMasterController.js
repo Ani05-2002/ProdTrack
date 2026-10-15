@@ -170,16 +170,15 @@ const getReportingCategories = async (req, res) => {
   try {
     // Loads all available reporting categories.
     const [categories] = await db.query(
-      `
-      SELECT
-        category_id,
-        name
-
-      FROM reporting_category
-
-      ORDER BY name ASC
-      `
-    );
+  `
+    SELECT
+      category_id,
+      name,
+      role_type
+    FROM reporting_category
+    ORDER BY role_type ASC, name ASC
+  `
+);
 
     // Returns category dropdown data.
     return res.status(200).json({

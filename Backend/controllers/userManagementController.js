@@ -1004,8 +1004,11 @@ const updateUser = async (req, res) => {
 
 
     if (email !== undefined) {
+      const normalizedEmail =
+        email === null ? null : String(email).trim();
+
       fields.push("email = ?");
-      values.push(email);
+      values.push(normalizedEmail || null);
     }
 
 

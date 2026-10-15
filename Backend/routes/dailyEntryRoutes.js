@@ -11,6 +11,8 @@ const {
   reviewEntry,
   getProjectFields,
   getProjectDailySummary,
+  getProjectIndexerCategories,
+  getProjectTeamLeadCategories,
 } = require("../controllers/dailyEntryController");
 
 const router = express.Router();
@@ -50,6 +52,19 @@ router.get(
   authenticate,
   allowRoles("teamLead", "coreTeam", "admin"),
   getProjectDailySummary
+);
+router.get(
+  "/projects/:projectId/indexer-categories",
+  authenticate,
+  allowRoles("teamLead"),
+  getProjectIndexerCategories
+);
+// Returns Team Lead categories for the selected project.
+router.get(
+  "/projects/:projectId/team-lead-categories",
+  authenticate,
+  allowRoles("indexer"),
+  getProjectTeamLeadCategories
 );
 
 router.patch(

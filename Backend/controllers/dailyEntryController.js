@@ -1,4 +1,63 @@
 const db = require("../config/db");
+// Returns Team Lead categories assigned to the selected project.
+const getProjectTeamLeadCategories = async (req, res) => {
+  try {
+    const projectId = Number(req.params.projectId);
+
+    if (!Number.isSafeInteger(projectId) || projectId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid project ID",
+      });
+    }
+
+    // Ensure the project is assigned to the logged-in user.
+    const [assignments] = await db.query(
+      `
+        SELECT 1
+        FROM project_assignment
+        WHERE project_id = ?
+          AND user_id = ?
+        LIMIT 1
+      `,
+      [projectId, req.user.id]
+    );
+
+    if (assignments.length === 0) {
+      return res.status(403).json({
+        success: false,
+        message: "This project is not assigned to you",
+      });
+    }
+
+    const [categories] = await db.query(
+      `
+        SELECT
+          rc.category_id,
+          rc.name
+        FROM reporting_category rc
+        JOIN project_reporting_category prc
+          ON prc.category_id = rc.category_id
+        WHERE prc.project_id = ?
+          AND rc.role_type = 'teamLead'
+        ORDER BY rc.name ASC
+      `,
+      [projectId]
+    );
+
+    return res.status(200).json({
+      success: true,
+      categories,
+    });
+  } catch (error) {
+    console.error("Get Project Categories Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load categories",
+    });
+  }
+};
 
 // Checks whether an Indexer is allowed to edit an entry based on the Admin locking rules.
 const getIndexerEditPermission = async (
@@ -318,15 +377,28 @@ const createEntry = async (req, res) => {
       productionDate,
       batchJobId,
       reportingCategory,
+      teamLeadCategoryId,
+      indexerCategoryIds,
       documentsReceived,
       documentsCompleted,
+      documentsPending,
       batchesReceived,
       batchesProcessed,
+      batchesPending,
       errorsFlagged,
       notes,
       status,
     } = req.body;
-
+    // Validate Indexer Reporting Categories selected by Team Lead.
+    // The new workflow does not accept Indexer category mappings
+    // from Team Lead Daily Entry requests.
+    if (indexerCategoryIds !== undefined) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Indexer category mappings are no longer supported. Indexers select their Team Lead category directly.",
+      });
+    }
     // Requires the project and production date before continuing.
     if (!projectId || !productionDate) {
       return res.status(400).json({
@@ -346,6 +418,22 @@ const createEntry = async (req, res) => {
         ? Number(batchesReceived ?? 0)
         : 0;
     const processed = Number(batchesProcessed || 0);
+    const isTeamLead = req.user.role === "teamLead";
+
+    const parsePending = (value) => {
+      if (value === undefined || value === null || value === "") {
+        return null;
+      }
+      return Number(value);
+    };
+
+    const pendingDocs = isTeamLead
+      ? parsePending(documentsPending)
+      : null;
+
+    const pendingBatches = isTeamLead
+      ? parsePending(batchesPending)
+      : null;
     const errors = Number(errorsFlagged || 0);
 
     // Validates all production numeric values, including Team Lead received count.
@@ -355,7 +443,9 @@ const createEntry = async (req, res) => {
       batchesReceivedCount,
       processed,
       errors,
-    ];
+      pendingDocs,
+      pendingBatches,
+    ].filter((value) => value !== null);
 
     // Validates that production values are valid unsigned whole numbers.
     if (
@@ -424,6 +514,24 @@ const createEntry = async (req, res) => {
       if (!Number.isNaN(Number(reportingCategory))) {
         categoryId = Number(reportingCategory);
       } else {
+        // Ensure the Team Lead is assigned to this project.
+        const [assignments] = await db.query(
+          `
+        SELECT assignment_id
+        FROM project_assignment
+        WHERE user_id = ?
+          AND project_id = ?
+        LIMIT 1
+      `,
+          [req.user.id, projectId]
+        );
+
+        if (assignments.length === 0) {
+          return res.status(403).json({
+            success: false,
+            message: "This project is not assigned to you",
+          });
+        }
         // Finds the category ID when the frontend sends the category name.
         const [categories] = await db.query(
           `
@@ -463,6 +571,9 @@ const createEntry = async (req, res) => {
         });
       }
     }
+
+    // Validate selected Indexer categories for this project.
+
     // Normalizes the requested workflow status.
     const statusCode = String(
       status || "draft"
@@ -525,7 +636,43 @@ const createEntry = async (req, res) => {
 
     // Starts a transaction for daily_entry and daily_entry_value.
     await connection.beginTransaction();
+    // Serialize Daily Entry creation for the same project.
 
+    // Validate the Team Lead category selected by the Indexer.
+    if (req.user.role === "indexer") {
+      const selectedTeamLeadCategoryId = Number(teamLeadCategoryId);
+
+      if (
+        !Number.isInteger(selectedTeamLeadCategoryId) ||
+        selectedTeamLeadCategoryId <= 0
+      ) {
+        const error = new Error("Please select a Team Lead category");
+        error.httpStatus = 400;
+        throw error;
+      }
+
+      const [validTeamLeadCategories] = await connection.query(
+        `
+      SELECT rc.category_id
+      FROM reporting_category rc
+      JOIN project_reporting_category prc
+        ON prc.category_id = rc.category_id
+      WHERE prc.project_id = ?
+        AND rc.category_id = ?
+        AND rc.role_type = 'teamLead'
+      LIMIT 1
+    `,
+        [Number(projectId), selectedTeamLeadCategoryId]
+      );
+
+      if (validTeamLeadCategories.length === 0) {
+        const error = new Error(
+          "Invalid Team Lead category for the selected project"
+        );
+        error.httpStatus = 400;
+        throw error;
+      }
+    }
     // Creates the main Daily Entry using the existing fixed columns.
     const [result] = await connection.query(
       `
@@ -536,16 +683,19 @@ const createEntry = async (req, res) => {
         production_date,
         batch_ref,
         category_id,
+        team_lead_category_id,
         docs_received,
         docs_completed,
+        docs_pending,
         batches_received,
         batches_processed,
+        batches_pending,
         errors_flagged,
         remarks,
         status_id,
         submitted_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         Number(projectId),
@@ -553,18 +703,19 @@ const createEntry = async (req, res) => {
         productionDate,
         batchRef,
         categoryId,
+        req.user.role === "indexer" && teamLeadCategoryId
+          ? Number(teamLeadCategoryId)
+          : null,
         received,
         completed,
+        pendingDocs,
         batchesReceivedCount,
         processed,
+        pendingBatches,
         errors,
         remarks || null,
         selectedStatus.status_id,
-
-        // Records the submission time only when creating a Submitted entry.
-        selectedStatus.code === "submitted"
-          ? new Date()
-          : null,
+        selectedStatus.code === "submitted" ? new Date() : null,
       ]
     );
 
@@ -705,10 +856,18 @@ const createEntry = async (req, res) => {
     }
 
     // Returns a safe response for other database/server failures.
+    // Return controlled validation errors with the correct HTTP status.
+    if (error.httpStatus) {
+      return res.status(error.httpStatus).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    // Return a safe response for unexpected server errors.
     return res.status(500).json({
       success: false,
       message: "Failed to create daily entry",
-      error: error.message,
     });
   } finally {
     // Always returns the dedicated connection to the MySQL connection pool.
@@ -744,11 +903,14 @@ const getMyEntries = async (req, res) => {
         de.batch_ref,
 
         rc.name AS reporting_category,
+        de.team_lead_category_id AS teamLeadCategoryId,
 
         de.docs_received AS documents_received,
         de.docs_completed AS documents_completed,
+        de.docs_pending AS documents_pending,
         de.batches_received,
         de.batches_processed,
+        de.batches_pending,
         de.errors_flagged,
 
         de.remarks AS notes,
@@ -799,6 +961,36 @@ const getMyEntries = async (req, res) => {
     const entryIds = entries.map(
       (entry) => entry.entry_id
     );
+    // Load selected Indexer Reporting Categories for Daily Entries.
+    const [indexerCategoryRows] = await db.query(
+      `
+    SELECT
+      deic.entry_id,
+      deic.category_id
+    FROM daily_entry_indexer_category deic
+
+    JOIN daily_entry de
+      ON de.entry_id = deic.entry_id
+
+    WHERE de.user_id = ?
+
+    ORDER BY deic.category_id ASC
+  `,
+      [userId]
+    );
+
+    // Group selected Indexer category IDs by Daily Entry.
+    const indexerCategoriesByEntry = {};
+
+    for (const row of indexerCategoryRows) {
+      if (!indexerCategoriesByEntry[row.entry_id]) {
+        indexerCategoriesByEntry[row.entry_id] = [];
+      }
+
+      indexerCategoriesByEntry[row.entry_id].push(
+        Number(row.category_id)
+      );
+    }
 
     // Creates SQL placeholders matching the number of Daily Entry IDs.
     const entryPlaceholders = entryIds
@@ -914,9 +1106,13 @@ const getMyEntries = async (req, res) => {
           return {
             ...entry,
 
+
+            indexerCategoryIds:
+              indexerCategoriesByEntry[entry.entry_id] || [],
+
             // Returns detailed field metadata required for fully dynamic forms later.
-            dynamic_fields:
-              dynamicFields,
+            dynamic_fields: dynamicFields,
+
 
             // Returns a convenient key/value representation for frontend use.
             dynamic_values:
@@ -986,15 +1182,27 @@ const updateEntry = async (req, res) => {
       productionDate,
       batchJobId,
       reportingCategory,
+      teamLeadCategoryId,
+      indexerCategoryIds,
       documentsReceived,
       documentsCompleted,
+      documentsPending,
       batchesReceived,
       batchesProcessed,
+      batchesPending,
       errorsFlagged,
       notes,
       status = "draft",
     } = req.body;
-
+    // Validate Indexer Reporting Categories during Daily Entry update.
+    // Reject legacy Indexer category mappings in new update requests.
+    if (indexerCategoryIds !== undefined) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Indexer category mappings are no longer supported. Indexers select their Team Lead category directly.",
+      });
+    }
     // Converts the selected project ID into a number.
     const selectedProjectId = Number(projectId);
     // Stores the reporting category ID selected by the Team Lead.
@@ -1024,6 +1232,23 @@ const updateEntry = async (req, res) => {
 
     // Normalizes the requested workflow status.
     const statusCode = String(status).toLowerCase();
+    const parsePending = (value) => {
+      if (value === undefined || value === null || value === "") {
+        return null;
+      }
+
+      return Number(value);
+    };
+
+    const pendingDocs =
+      req.user.role === "teamLead"
+        ? parsePending(documentsPending)
+        : null;
+
+    const pendingBatches =
+      req.user.role === "teamLead"
+        ? parsePending(batchesPending)
+        : null;
     // Documents received is no longer entered by the Indexer.
     // Team Lead can update received documents; Indexer received count always remains 0.
     const received =
@@ -1074,12 +1299,14 @@ const updateEntry = async (req, res) => {
 
     // Validates that all production values are non-negative whole numbers.
     if (
-      numbers.some(
-        (value) =>
-          !Number.isInteger(value) ||
-          value < 0 ||
-          value > 4294967295
-      )
+      [...numbers, pendingDocs, pendingBatches]
+        .filter((value) => value !== null)
+        .some(
+          (value) =>
+            !Number.isInteger(value) ||
+            value < 0 ||
+            value > 4294967295
+        )
     ) {
       return res.status(400).json({
         success: false,
@@ -1213,6 +1440,35 @@ const updateEntry = async (req, res) => {
         "This active project is not assigned to you"
       );
     }
+    // Validate the Team Lead category selected by the Indexer.
+    if (req.user.role === "indexer") {
+      const selectedTeamLeadCategoryId = Number(teamLeadCategoryId);
+
+      if (
+        !Number.isSafeInteger(selectedTeamLeadCategoryId) ||
+        selectedTeamLeadCategoryId <= 0
+      ) {
+        reject(400, "Please select a category");
+      }
+
+      const [validTeamLeadCategories] = await connection.query(
+        `
+      SELECT rc.category_id
+      FROM reporting_category rc
+      JOIN project_reporting_category prc
+        ON prc.category_id = rc.category_id
+      WHERE prc.project_id = ?
+        AND rc.category_id = ?
+        AND rc.role_type = 'teamLead'
+      LIMIT 1
+    `,
+        [selectedProjectId, selectedTeamLeadCategoryId]
+      );
+
+      if (validTeamLeadCategories.length === 0) {
+        reject(400, "Invalid category for the selected project");
+      }
+    }
     // Validate that the selected reporting category belongs to the project.
     if (categoryId !== null) {
       const [allowedCategories] = await connection.query(
@@ -1281,10 +1537,13 @@ const updateEntry = async (req, res) => {
         production_date = ?,
         batch_ref = ?,
         category_id = ?,
+        team_lead_category_id = ?,
         docs_received = ?,
         docs_completed = ?,
+        docs_pending = ?,
         batches_received = ?,
         batches_processed = ?,
+        batches_pending = ?,
         errors_flagged = ?,
         remarks = ?,
         status_id = ?,
@@ -1298,10 +1557,15 @@ const updateEntry = async (req, res) => {
         productionDate,
         batchRef,
         categoryId,
+        req.user.role === "indexer"
+          ? Number(teamLeadCategoryId)
+          : null,
         received,
         completed,
+        pendingDocs,
         batchesReceivedCount,
         processed,
+        pendingBatches,
         errors,
         remarks || null,
         statuses[0].status_id,
@@ -1315,8 +1579,7 @@ const updateEntry = async (req, res) => {
         userId,
       ]
     );
-
-    // Loads all project fields configured for the newly selected project.
+ // Loads all project fields configured for the newly selected project.
     const [projectFields] = await connection.query(
       `
       SELECT
@@ -1910,6 +2173,7 @@ const getProjectDailySummary = async (req, res) => {
       }
     }
     // Load the selected project and all assigned Reporting Categories.
+    // Load the project and its assigned Team Lead Reporting Categories.
     const [projectCategories] = await db.query(
       `
     SELECT
@@ -1917,12 +2181,24 @@ const getProjectDailySummary = async (req, res) => {
       p.project_name,
       rc.category_id,
       rc.name AS category_name
+
     FROM project p
-    LEFT JOIN project_reporting_category prc
-      ON prc.project_id = p.project_id
-    LEFT JOIN reporting_category rc
-      ON rc.category_id = prc.category_id
+
+    LEFT JOIN (
+      SELECT
+        prc.project_id,
+        rc.category_id,
+        rc.name
+      FROM project_reporting_category prc
+
+      INNER JOIN reporting_category rc
+        ON rc.category_id = prc.category_id
+        AND rc.role_type = 'teamLead'
+    ) rc
+      ON rc.project_id = p.project_id
+
     WHERE p.project_id = ?
+
     ORDER BY rc.name ASC
   `,
       [projectId]
@@ -1936,6 +2212,51 @@ const getProjectDailySummary = async (req, res) => {
     }
 
     const projectName = projectCategories[0].project_name;
+    // Get the most recent previous production date
+    // and its manually entered pending documents.
+    const [previousPendingRows] = await db.query(
+      `
+  SELECT
+    de.production_date,
+    SUM(de.docs_pending) AS previousPending
+  FROM daily_entry de
+  JOIN users u ON u.user_id = de.user_id
+  JOIN role r ON r.role_id = u.role_id
+  JOIN entry_status es ON es.status_id = de.status_id
+  WHERE de.project_id = ?
+    AND de.production_date < ?
+    AND de.production_date >= ?
+    AND r.code IN ('teamLead', 'team_lead', 'lead')
+    AND es.code IN ('submitted', 'reviewed', 'locked')
+    AND de.docs_pending IS NOT NULL
+  GROUP BY de.production_date
+  ORDER BY de.production_date DESC
+  LIMIT 1
+  `,
+      [projectId, productionDate, "2026-10-05"]
+    );
+
+    const previousDayPending = Number(
+      previousPendingRows[0]?.previousPending ?? 0
+    );
+    const [previousCategoryPendingRows] = await db.query(
+      `
+  SELECT
+    de.category_id,
+    COALESCE(SUM(de.docs_pending), 0) AS pending
+  FROM daily_entry de
+  JOIN users u ON u.user_id = de.user_id
+  JOIN role r ON r.role_id = u.role_id
+  JOIN entry_status es ON es.status_id = de.status_id
+  WHERE de.project_id = ?
+    AND de.production_date = ?
+    AND r.code IN ('teamLead', 'team_lead', 'lead')
+    AND es.code IN ('submitted', 'reviewed', 'locked')
+    AND de.docs_pending IS NOT NULL
+  GROUP BY de.category_id
+  `,
+      [projectId, previousPendingRows[0]?.production_date ?? null]
+    );
     // Defines when the new Team Lead Received + Indexer Completed backlog workflow starts.
     const backlogWorkflowStartDate = "2026-10-05";
     // Calculates all received and completed work before the selected production date.
@@ -2036,6 +2357,87 @@ const getProjectDailySummary = async (req, res) => {
         productionDate,
       ]
     );
+    // Calculate Indexer totals using the Team Lead category
+    // selected directly by the Indexer.
+    const [directIndexerDailyRows] = await db.query(
+      `
+    SELECT
+      de.team_lead_category_id AS category_id,
+      COALESCE(SUM(de.docs_completed), 0) AS completed,
+      COALESCE(SUM(de.batches_processed), 0) AS batchesProcessed
+
+    FROM daily_entry de
+
+    JOIN users u
+      ON u.user_id = de.user_id
+
+    JOIN role r
+      ON r.role_id = u.role_id
+
+    JOIN entry_status es
+      ON es.status_id = de.status_id
+
+    WHERE de.project_id = ?
+      AND de.production_date = ?
+      AND de.team_lead_category_id IS NOT NULL
+      AND r.code = 'indexer'
+     AND es.code IN ('submitted', 'reviewed', 'locked')
+
+    GROUP BY de.team_lead_category_id
+  `,
+      [projectId, productionDate]
+    );
+
+    // Calculate reviewed/locked Indexer totals for each Team Lead category.
+    // Calculate reviewed/locked Indexer totals for each Team Lead category.
+    const [mappedIndexerDailyRows] = await db.query(
+      `
+    SELECT
+      tlEntry.category_id,
+
+      COALESCE(SUM(idx.docs_completed), 0) AS completed,
+      COALESCE(SUM(idx.batches_processed), 0) AS batchesProcessed
+
+    FROM daily_entry tlEntry
+
+    JOIN users leadUser
+      ON leadUser.user_id = tlEntry.user_id
+
+    JOIN role leadRole
+      ON leadRole.role_id = leadUser.role_id
+      AND leadRole.code IN ('teamLead', 'team_lead', 'lead')
+
+    JOIN daily_entry_indexer_category mapping
+      ON mapping.entry_id = tlEntry.entry_id
+
+    JOIN daily_entry idx
+      ON idx.project_id = tlEntry.project_id
+      AND idx.production_date = tlEntry.production_date
+      AND idx.category_id = mapping.category_id
+      AND idx.team_lead_category_id IS NULL
+
+    JOIN users indexerUser
+      ON indexerUser.user_id = idx.user_id
+
+    JOIN role indexerRole
+      ON indexerRole.role_id = indexerUser.role_id
+      AND indexerRole.code = 'indexer'
+
+    JOIN entry_status idxStatus
+      ON idxStatus.status_id = idx.status_id
+      AND idxStatus.code IN ('submitted', 'reviewed', 'locked')
+
+    JOIN entry_status leadStatus
+      ON leadStatus.status_id = tlEntry.status_id
+      AND leadStatus.code IN ('submitted', 'reviewed', 'locked')
+
+    WHERE tlEntry.project_id = ?
+      AND tlEntry.production_date = ?
+
+    GROUP BY tlEntry.category_id
+  `,
+      [projectId, productionDate]
+    );
     // Calculate today's Received and Completed for each Reporting Category.
     const [categoryDailyRows] = await db.query(
       `
@@ -2086,7 +2488,29 @@ const getProjectDailySummary = async (req, res) => {
             END
           ),
           0
-        ) AS batchesProcessed
+      ) AS batchesProcessed,
+
+COALESCE(
+  SUM(
+    CASE
+      WHEN r.code IN ('teamLead', 'team_lead', 'lead')
+      THEN de.docs_pending
+      ELSE 0
+    END
+  ),
+  0
+) AS documentsPending,
+
+COALESCE(
+  SUM(
+    CASE
+      WHEN r.code IN ('teamLead', 'team_lead', 'lead')
+      THEN de.batches_pending
+      ELSE 0
+    END
+  ),
+  0
+) AS batchesPending
 
       FROM daily_entry de
 
@@ -2186,10 +2610,7 @@ ORDER BY de.production_date ASC, de.category_id ASC
     const previousCompleted = Number(previousRows[0]?.completed || 0);
 
     // Calculates unfinished work carried forward from previous dates.
-    const previousBacklog = Math.max(
-      previousReceived - previousCompleted,
-      0
-    );
+    const previousBacklog = previousDayPending;
     // Converts database aggregate values into normal numbers.
     const received = Number(rows[0]?.received || 0);
     const completed = Number(rows[0]?.completed || 0);
@@ -2214,10 +2635,7 @@ ORDER BY de.production_date ASC, de.category_id ASC
     );
 
     // Calculates today's pending work after applying the remaining completion.
-    const pending = Math.max(
-      received - todayCompleted,
-      0
-    );
+
     // Build a separate daily summary for every assigned Reporting Category.
     const categorySummaries = projectCategories
       .filter((category) => category.category_id !== null)
@@ -2231,48 +2649,53 @@ ORDER BY de.production_date ASC, de.category_id ASC
         const previousEntries = categoryPreviousRows.filter(
           (row) => Number(row.category_id) === categoryId
         );
-        const categoryReceived = Number(daily?.received || 0);
-        const categoryCompleted = Number(daily?.completed || 0);
+        // Find completed work from the Indexer categories mapped to this Team Lead category.
+        const mappedIndexer = mappedIndexerDailyRows.find(
+          (row) => Number(row.category_id) === categoryId
+        );
+        // Find Indexer work directly assigned to this Team Lead category.
+        const directIndexer = directIndexerDailyRows.find(
+          (row) => Number(row.category_id) === categoryId
+        );
 
-        // Batch values for the selected reporting category
+        // Received values come from the Team Lead entry.
+        const categoryReceived = Number(daily?.received || 0);
         const batchesReceived = Number(daily?.batchesReceived || 0);
-        const batchesProcessed = Number(daily?.batchesProcessed || 0);
+
+        // Completed values come from reviewed/locked Indexer entries.
+        // Combine new direct category totals with historical mapping totals.
+        const categoryCompleted =
+          Number(directIndexer?.completed || 0) +
+          Number(mappedIndexer?.completed || 0);
+
+        const batchesProcessed =
+          Number(directIndexer?.batchesProcessed || 0) +
+          Number(mappedIndexer?.batchesProcessed || 0);
+        const manualDocumentsPending = Number(daily?.documentsPending || 0);
+        const manualBatchesPending = Number(daily?.batchesPending || 0);
 
         // Calculate pending batches
         // Calculate pending batches carried forward from previous dates.
-        let previousPendingBatches = 0;
+        const previousCategoryRow = previousCategoryPendingRows.find(
+          (row) => Number(row.category_id) === categoryId
+        );
 
-        for (const entry of previousEntries) {
-          const dayBatchesReceived = Number(entry.batchesReceived || 0);
-          const dayBatchesProcessed = Number(entry.batchesProcessed || 0);
-
-          previousPendingBatches = Math.max(
-            0,
-            previousPendingBatches +
-            dayBatchesReceived -
-            dayBatchesProcessed
-          );
-        }
+        const previousBacklog = Number(
+          previousCategoryRow?.pending ?? 0
+        );
 
         // Add today's received batches and subtract today's processed batches.
-        const pendingBatches = Math.max(
-          0,
-          previousPendingBatches + batchesReceived - batchesProcessed
-        );
+        const pendingBatches = manualBatchesPending;
 
         // Calculate unfinished work from previous dates.
         // Get previous received documents for this category
         // Calculate previous backlog chronologically for this category.
-        let previousBacklog = 0;
+
 
         for (const entry of previousEntries) {
           const dayReceived = Number(entry.received || 0);
           const dayCompleted = Number(entry.completed || 0);
 
-          previousBacklog = Math.max(
-            previousBacklog + dayReceived - dayCompleted,
-            0
-          );
         }
 
         // Apply today's completed work to previous backlog first.
@@ -2292,10 +2715,7 @@ ORDER BY de.production_date ASC, de.category_id ASC
           0
         );
 
-        const pending = Math.max(
-          categoryReceived - todayCompleted,
-          0
-        );
+        const pending = manualDocumentsPending;
 
         return {
           categoryId,
@@ -2309,6 +2729,11 @@ ORDER BY de.production_date ASC, de.category_id ASC
           pendingBatches,
         };
       });
+
+    const pending = categorySummaries.reduce(
+      (total, category) => total + category.pending,
+      0
+    );
     // Returns the calculated project/day production totals.
     // Returns today's production totals together with backlog information.
     return res.status(200).json({
@@ -2342,6 +2767,45 @@ ORDER BY de.production_date ASC, de.category_id ASC
     });
   }
 };
+const getProjectIndexerCategories = async (req, res) => {
+  try {
+    const projectId = Number(req.params.projectId);
+
+    if (!Number.isSafeInteger(projectId) || projectId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid project ID",
+      });
+    }
+
+    const [categories] = await db.query(
+      `
+        SELECT
+          rc.category_id,
+          rc.name AS category_name
+        FROM reporting_category rc
+        INNER JOIN project_reporting_category prc
+          ON prc.category_id = rc.category_id
+        WHERE prc.project_id = ?
+          AND rc.role_type = 'indexer'
+        ORDER BY rc.name ASC
+      `,
+      [projectId]
+    );
+
+    return res.json({
+      success: true,
+      categories,
+    });
+  } catch (error) {
+    console.error("Indexer categories loading error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load Indexer reporting categories",
+    });
+  }
+};
 module.exports = {
   createEntry,
   getMyEntries,
@@ -2350,4 +2814,6 @@ module.exports = {
   reviewEntry,
   getProjectFields,
   getProjectDailySummary,
+  getProjectIndexerCategories,
+  getProjectTeamLeadCategories,
 };
