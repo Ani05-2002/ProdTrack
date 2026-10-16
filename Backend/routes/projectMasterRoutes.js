@@ -57,20 +57,6 @@ router.get(
 );
 
 
-// Updates an existing Project Master record.
-router.patch(
-  "/projects/:id",
-  authenticate,
-  allowRoles("coreTeam", "administrator"),
-  updateProject
-);
-router.post(
-  "/projects/:id",
-  authenticate,
-  allowRoles("coreTeam", "administrator"),
-  updateProject
-);
-
 // Keep GET for backward compatibility.
 router.get(
   "/projects/reporting-categories",
@@ -86,7 +72,19 @@ router.post(
   allowRoles("coreTeam", "administrator"),
   getReportingCategories
 );
-
+// Updates an existing Project Master record.
+router.patch(
+  "/projects/:id",
+  authenticate,
+  allowRoles("coreTeam", "administrator"),
+  updateProject
+);
+router.post(
+  "/projects/:id",
+  authenticate,
+  allowRoles("coreTeam", "administrator"),
+  updateProject
+);
 
 // Exports the Project Master router so index.js can register it.
 module.exports = router;

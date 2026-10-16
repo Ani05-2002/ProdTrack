@@ -50,7 +50,7 @@ router.get(
 router.get(
   "/projects/:projectId/summary",
   authenticate,
-  allowRoles("teamLead", "coreTeam", "admin"),
+  allowRoles("teamLead", "coreTeam", "administrator"),
   getProjectDailySummary
 );
 router.get(
