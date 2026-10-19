@@ -702,8 +702,40 @@ export function CoreFormDialog({
                       ? "Select categories"
                       : selected.join(", ")
                   }
+                  // Controls dropdown positioning and scrolling.
+                  // Configures the multi-select dropdown menu.
+                  // Controls the multiselect dropdown position and height.
                   MenuProps={{
-                    PaperProps: { style: { maxHeight: 280 } },
+                    // Positions the menu below the input.
+                    anchorOrigin: {
+                      vertical: "bottom",
+                      horizontal: "left",
+                    },
+
+                    // Aligns the menu's top edge with the input's bottom edge.
+                    transformOrigin: {
+                      vertical: "top",
+                      horizontal: "left",
+                    },
+
+                    // Prevents selected items from changing the menu alignment.
+                    variant: "menu",
+
+                    // Applies the height directly to the menu's Paper element.
+                    slotProps: {
+                      paper: {
+                        sx: {
+                          // Shows approximately four categories before scrolling.
+                          maxHeight: "220px !important",
+
+                          // Enables vertical scrolling.
+                          overflowY: "auto",
+
+                          // Maintains rounded corners.
+                          borderRadius: 1.5,
+                        },
+                      },
+                    },
                   }}
                 >
                   {(field.options || []).map((option) => (

@@ -2150,8 +2150,8 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
           batch: entry.batch_ref || "—",
           received: entry.documents_received,
           batchesReceived: entry.batches_received,
-          completed: entry.documents_completed,
-          batchesProcessed: entry.batches_processed,
+          documentsPending: entry.documents_pending,
+          batchesPending: entry.batches_pending,
           status: String(entry.status || "").toUpperCase(),
         }))
       );
@@ -2944,7 +2944,7 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
         <Table
           size="small"
           sx={{
-            minWidth: 820,
+            minWidth: 1050,
           }}
         >
           <TableHead>
@@ -2959,7 +2959,8 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
                 "REPORTING CATEGORY",
                 "RECEIVED",
                 "BATCH RECEIVED",
-                "COMPLETED",
+                "DOCUMENTS PENDING",
+                "BATCHES PENDING",
                 "STATUS",
                 "",
               ].map((heading, index) => (
@@ -3048,6 +3049,7 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
                 >
                   {entry.batchesReceived ?? 0}
                 </TableCell>
+                {/* Displays the saved Documents Pending count. */}
                 <TableCell
                   sx={{
                     fontSize: 13,
@@ -3055,7 +3057,18 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
                     py: 1.15,
                   }}
                 >
-                  {entry.completed}
+                  {entry.documentsPending ?? "—"}
+                </TableCell>
+
+                {/* Displays the saved Batches Pending count. */}
+                <TableCell
+                  sx={{
+                    fontSize: 13,
+                    color: "#334155",
+                    py: 1.15,
+                  }}
+                >
+                  {entry.batchesPending ?? "—"}
                 </TableCell>
                 <TableCell sx={{ py: 1.15 }}
                 >
