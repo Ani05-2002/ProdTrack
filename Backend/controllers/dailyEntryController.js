@@ -902,7 +902,8 @@ const getMyEntries = async (req, res) => {
         de.batch_ref AS batch_job_id,
         de.batch_ref,
 
-        rc.name AS reporting_category,
+        CONCAT_WS(' / ', tlrc.name, rc.name) AS reporting_category,
+
         de.team_lead_category_id AS teamLeadCategoryId,
 
         de.docs_received AS documents_received,
@@ -937,7 +938,10 @@ const getMyEntries = async (req, res) => {
         ON es.status_id = de.status_id
 
       LEFT JOIN reporting_category rc
-        ON rc.category_id = de.category_id
+         ON rc.category_id = de.category_id
+
+      LEFT JOIN reporting_category tlrc
+        ON tlrc.category_id = de.team_lead_category_id
 
       WHERE de.user_id = ?
 
@@ -1357,6 +1361,8 @@ const updateEntry = async (req, res) => {
     };
 
     // Locks the existing Daily Entry while checking permissions and updating it.
+
+    // Locks the existing Daily Entry while checking permissions and updating it.
     const [entries] = await connection.query(
       `
       SELECT
@@ -1364,6 +1370,7 @@ const updateEntry = async (req, res) => {
         de.project_id,
         de.status_id,
         de.locked_at,
+        de.submitted_at,
         es.code AS status
 
       FROM daily_entry de
@@ -1390,8 +1397,35 @@ const updateEntry = async (req, res) => {
       );
     }
 
+
     // Stores the current database Daily Entry.
     const entry = entries[0];
+    // Restricts Team Leader editing to Draft and Submitted entries.
+    if (req.user.role === "teamLead") {
+      // Rejects edits to Reviewed, Locked, or otherwise locked entries.
+      if (
+        !["draft", "submitted"].includes(
+          String(entry.status).toLowerCase()
+        ) ||
+        entry.locked_at !== null
+      ) {
+        reject(
+          403,
+          "Team Leaders can edit only Draft or Submitted entries"
+        );
+      }
+
+      // Prevents a Submitted entry from being changed back to Draft.
+      if (
+        String(entry.status).toLowerCase() === "submitted" &&
+        statusCode !== "submitted"
+      ) {
+        reject(
+          400,
+          "A Submitted entry must remain Submitted when edited"
+        );
+      }
+    }
 
     // Checks whether the current Administrator locking rule permits editing.
     // Applies Indexer edit restrictions only to Indexer entries.
@@ -1572,14 +1606,16 @@ const updateEntry = async (req, res) => {
 
         // Records the current time when this edit submits the entry.
         statusCode === "submitted"
-          ? new Date()
+          ? String(entry.status).toLowerCase() === "submitted"
+            ? entry.submitted_at
+            : new Date()
           : null,
 
         entryId,
         userId,
       ]
     );
- // Loads all project fields configured for the newly selected project.
+    // Loads all project fields configured for the newly selected project.
     const [projectFields] = await connection.query(
       `
       SELECT
@@ -1797,7 +1833,7 @@ const getPendingTeamEntries = async (req, res) => {
 
         p.project_id,
         p.project_name,
-        rc.name AS reporting_category,
+        CONCAT_WS(' / ', tlrc.name, rc.name) AS reporting_category,
 
        de.docs_received AS documents_received,
        de.docs_completed AS documents_completed,
@@ -1822,6 +1858,10 @@ const getPendingTeamEntries = async (req, res) => {
 
       LEFT JOIN reporting_category rc
         ON rc.category_id = de.category_id
+
+      LEFT JOIN reporting_category tlrc
+        ON tlrc.category_id = de.team_lead_category_id
+        AND tlrc.role_type = 'teamLead'
 
       WHERE u.team_lead_id = ?
         AND de.user_id <> ?

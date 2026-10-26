@@ -39,7 +39,7 @@ const roleNames = {
 // SELECT FIELD
 // =========================================================
 
-function SelectField({ label, children,value,onChange, }) {
+function SelectField({ label, children, value, onChange, }) {
   return (
     <Box sx={{ width: "100%" }}>
       <Typography
@@ -55,14 +55,14 @@ function SelectField({ label, children,value,onChange, }) {
 
       <FormControl fullWidth size="small">
         <Select
-            {...(
-              value !== undefined
-                ? { value, onChange }
-                : {
-                    defaultValue:
-                      children[0]?.props?.value,
-                  }
-            )}
+          {...(
+            value !== undefined
+              ? { value, onChange }
+              : {
+                defaultValue:
+                  children[0]?.props?.value,
+              }
+          )}
           sx={{
             height: 44,
             fontSize: 13,
@@ -104,6 +104,7 @@ function SimpleReportTable({
   title,
   columns,
   rows,
+  headerActions = null,
 }) {
   const [srPage, setSrPage] = useState(0);
   const SR_ROWS_PER_PAGE = 10;
@@ -138,15 +139,42 @@ function SimpleReportTable({
             "1px solid #e2e7ee",
         }}
       >
-        <Typography
+        {/* Main header container: title and buttons in separate rows. */}
+        <Box
           sx={{
-            fontSize: 14,
-            fontWeight: 800,
-            color: "#17233a",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-start",
+            width: "100%",
+            gap: 1.5,
           }}
         >
-          {title}
-        </Typography>
+          {/* First row: display the report title. */}
+          <Typography
+            sx={{
+              fontSize: 15,
+              fontWeight: 800,
+              color: "#17233a",
+              display: "block",
+              width: "100%",
+            }}
+          >
+            {title}
+          </Typography>
+
+          {/* Second row: display role filter buttons below the title. */}
+          {headerActions && (
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "flex-start",
+                width: "100%",
+              }}
+            >
+              {headerActions}
+            </Box>
+          )}
+        </Box>
       </Box>
 
       <Box
@@ -225,7 +253,7 @@ function SimpleReportTable({
           )}
         </Box>
       </Box>
-      {srTotalPages > 1 && (
+      {rows.length > 0 && (
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 1, px: 2, py: 1, borderTop: "1px solid #e2e7ee" }}>
           <Typography sx={{ fontSize: 12, color: "#6A7585" }}>
             {srPage * SR_ROWS_PER_PAGE + 1}–{Math.min((srPage + 1) * SR_ROWS_PER_PAGE, rows.length)} of {rows.length}
@@ -243,32 +271,41 @@ export default function Reports({
 }) {
   const toast = useToast();
   const [summary, setSummary] = useState({
-  totalReceived: 0,
-  totalCompleted: 0,
-  totalPending: 0,
-  completionRate: 0,
-});
+    totalReceived: 0,
+    totalCompleted: 0,
+    totalPending: 0,
+    completionRate: 0,
+  });
   const [period, setPeriod] = useState("week");
+  // Display the correct label for the selected report period.
+  const periodLabel =
+    period === "day"
+      ? "today"
+      : period === "month"
+        ? "this month"
+        : "this week";
   const [employeeReportPage, setEmployeeReportPage] = useState(0);
   const EMP_ROWS_PER_PAGE = 10;
-const [bars, setBars] = useState([]);
-const [employees, setEmployees] = useState([]);
-const [employeeOptions, setEmployeeOptions] = useState([]);
-const [projects, setProjects] = useState([]);
-const [selectedProject, setSelectedProject] = useState("all");
-const [selectedEmployee, setSelectedEmployee] = useState("all");
-const [reportType, setReportType] =
-  useState("employee");
-const [projectReportRows, setProjectReportRows] =
-  useState([]);
+  const [bars, setBars] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [employeeOptions, setEmployeeOptions] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [selectedProject, setSelectedProject] = useState("all");
+  const [selectedEmployee, setSelectedEmployee] = useState("all");
+  const [reportType, setReportType] =
+    useState("employee");
+  const [projectReportRows, setProjectReportRows] =
+    useState([]);
 
-const [correctionReportRows, setCorrectionReportRows] =
-  useState([]);
+  const [correctionReportRows, setCorrectionReportRows] =
+    useState([]);
+  const [allDailyEntries, setAllDailyEntries] = useState([]);
+  const [dailyEntryRole, setDailyEntryRole] = useState("all");
 
 
-useEffect(() => {
-  const loadReports = async () => {
-    if (
+  useEffect(() => {
+    const loadReports = async () => {
+      if (
         ![
           "indexer",
           "teamLead",
@@ -279,178 +316,218 @@ useEffect(() => {
         return;
       }
 
-    try {
-      const queryParams = new URLSearchParams({
-        period,
-      });
-
-      if (selectedProject !== "all") {
-        queryParams.set(
-          "projectId",
-          selectedProject
-        );
-      }
-
-      if (selectedEmployee !== "all") {
-        queryParams.set(
-          "employeeId",
-          selectedEmployee
-        );
-      }
-
-    const reportQuery = queryParams.toString();
-
-
-      const [
-        summaryData,
-        productionData,
-        employeeData,
-        employeeOptionsData,
-        projectData,
-        projectReportData,
-        correctionReportData,
-      ] = await Promise.all([
-        apiRequest(
-          `/reports/my-summary?${reportQuery}`
-        ),
-
-        apiRequest(
-          `/reports/my-daily-production?${reportQuery}`
-        ),
-
-        apiRequest(
-          `/reports/employee-production?${reportQuery}`
-        ),
-
-        // Unfiltered request for dropdown options
-        apiRequest(
-          `/reports/employee-production?period=${period}`
-        ),
-
-        apiRequest("/projects/my"),
-        reportType === "project"
-        ? apiRequest(
-            `/reports/project-production?${reportQuery}`
-          )
-        : Promise.resolve({
-            projects: [],
-          }),
-
-      reportType === "correction"
-        ? apiRequest(
-            `/reports/correction-log?${reportQuery}`
-          )
-        : Promise.resolve({
-            corrections: [],
-          }),
-      ]);
-
-      setSummary(summaryData.summary);
-      setProjects(projectData.projects || []);
-
-      setProjectReportRows(
-        projectReportData.projects || []
-      );
-
-      setCorrectionReportRows(
-        correctionReportData.corrections || []
-      );
-
-      const formattedBars = (
-        productionData.production || []
-      ).map((entry) => ({
-        day: String(
-          entry.day_name || ""
-        ).slice(0, 3),
-
-        value: Number(entry.completed || 0),
-        received: Number(entry.received || 0),
-        completed: Number(entry.completed || 0),
-      }));
-
-      setBars(formattedBars);
-
-      const formatEmployees = (employeeList) =>
-        (employeeList || []).map((employee) => {
-          const employeeName =
-            employee.employee_name || "";
-
-          const initials = employeeName
-            .split(" ")
-            .filter(Boolean)
-            .map((part) => part[0])
-            .join("")
-            .slice(0, 2)
-            .toUpperCase();
-
-          return [
-            initials,
-            employeeName,
-            employee.projects || "—",
-            Number(employee.received || 0),
-            Number(employee.completed || 0),
-            Number(employee.pending || 0),
-            `${Number(employee.productivity || 0)}%`,
-            employee.id,
-          ];
+      try {
+        const queryParams = new URLSearchParams({
+          period,
         });
 
-      setEmployees(
-        formatEmployees(employeeData.employees)
-      );
+        if (selectedProject !== "all") {
+          queryParams.set(
+            "projectId",
+            selectedProject
+          );
+        }
 
-      setEmployeeOptions(
-        formatEmployees(
-          employeeOptionsData.employees
-        )
-      );
-    } catch (error) {
-      console.error(
-        "Load Reports Error:",
-        error
-      );
+        if (selectedEmployee !== "all") {
+          queryParams.set(
+            "employeeId",
+            selectedEmployee
+          );
+        }
 
-      toast.error(error.message);
+        const reportQuery = queryParams.toString();
+
+
+        const [
+          summaryData,
+          productionData,
+          employeeData,
+          employeeOptionsData,
+          projectData,
+          projectReportData,
+          correctionReportData,
+          allDailyEntriesData
+        ] = await Promise.all([
+          apiRequest(
+            `/reports/my-summary?${reportQuery}`
+          ),
+
+          apiRequest(
+            `/reports/my-daily-production?${reportQuery}`
+          ),
+
+          apiRequest(
+            `/reports/employee-production?${reportQuery}`
+          ),
+
+          // Unfiltered request for dropdown options
+          apiRequest(
+            `/reports/employee-production?period=${period}`
+          ),
+
+          apiRequest("/projects/my"),
+          // Load project data for both Project-wise Production and Pending Backlog.
+          ["project", "pending"].includes(reportType)
+            ? apiRequest(
+              `/reports/project-production?${reportQuery}`
+            )
+            : Promise.resolve({
+              projects: [],
+            }),
+
+          reportType === "correction"
+            ? apiRequest(
+              `/reports/correction-log?${reportQuery}`
+            )
+            : Promise.resolve({
+              corrections: [],
+            }),
+          // Fetch individual daily entries only for Admin and Core Team.
+          ["administrator", "coreTeam"].includes(roleKey) &&
+            reportType === "allEntries"
+            ? apiRequest(
+              "/reports/all-daily-entries"
+            )
+            : Promise.resolve({
+              entries: [],
+            }),
+        ]);
+
+        setSummary(summaryData.summary);
+        setProjects(projectData.projects || []);
+
+        setProjectReportRows(
+          projectReportData.projects || []
+        );
+
+        setCorrectionReportRows(
+          correctionReportData.corrections || []
+        );
+
+        // Sort all daily entries by production date, newest first.
+        const sortedDailyEntries = [
+          ...(allDailyEntriesData.entries || []),
+        ].sort((a, b) => {
+          // Compare production dates.
+          const dateA = String(a.production_date || "").slice(0, 10);
+          const dateB = String(b.production_date || "").slice(0, 10);
+
+          // Show the newest date first.
+          const dateDifference = dateB.localeCompare(dateA);
+
+          // For entries on the same date, show the newest entry ID first.
+          return dateDifference || Number(b.id || 0) - Number(a.id || 0);
+        });
+
+        // Store sorted daily entries.
+        setAllDailyEntries(sortedDailyEntries);
+
+        const formattedBars = (
+          productionData.production || []
+        ).map((entry) => ({
+          day: String(
+            entry.day_name || ""
+          ).slice(0, 3),
+
+          value: Number(entry.completed || 0),
+          received: Number(entry.received || 0),
+          completed: Number(entry.completed || 0),
+        }));
+
+        setBars(formattedBars);
+
+        const formatEmployees = (employeeList) =>
+          (employeeList || []).map((employee) => {
+            const employeeName =
+              employee.employee_name || "";
+
+            const initials = employeeName
+              .split(" ")
+              .filter(Boolean)
+              .map((part) => part[0])
+              .join("")
+              .slice(0, 2)
+              .toUpperCase();
+
+            return [
+              initials, // [0] Employee initials.
+              employeeName, // [1] Employee name.
+              employee.projects || "—", // [2] Assigned projects.
+              Number(employee.target || 0), // [3] Combined project target.
+              Number(employee.completed || 0), // [4] Completed documents.
+              Number(employee.targetRemaining || 0), // [5] Target remaining.
+              employee.productivity == null
+                ? "—"
+                : `${Number(employee.productivity).toFixed(2)}%`, // [6] Productivity.
+              employee.id, // [7] Employee ID for filters.
+            ];
+          });
+
+        setEmployees(
+          formatEmployees(employeeData.employees)
+        );
+
+        setEmployeeOptions(
+          formatEmployees(
+            employeeOptionsData.employees
+          )
+        );
+      } catch (error) {
+        console.error(
+          "Load Reports Error:",
+          error
+        );
+
+        toast.error(error.message);
+      }
+    };
+
+    loadReports();
+  }, [
+    roleKey,
+    period,
+    selectedProject,
+    selectedEmployee,
+    toast,
+    reportType,
+  ]);
+  // Filter projects that have pending documents.
+  const pendingProjectRows = [...projectReportRows]
+    // Include only projects with pending greater than zero.
+    .filter((project) => Number(project.pending || 0) > 0)
+    // Display projects with the highest pending count first.
+    .sort(
+      (a, b) =>
+        Number(b.pending || 0) - Number(a.pending || 0)
+    );
+  // Filter daily entries by role while preserving newest-first order.
+  const filteredDailyEntries = allDailyEntries.filter((entry) => {
+    // Show all records when no specific role is selected.
+    if (dailyEntryRole === "all") return true;
+
+    // Match both supported Team Lead role codes.
+    if (dailyEntryRole === "lead") {
+      return ["lead", "teamLead"].includes(entry.employee_role);
     }
-  };
 
-  loadReports();
-}, [
-  roleKey,
-  period,
-  selectedProject,
-  selectedEmployee,
-  toast,
-  reportType,
-]);
-
-const max = Math.max(
-  1,
-  ...bars.map((bar) => bar.value)
-);
+    // Match Indexer records.
+    return entry.employee_role === "indexer";
+  });
+  const max = Math.max(
+    1,
+    ...bars.map((bar) => bar.value)
+  );
 
   const currentRole =
     roleNames[roleKey] || "Indexer";
 
   const completedDegrees =
-  (Math.min(
-    Math.max(summary.completionRate, 0),
-    100
-  ) / 100) * 360;
+    (Math.min(
+      Math.max(summary.completionRate, 0),
+      100
+    ) / 100) * 360;
 
-  const displayedEmployees =
-  reportType === "pending"
-    ? [...employees]
-        .filter(
-          (employee) =>
-            Number(employee[5]) > 0
-        )
-        .sort(
-          (a, b) =>
-            Number(b[5]) - Number(a[5])
-        )
-    : employees;
-
+  const displayedEmployees = employees;
   // Reset employee table page when data or type changes.
   const pagedEmployees = displayedEmployees.slice(
     employeeReportPage * EMP_ROWS_PER_PAGE,
@@ -459,118 +536,205 @@ const max = Math.max(
   const empTotalPages = Math.ceil(displayedEmployees.length / EMP_ROWS_PER_PAGE);
 
   const handleCsvDownload = () => {
-  if (employees.length === 0) {
-    toast.info("No report data is available to export");
-    return;
-  }
+    // Export individual daily entries when Admin/Core Team selects this report.
+    if (
+      reportType === "allEntries" &&
+      ["administrator", "coreTeam"].includes(roleKey)
+    ) {
+      // Prevent downloading an empty report.
+      if (filteredDailyEntries.length === 0) {
+        toast.info("No daily entries available to export");
+        return;
+      }
 
-  const headings = [
-    "Employee",
-    "Project",
-    "Received",
-    "Completed",
-    "Pending",
-    "Productivity",
-  ];
+      // Define the CSV columns.
+      const headings = [
+        "Employee",
+        "Employee Code",
+        "Role",
+        "Project",
+        "Production Date",
+        "Team Lead Category",
+        "Indexer Category",
+        "Received",
+        "Completed",
+        "Batches",
+        "Status",
+        "Notes",
+      ];
 
-  const reportRows = employees.map((employee) => [
-    employee[1],
-    employee[2],
-    employee[3],
-    employee[4],
-    employee[5],
-    employee[6],
-  ]);
+      // Export only entries matching the selected role filter.
+      const reportRows = filteredDailyEntries.map((entry) => {
+        const isTeamLead = ["lead", "teamLead"].includes(
+          entry.employee_role
+        );
 
-  const csvContent = [headings, ...reportRows]
-    .map((row) =>
-      row
-        .map((value) =>
-          `"${String(value ?? "").replace(/"/g, '""')}"`
-        )
-        .join(",")
-    )
-    .join("\n");
+        return [
+          entry.employee_name,
+          entry.employee_code,
+          isTeamLead ? "Team Lead" : "Indexer",
+          entry.project_name,
+          entry.production_date,
+          entry.team_lead_category || "",
+          entry.indexer_category || "",
+          isTeamLead ? Number(entry.received || 0) : "",
+          !isTeamLead ? Number(entry.completed || 0) : "",
+          !isTeamLead ? Number(entry.batches_processed || 0) : "",
+          entry.status_name || "",
+          entry.notes || "",
+        ];
+      });
 
-  const file = new Blob(
-    [csvContent],
-    {
-      type: "text/csv;charset=utf-8;",
+      // Escape CSV values and protect spreadsheet applications from formula injection.
+      const escapeCsvValue = (value) => {
+        const text = String(value ?? "");
+        const safeText = /^[\s]*[=+\-@\t\r]/.test(text)
+          ? `'${text}`
+          : text;
+
+        return `"${safeText.replace(/"/g, '""')}"`;
+      };
+
+      // Generate the CSV content with headings.
+      const csvContent = [headings, ...reportRows]
+        .map((row) => row.map(escapeCsvValue).join(","))
+        .join("\r\n");
+
+      // Create the CSV file.
+      const file = new Blob(["\uFEFF", csvContent], {
+        type: "text/csv;charset=utf-8;",
+      });
+
+      // Generate a temporary download URL.
+      const downloadUrl = URL.createObjectURL(file);
+      const link = document.createElement("a");
+
+      // Set the CSV filename based on the selected period.
+      link.href = downloadUrl;
+      link.download = `prodtrack-all-daily-entries.csv`;
+
+      // Trigger the CSV download.
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // Release the temporary URL.
+      URL.revokeObjectURL(downloadUrl);
+
+      return;
     }
-  );
+    if (employees.length === 0) {
+      toast.info("No report data is available to export");
+      return;
+    }
 
-  const downloadUrl = URL.createObjectURL(file);
-  const link = document.createElement("a");
-
-  link.href = downloadUrl;
-  link.download = `prodtrack-report-${period}.csv`;
-
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-
-  URL.revokeObjectURL(downloadUrl);
-};
-
-const handlePdfDownload = () => {
-  if (employees.length === 0) {
-    toast.info("No report data is available to export");
-    return;
-  }
-
-  const document = new jsPDF({
-    orientation: "landscape",
-    unit: "mm",
-    format: "a4",
-  });
-
-  document.setFontSize(18);
-  document.text("ProdTrack Production Report", 14, 16);
-
-  document.setFontSize(10);
-  document.text(
-    `Role: ${currentRole} | Period: ${period}`,
-    14,
-    24
-  );
-
-  document.text(
-    `Received: ${summary.totalReceived}   Completed: ${summary.totalCompleted}   Pending: ${summary.totalPending}   Completion: ${summary.completionRate}%`,
-    14,
-    31
-  );
-
-  autoTable(document, {
-    startY: 38,
-    head: [[
+    const headings = [
       "Employee",
       "Project",
-      "Received",
+      "Target",
       "Completed",
-      "Pending",
+      "Target Left",
       "Productivity",
-    ]],
-    body: employees.map((employee) => [
+    ];
+
+    // Export the same values shown in the employee table.
+    const reportRows = employees.map((employee) => [
       employee[1],
       employee[2],
       employee[3],
       employee[4],
       employee[5],
       employee[6],
-    ]),
-    theme: "grid",
-    headStyles: {
-      fillColor: [47, 109, 246],
-      textColor: [255, 255, 255],
-    },
-    styles: {
-      fontSize: 9,
-      cellPadding: 3,
-    },
-  });
+    ]);
+    const csvContent = [headings, ...reportRows]
+      .map((row) =>
+        row
+          .map((value) =>
+            `"${String(value ?? "").replace(/"/g, '""')}"`
+          )
+          .join(",")
+      )
+      .join("\n");
 
-  document.save(`prodtrack-report-${period}.pdf`);
-};
+    const file = new Blob(
+      [csvContent],
+      {
+        type: "text/csv;charset=utf-8;",
+      }
+    );
+
+    const downloadUrl = URL.createObjectURL(file);
+    const link = document.createElement("a");
+
+    link.href = downloadUrl;
+    link.download = `prodtrack-report-${period}.csv`;
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    URL.revokeObjectURL(downloadUrl);
+  };
+
+  const handlePdfDownload = () => {
+    if (employees.length === 0) {
+      toast.info("No report data is available to export");
+      return;
+    }
+
+    const document = new jsPDF({
+      orientation: "landscape",
+      unit: "mm",
+      format: "a4",
+    });
+
+    document.setFontSize(18);
+    document.text("ProdTrack Production Report", 14, 16);
+
+    document.setFontSize(10);
+    document.text(
+      `Role: ${currentRole} | Period: ${period}`,
+      14,
+      24
+    );
+
+    document.text(
+      `Received: ${summary.totalReceived}   Completed: ${summary.totalCompleted}   Pending: ${summary.totalPending}   Completion: ${summary.completionRate}%`,
+      14,
+      31
+    );
+
+    autoTable(document, {
+      startY: 38,
+      head: [[
+        "Employee",
+        "Project",
+        "Target",
+        "Completed",
+        "Target Left",
+        "Productivity",
+      ]],
+      body: employees.map((employee) => [
+        employee[1],
+        employee[2],
+        employee[3],
+        employee[4],
+        employee[5],
+        employee[6],
+      ]),
+      theme: "grid",
+      headStyles: {
+        fillColor: [47, 109, 246],
+        textColor: [255, 255, 255],
+      },
+      styles: {
+        fontSize: 9,
+        cellPadding: 3,
+      },
+    });
+
+    document.save(`prodtrack-report-${period}.pdf`);
+  };
 
   return (
     <Box
@@ -730,12 +894,12 @@ const handlePdfDownload = () => {
           {/* REPORT TYPE */}
 
           <SelectField
-              label="Report type"
-              value={reportType}
-              onChange={(event) =>
-                setReportType(event.target.value)
-              }
-            >
+            label="Report type"
+            value={reportType}
+            onChange={(event) =>
+              setReportType(event.target.value)
+            }
+          >
             <MenuItem value="employee">
               Employee-wise production
             </MenuItem>
@@ -755,62 +919,74 @@ const handlePdfDownload = () => {
             <MenuItem value="correction">
               Correction request log
             </MenuItem>
+            {/* Shows all Indexer and Team Lead entries for Admin and Core Team. */}
+            {["administrator", "coreTeam"].includes(roleKey) && (
+              <MenuItem value="allEntries">
+                All Daily Entries
+              </MenuItem>
+            )}
           </SelectField>
 
           {/* PERIOD */}
 
-            <SelectField
-              label="Project"
-              value={selectedProject}
-              onChange={(event) =>
-                setSelectedProject(event.target.value)
-              }
-            >
-              <MenuItem value="all">
-                All projects
+          <SelectField
+            label="Project"
+            value={selectedProject}
+            onChange={(event) =>
+              setSelectedProject(event.target.value)
+            }
+          >
+            <MenuItem value="all">
+              All projects
+            </MenuItem>
+
+            {projects.map((project) => (
+              <MenuItem
+                key={project.project_id || project.id}
+                value={project.project_id || project.id}
+              >
+                {project.project_name}
               </MenuItem>
+            ))}
+          </SelectField>
 
-              {projects.map((project) => (
-                <MenuItem
-                  key={project.project_id || project.id}
-                  value={project.project_id || project.id}
-                >
-                  {project.project_name}
-                </MenuItem>
-              ))}
-            </SelectField>
+          <SelectField
+            label="Period"
+            value={period}
+            onChange={(event) => setPeriod(event.target.value)}
+          >
+            {/* Show only today's records. */}
+            <MenuItem value="day">Today</MenuItem>
 
-            <SelectField
-              label="Period"
-              value={period}
-              onChange={(event) => setPeriod(event.target.value)}
-            >
-              <MenuItem value="week">This week</MenuItem>
-              <MenuItem value="month">This month</MenuItem>
-            </SelectField>
+            {/* Show records from the current week. */}
+            <MenuItem value="week">This week</MenuItem>
+
+            {/* Show records from the current month. */}
+            <MenuItem value="month">This month</MenuItem>
+          </SelectField>
 
           {/* EMPLOYEE */}
 
-            <SelectField
-              label="Employee"
-              value={selectedEmployee}
-              onChange={(event) =>
-                setSelectedEmployee(event.target.value)
-              }
-            >
-              <MenuItem value="all">
-                All employees
-              </MenuItem>
+          <SelectField
+            label="Employee"
+            value={selectedEmployee}
+            onChange={(event) =>
+              setSelectedEmployee(event.target.value)
+            }
+          >
+            <MenuItem value="all">
+              All employees
+            </MenuItem>
 
-              {employeeOptions.map((employee) => (
-                <MenuItem
-                  key={employee[7]}
-                  value={employee[7]}
-                >
-                  {employee[1]}
-                </MenuItem>
-              ))}
-            </SelectField>
+            {employeeOptions.map((employee) => (
+              <MenuItem
+                key={employee[7]}
+                value={employee[7]}
+              >
+                {employee[1]}
+              </MenuItem>
+            ))}
+          </SelectField>
         </Box>
       </Card>
 
@@ -846,13 +1022,24 @@ const handlePdfDownload = () => {
 
           <Box
             sx={{
+              // Add spacing inside the table header.
               px: 2,
               py: 1.5,
               minHeight: 54,
+
+              // Arrange the heading and buttons vertically.
               display: "flex",
-              alignItems: "center",
+              flexDirection: "column",
+
+              // Align the heading and buttons to the left.
+              alignItems: "flex-start",
+              justifyContent: "center",
+
+              // Maintain spacing between the heading and buttons.
+              gap: 1.5,
+
+              // Separate the header from the table columns.
               borderBottom: "1px solid #e2e7ee",
-              boxSizing: "border-box",
             }}
           >
             <Typography
@@ -1073,19 +1260,19 @@ const handlePdfDownload = () => {
 
             <Box>
               {[
-                  [
-                    "#20a36f",
-                    `Completed · ${summary.totalCompleted}`,
-                  ],
-                  [
-                    "#e09a22",
-                    `Pending · ${summary.totalPending}`,
-                  ],
-                  [
-                    "#3475ee",
-                    `Received · ${summary.totalReceived}`,
-                  ],
-                ].map(([color, label]) => (
+                [
+                  "#20a36f",
+                  `Completed · ${summary.totalCompleted}`,
+                ],
+                [
+                  "#e09a22",
+                  `Pending · ${summary.totalPending}`,
+                ],
+                [
+                  "#3475ee",
+                  `Received · ${summary.totalReceived}`,
+                ],
+              ].map(([color, label]) => (
                 <Box
                   key={label}
                   sx={{
@@ -1122,249 +1309,286 @@ const handlePdfDownload = () => {
       {/* =================================================
           EMPLOYEE TABLE
       ================================================= */}
-      {["employee", "pending"].includes(
-        reportType
-      ) && (
-      <Card
-        elevation={0}
-        sx={{
-          border: "1px solid #dce3ec",
-          borderRadius: "10px",
-          overflow: "hidden",
-          backgroundColor: "#fff",
-        }}
-      >
-        {/* TABLE TITLE */}
-
-        <Box
+      {reportType === "employee" && (
+        <Card
+          elevation={0}
           sx={{
-            px: 2,
-            py: 1.5,
-            minHeight: 54,
-            display: "flex",
-            alignItems: "center",
-            borderBottom: "1px solid #e2e7ee",
-            boxSizing: "border-box",
+            border: "1px solid #dce3ec",
+            borderRadius: "10px",
+            overflow: "hidden",
+            backgroundColor: "#fff",
           }}
         >
-          <Typography
+          {/* TABLE TITLE */}
+
+          <Box
             sx={{
-              fontSize: 14,
-              fontWeight: 800,
-              color: "#17233a",
+              px: 2,
+              py: 1.5,
+              minHeight: 54,
+              display: "flex",
+              alignItems: "center",
+              borderBottom: "1px solid #e2e7ee",
+              boxSizing: "border-box",
             }}
           >
-            {reportType === "pending"
-            ? `Pending backlog — ${
-                period === "month"
-                  ? "this month"
-                  : "this week"
-              }`
-            : `Employee-wise production — ${
-                period === "month"
-                  ? "this month"
-                  : "this week"
-              }`}
-          </Typography>
-        </Box>
-        {/* RESPONSIVE TABLE AREA */}
-        <Box
-          sx={{
-            width: "100%",
-            overflowX: "auto",
-            WebkitOverflowScrolling: "touch",
-          }}
-        >
-        <Box sx={{ minWidth: 900 }}>
-        {/* TABLE HEADER */}
-
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns:
-              "2fr 2fr 1fr 1fr 1fr 1fr",
-            px: 2,
-            py: 1.5,
-            minWidth: 760,
-            backgroundColor: "#f8fafc",
-            boxSizing: "border-box",
-          }}
-        >
-          {[
-            "EMPLOYEE",
-            "PROJECT",
-            "RECEIVED",
-            "COMPLETED",
-            "PENDING",
-            "PRODUCTIVITY",
-          ].map((header) => (
             <Typography
-              key={header}
               sx={{
-                fontSize: 12,
-                color: "#6A7585",
-                fontWeight: 700,
+                fontSize: 14,
+                fontWeight: 800,
+                color: "#17233a",
               }}
             >
-              {header}
+              {reportType === "pending"
+                ? `Pending backlog — ${periodLabel}`
+                : `Employee-wise production — ${periodLabel}`}
             </Typography>
-          ))}
-        </Box>
-
-        {/* TABLE ROWS */}
-
-        <Box
-          sx={{
-            overflowX: "visible",
-            width: "100%",
-          }}
-        >
-          {pagedEmployees.map((employee) => (
-            <Box
-              key={employee[7] || employee[1]}
-              sx={{
-                display: "grid",
-                gridTemplateColumns:
-                  "2fr 2fr 1fr 1fr 1fr 1fr",
-                minWidth: 760,
-                px: 2,
-                py: 1.5,
-                minHeight: 62,
-                alignItems: "center",
-                borderTop: "1px solid #e7ebf0",
-                boxSizing: "border-box",
-              }}
-            >
-              {/* EMPLOYEE */}
+          </Box>
+          {/* RESPONSIVE TABLE AREA */}
+          <Box
+            sx={{
+              width: "100%",
+              overflowX: "auto",
+              WebkitOverflowScrolling: "touch",
+            }}
+          >
+            <Box sx={{ minWidth: 900 }}>
+              {/* TABLE HEADER */}
 
               <Box
                 sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 1,
-                  minWidth: 0,
+                  display: "grid",
+                  gridTemplateColumns:
+                    "2fr 2fr 1fr 1fr 1fr 1fr",
+                  px: 2,
+                  py: 1.5,
+                  minWidth: 760,
+                  backgroundColor: "#f8fafc",
+                  boxSizing: "border-box",
                 }}
               >
-                <Avatar
-                  sx={{
-                    width: 30,
-                    height: 30,
-                    fontSize: 10,
-                    fontWeight: 700,
-                    background: "linear-gradient(135deg, #3f7bff, #7a51d6);",
-                    flexShrink: 0,
-                  }}
-                >
-                  {employee[0]}
-                </Avatar>
-
-                <Typography
-                  sx={{
-                    fontSize: 13,
-                    color: "#6A7585",
-                    whiteSpace: "normal",
-                    overflowWrap: "anywhere",
-                    pr: 2,
-                  }}
-                >
-                  {employee[1]}
-                </Typography>
+                {[
+                  "EMPLOYEE",
+                  "PROJECT",
+                  "TARGET",
+                  "COMPLETED",
+                  "TARGET LEFT",
+                  "PRODUCTIVITY",
+                ].map((header) => (
+                  <Typography
+                    key={header}
+                    sx={{
+                      fontSize: 12,
+                      color: "#6A7585",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {header}
+                  </Typography>
+                ))}
               </Box>
 
-              {/* PROJECT */}
+              {/* TABLE ROWS */}
 
-             <Typography
+              <Box
                 sx={{
-                  fontSize: 13,
-                  color: "#6A7585",
-                  whiteSpace: "normal",
-                  overflowWrap: "anywhere",
-                  pr: 2,
+                  overflowX: "visible",
+                  width: "100%",
                 }}
               >
-                {employee[2]}
-              </Typography>
+                {pagedEmployees.map((employee) => (
+                  <Box
+                    key={employee[7] || employee[1]}
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "2fr 2fr 1fr 1fr 1fr 1fr",
+                      minWidth: 760,
+                      px: 2,
+                      py: 1.5,
+                      minHeight: 62,
+                      alignItems: "center",
+                      borderTop: "1px solid #e7ebf0",
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    {/* EMPLOYEE */}
 
-              {/* RECEIVED */}
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1,
+                        minWidth: 0,
+                      }}
+                    >
+                      <Avatar
+                        sx={{
+                          width: 30,
+                          height: 30,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          background: "linear-gradient(135deg, #3f7bff, #7a51d6);",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {employee[0]}
+                      </Avatar>
 
-              <Typography
-                sx={{
-                  fontSize: 13,
-                  color: "#1A2434",
-                  fontWeight: 500,
-                }}
-              >
-                {employee[3]}
-              </Typography>
+                      <Typography
+                        sx={{
+                          fontSize: 13,
+                          color: "#6A7585",
+                          whiteSpace: "normal",
+                          overflowWrap: "anywhere",
+                          pr: 2,
+                        }}
+                      >
+                        {employee[1]}
+                      </Typography>
+                    </Box>
 
-              {/* COMPLETED */}
+                    {/* PROJECT */}
 
-              <Typography
-                sx={{
-                  fontSize: 13,
-                  color: "#1A2434",
-                  fontWeight: 500,
-                }}
-              >
-                {employee[4]}
-              </Typography>
+                    <Typography
+                      sx={{
+                        fontSize: 13,
+                        color: "#6A7585",
+                        whiteSpace: "normal",
+                        overflowWrap: "anywhere",
+                        pr: 2,
+                      }}
+                    >
+                      {employee[2]}
+                    </Typography>
 
-              {/* PENDING */}
+                    {/* RECEIVED */}
 
-              <Typography
-                sx={{
-                  fontSize: 13,
-                  color: "#1A2434",
-                  fontWeight: 500,
-                }}
-              >
-                {employee[5]}
-              </Typography>
+                    <Typography
+                      sx={{
+                        fontSize: 13,
+                        color: "#1A2434",
+                        fontWeight: 500,
+                      }}
+                    >
+                      {employee[3]}
+                    </Typography>
 
-              {/* PRODUCTIVITY */}
+                    {/* COMPLETED */}
 
-              <Chip
-                label={employee[6]}
-                size="small"
-                sx={{
-                  width: "fit-content",
-                  height: 28,
-                  backgroundColor: "#e5f7ef",
-                  color: "#10694a",
-                  border: "1px solid #b9e5d1",
-                  fontSize: 11,
-                  fontWeight: 800,
-                  borderRadius: "15px",
-                }}
-              />
-              
+                    <Typography
+                      sx={{
+                        fontSize: 13,
+                        color: "#1A2434",
+                        fontWeight: 500,
+                      }}
+                    >
+                      {employee[4]}
+                    </Typography>
+
+                    {/* PENDING */}
+
+                    <Typography
+                      sx={{
+                        fontSize: 13,
+                        color: "#1A2434",
+                        fontWeight: 500,
+                      }}
+                    >
+                      {employee[5]}
+                    </Typography>
+
+                    {/* PRODUCTIVITY */}
+
+                    <Chip
+                      label={employee[6]}
+                      size="small"
+                      sx={{
+                        width: "fit-content",
+                        height: 28,
+                        backgroundColor: "#e5f7ef",
+                        color: "#10694a",
+                        border: "1px solid #b9e5d1",
+                        fontSize: 11,
+                        fontWeight: 800,
+                        borderRadius: "15px",
+                      }}
+                    />
+
+                  </Box>
+
+
+                ))}
+              </Box>
             </Box>
-            
-            
-          ))}
-        </Box>
-        </Box>
-      </Box>
-      {empTotalPages > 1 && (
-        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 1, px: 2, py: 1, borderTop: "1px solid #e2e7ee" }}>
-          <Typography sx={{ fontSize: 12, color: "#6A7585" }}>
-            {employeeReportPage * EMP_ROWS_PER_PAGE + 1}–{Math.min((employeeReportPage + 1) * EMP_ROWS_PER_PAGE, displayedEmployees.length)} of {displayedEmployees.length}
-          </Typography>
-          <Button size="small" disabled={employeeReportPage === 0} onClick={() => setEmployeeReportPage((p) => p - 1)} sx={{ minWidth: 28, height: 28, p: 0, fontSize: 16, color: "#6A7585" }}>‹</Button>
-          <Button size="small" disabled={employeeReportPage >= empTotalPages - 1} onClick={() => setEmployeeReportPage((p) => p + 1)} sx={{ minWidth: 28, height: 28, p: 0, fontSize: 16, color: "#6A7585" }}>›</Button>
-        </Box>
+          </Box>
+          {empTotalPages > 1 && (
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 1, px: 2, py: 1, borderTop: "1px solid #e2e7ee" }}>
+              <Typography sx={{ fontSize: 12, color: "#6A7585" }}>
+                {employeeReportPage * EMP_ROWS_PER_PAGE + 1}–{Math.min((employeeReportPage + 1) * EMP_ROWS_PER_PAGE, displayedEmployees.length)} of {displayedEmployees.length}
+              </Typography>
+              <Button size="small" disabled={employeeReportPage === 0} onClick={() => setEmployeeReportPage((p) => p - 1)} sx={{ minWidth: 28, height: 28, p: 0, fontSize: 16, color: "#6A7585" }}>‹</Button>
+              <Button size="small" disabled={employeeReportPage >= empTotalPages - 1} onClick={() => setEmployeeReportPage((p) => p + 1)} sx={{ minWidth: 28, height: 28, p: 0, fontSize: 16, color: "#6A7585" }}>›</Button>
+            </Box>
+          )}
+        </Card>
       )}
-      </Card>
+      {/* =================================================
+    PROJECT-WISE PENDING BACKLOG REPORT
+================================================= */}
+
+      {reportType === "pending" && (
+        <SimpleReportTable
+          title={`Pending backlog — ${periodLabel}`}
+          columns={[
+            // Display the project name.
+            {
+              key: "project_name",
+              label: "PROJECT",
+            },
+
+            // Display the project code.
+            {
+              key: "project_code",
+              label: "PROJECT CODE",
+            },
+
+            // Display the received document count.
+            {
+              key: "received",
+              label: "RECEIVED",
+              render: (row) => Number(row.received || 0),
+            },
+
+            // Display the completed document count.
+            {
+              key: "completed",
+              label: "COMPLETED",
+              render: (row) => Number(row.completed || 0),
+            },
+
+            // Display the pending document count.
+            {
+              key: "pending",
+              label: "PENDING",
+              render: (row) => Number(row.pending || 0),
+            },
+
+            // Display the completion percentage.
+            {
+              key: "productivity",
+              label: "PRODUCTIVITY",
+              render: (row) => `${Number(row.productivity || 0)}%`,
+            },
+          ]}
+          rows={pendingProjectRows}
+        />
       )}
       {/* PROJECT-WISE REPORT */}
 
       {reportType === "project" && (
         <SimpleReportTable
-          title={`Project-wise production — ${
-            period === "month"
-              ? "this month"
-              : "this week"
-          }`}
+          title={`Project-wise production — ${periodLabel}`}
           columns={[
             {
               key: "project_name",
@@ -1405,11 +1629,7 @@ const handlePdfDownload = () => {
 
       {reportType === "received" && (
         <SimpleReportTable
-          title={`Received vs Completed — ${
-            period === "month"
-              ? "this month"
-              : "this week"
-          }`}
+          title={`Received vs Completed — ${periodLabel}`}
           columns={[
             {
               key: "day",
@@ -1435,7 +1655,7 @@ const handlePdfDownload = () => {
             completed: bar.completed,
             pending: Math.max(
               Number(bar.received || 0) -
-                Number(bar.completed || 0),
+              Number(bar.completed || 0),
               0
             ),
           }))}
@@ -1446,11 +1666,7 @@ const handlePdfDownload = () => {
 
       {reportType === "correction" && (
         <SimpleReportTable
-          title={`Correction request log — ${
-            period === "month"
-              ? "this month"
-              : "this week"
-          }`}
+          title={`Correction request log — ${periodLabel}`}
           columns={[
             {
               key: "id",
@@ -1492,6 +1708,147 @@ const handlePdfDownload = () => {
           rows={correctionReportRows}
         />
       )}
+      {/* =================================================
+    ALL DAILY ENTRIES — ADMIN / CORE TEAM
+    SINGLE TABLE WITH ROLE FILTER AND PAGINATION
+================================================= */}
+
+      {["administrator", "coreTeam"].includes(roleKey) &&
+        reportType === "allEntries" && (
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 2,
+            }}
+          >
+            {/* =============================================
+          ROLE FILTER BUTTONS
+      ============================================= */}
+
+            {/* =============================================
+          ALL DAILY ENTRIES TABLE
+          PAGINATION HANDLED BY SimpleReportTable
+      ============================================= */}
+            <SimpleReportTable
+              title="All Daily Entries — Today"
+              headerActions={
+                <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                  {/* Switch between all records, Team Leads and Indexers. */}
+                  {[
+                    { label: "All Entries", value: "all" },
+                    { label: "Team Lead", value: "lead" },
+                    { label: "Indexer", value: "indexer" },
+                  ].map((option) => (
+                    <Button
+                      key={option.value}
+                      size="small"
+                      variant={
+                        dailyEntryRole === option.value
+                          ? "contained"
+                          : "outlined"
+                      }
+                      onClick={() => setDailyEntryRole(option.value)}
+                      sx={{
+                        textTransform: "none",
+                        borderRadius: "8px",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {option.label}
+                    </Button>
+                  ))}
+                </Box>
+              }
+
+              columns={[
+                // Display the production date.
+                {
+                  key: "production_date",
+                  label: "DATE",
+                },
+
+                // Display employee name.
+                {
+                  key: "employee_name",
+                  label: "EMPLOYEE",
+                },
+
+                // Display employee role.
+                {
+                  key: "employee_role",
+                  label: "ROLE",
+                  render: (row) =>
+                    ["lead", "teamLead"].includes(row.employee_role)
+                      ? "Team Lead"
+                      : "Indexer",
+                },
+
+                // Display project name.
+                {
+                  key: "project_name",
+                  label: "PROJECT",
+                },
+
+                // Display Team Lead reporting category.
+                {
+                  key: "team_lead_category",
+                  label: "TEAM LEAD CATEGORY",
+                },
+
+                // Display Indexer reporting category.
+                {
+                  key: "indexer_category",
+                  label: "INDEXER CATEGORY",
+                },
+
+                // Display received documents for Team Leads.
+                {
+                  key: "received",
+                  label: "RECEIVED",
+                  render: (row) =>
+                    ["lead", "teamLead"].includes(row.employee_role)
+                      ? Number(row.received || 0)
+                      : "—",
+                },
+
+                // Display completed documents for Indexers.
+                {
+                  key: "completed",
+                  label: "COMPLETED",
+                  render: (row) =>
+                    row.employee_role === "indexer"
+                      ? Number(row.completed || 0)
+                      : "—",
+                },
+
+                // Display processed batches for Indexers.
+                {
+                  key: "batches_processed",
+                  label: "BATCHES",
+                  render: (row) =>
+                    row.employee_role === "indexer"
+                      ? Number(row.batches_processed || 0)
+                      : "—",
+                },
+
+                // Display actual entry status.
+                {
+                  key: "status_name",
+                  label: "STATUS",
+                  render: (row) => row.status_name || "—",
+                },
+
+                // Display entry remarks.
+                {
+                  key: "notes",
+                  label: "NOTES",
+                },
+              ]}
+              rows={filteredDailyEntries}
+            />
+          </Box>
+        )}
     </Box>
   );
 }

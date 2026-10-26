@@ -18,6 +18,7 @@ const {
   acknowledgeGuide,
   getGuideHistory,
   downloadGuide,
+  previewGuide,
   getGuideManagerList,
   getGuideCompliance,
   uploadGuideVersion,
@@ -103,6 +104,18 @@ router.get(
   getGuideHistory
 );
 
+// Allows authorized users to preview uploaded PDF guides.
+router.get(
+  "/versions/:versionId/preview",
+  authenticate,
+  allowRoles(
+    "indexer",
+    "teamLead",
+    "coreTeam",
+    "administrator"
+  ),
+  previewGuide
+);
 // Downloads a guide only after authentication and role validation.
 router.get(
   "/:id/download",

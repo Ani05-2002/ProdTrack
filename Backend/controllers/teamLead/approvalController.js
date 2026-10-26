@@ -50,17 +50,17 @@ const getPendingApprovals = async (req, res) => {
     const userId = req.user.id;
     const role = req.user.role;
     // Checks the current Locking Rules setting before allowing approval.
-const canApprove =
-  await canReviewCorrection(role);
+    const canApprove =
+      await canReviewCorrection(role);
 
-// Blocks the request when the saved approval rule does not allow this role.
-if (!canApprove) {
-  return res.status(403).json({
-    success: false,
-    message:
-      "You are not allowed to approve corrections under the current Locking Rules",
-  });
-}
+    // Blocks the request when the saved approval rule does not allow this role.
+    if (!canApprove) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "You are not allowed to approve corrections under the current Locking Rules",
+      });
+    }
 
     let scopeCondition = "";
     let queryValues = [];
@@ -125,8 +125,13 @@ if (!canApprove) {
         u.full_name AS employee_name,
 
         p.project_id,
-        p.project_name
-
+        p.project_name,
+      
+        CONCAT_WS(
+        ' / ',
+        tlrc.name,
+        rc.name
+        ) AS reporting_category
       FROM correction_request cr
 
       JOIN correction_status cs
@@ -138,8 +143,19 @@ if (!canApprove) {
       JOIN project p
         ON p.project_id = cr.project_id
 
+      LEFT JOIN daily_entry de
+        ON de.entry_id = cr.entry_id      
+
+      LEFT JOIN reporting_category rc
+        ON rc.category_id = de.category_id
+        AND rc.role_type = 'indexer'
+        
+      LEFT JOIN reporting_category tlrc
+        ON tlrc.category_id = de.team_lead_category_id
+        AND tlrc.role_type = 'teamLead'
+
       WHERE cs.code = 'pending'
-        ${scopeCondition}
+      ${scopeCondition}
 
       ORDER BY
         cr.requested_at DESC,
@@ -176,25 +192,25 @@ const approveCorrectionRequest = async (req, res) => {
 
   try {
     const reviewerId = req.user.id;
-const role = req.user.role;
-// Checks the current Locking Rules setting before allowing rejection.
-const canReject =
-  await canReviewCorrection(role);
+    const role = req.user.role;
+    // Checks the current Locking Rules setting before allowing rejection.
+    const canReject =
+      await canReviewCorrection(role);
 
-// Blocks rejection when the saved rule does not allow this role.
-if (!canReject) {
-  return res.status(403).json({
-    success: false,
-    message:
-      "You are not allowed to reject corrections under the current Locking Rules",
-  });
-}
+    // Blocks rejection when the saved rule does not allow this role.
+    if (!canReject) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "You are not allowed to reject corrections under the current Locking Rules",
+      });
+    }
 
-let requestScope = "";
-let scopeValues = [];
+    let requestScope = "";
+    let scopeValues = [];
 
-if (role === "teamLead") {
-  requestScope = `
+    if (role === "teamLead") {
+      requestScope = `
     AND u.team_lead_id = ?
     AND EXISTS (
       SELECT 1
@@ -204,19 +220,19 @@ if (role === "teamLead") {
     )
   `;
 
-  scopeValues = [reviewerId, reviewerId];
-} else if (
-  role === "coreTeam" ||
-  role === "administrator"
-) {
-  requestScope = "";
-} else {
-  return res.status(403).json({
-    success: false,
-    message:
-      "You are not allowed to approve corrections",
-  });
-}
+      scopeValues = [reviewerId, reviewerId];
+    } else if (
+      role === "coreTeam" ||
+      role === "administrator"
+    ) {
+      requestScope = "";
+    } else {
+      return res.status(403).json({
+        success: false,
+        message:
+          "You are not allowed to approve corrections",
+      });
+    }
     const requestId = Number(req.params.id);
     const reviewComment = String(
       req.body?.reviewComment || ""
@@ -326,77 +342,77 @@ if (role === "teamLead") {
       reject(409, "Correction request changed. Refresh and try again");
     }
 
-// Allows corrections only to fields entered by Indexers.
-const editableFields = {
-  docs_completed: "docs_completed",
-  batches_processed: "batches_processed",
-  errors_flagged: "errors_flagged",
-};
+    // Allows corrections only to fields entered by Indexers.
+    const editableFields = {
+      docs_completed: "docs_completed",
+      batches_processed: "batches_processed",
+      errors_flagged: "errors_flagged",
+    };
 
-const requestedField = String(
-  requests[0].field_name || ""
-)
-  .trim()
-  .toLowerCase();
+    const requestedField = String(
+      requests[0].field_name || ""
+    )
+      .trim()
+      .toLowerCase();
 
-const columnName = editableFields[requestedField];
+    const columnName = editableFields[requestedField];
 
-if (!columnName) {
-  reject(
-    400,
-    `The field '${requestedField}' cannot be corrected`
-  );
-}
+    if (!columnName) {
+      reject(
+        400,
+        `The field '${requestedField}' cannot be corrected`
+      );
+    }
 
-const correctedValue = Number(
-  requests[0].new_value
-);
+    const correctedValue = Number(
+      requests[0].new_value
+    );
 
-if (
-  !Number.isSafeInteger(correctedValue) ||
-  correctedValue < 0
-) {
-  reject(
-    400,
-    "The corrected value must be a non-negative integer"
-  );
-}
+    if (
+      !Number.isSafeInteger(correctedValue) ||
+      correctedValue < 0
+    ) {
+      reject(
+        400,
+        "The corrected value must be a non-negative integer"
+      );
+    }
 
 
-const [dailyEntryResult] =
-  await connection.query(
-    `
+    const [dailyEntryResult] =
+      await connection.query(
+        `
     UPDATE daily_entry
     SET ${columnName} = ?
     WHERE entry_id = ?
     `,
-    [
-      correctedValue,
-      requests[0].entry_id,
-    ]
-  );
+        [
+          correctedValue,
+          requests[0].entry_id,
+        ]
+      );
 
-if (dailyEntryResult.affectedRows !== 1) {
-  reject(
-    404,
-    "Original daily entry was not found"
-  );
-}
+    if (dailyEntryResult.affectedRows !== 1) {
+      reject(
+        404,
+        "Original daily entry was not found"
+      );
+    }
 
-  const [notificationTypes] =
-  await connection.query(
-    `
+    const [notificationTypes] =
+      await connection.query(
+        `
     SELECT type_id
     FROM notification_type
     WHERE code = 'correction_approved'
       AND is_enabled = 1
     LIMIT 1
     `
-  );
+      );
 
-if (notificationTypes.length > 0) {
-  await connection.query(
-    `
+    if (notificationTypes.length > 0) {
+      await connection.query(
+        `
     INSERT INTO notification
     (
       user_id,
@@ -408,15 +424,15 @@ if (notificationTypes.length > 0) {
     )
     VALUES (?, ?, ?, ?, ?, 0)
     `,
-    [
-      requests[0].requested_by,
-      notificationTypes[0].type_id,
-      "Correction approved",
-      `Your correction request #${requestId} was approved.`,
-      "#correction-requests",
-    ]
-  );
-}
+        [
+          requests[0].requested_by,
+          notificationTypes[0].type_id,
+          "Correction approved",
+          `Your correction request #${requestId} was approved.`,
+          "#correction-requests",
+        ]
+      );
+    }
     await connection.query(
       `
       INSERT INTO audit_log
@@ -769,12 +785,11 @@ const getApprovalSummary = async (req, res) => {
             ELSE 0
           END
         ) AS awaiting_review,
-
         SUM(
           CASE
             WHEN cs.code = 'approved'
-              AND cr.approved_at >=
-                DATE_FORMAT(CURDATE(), '%Y-%m-01')
+              AND cr.approved_at >= CURDATE()
+              AND cr.approved_at < CURDATE() + INTERVAL 1 DAY
             THEN 1
             ELSE 0
           END
@@ -783,8 +798,8 @@ const getApprovalSummary = async (req, res) => {
         SUM(
           CASE
             WHEN cs.code = 'rejected'
-              AND cr.approved_at >=
-                DATE_FORMAT(CURDATE(), '%Y-%m-01')
+              AND cr.approved_at >= CURDATE()
+              AND cr.approved_at < CURDATE() + INTERVAL 1 DAY
             THEN 1
             ELSE 0
           END
@@ -794,7 +809,8 @@ const getApprovalSummary = async (req, res) => {
           AVG(
             CASE
               WHEN cs.code IN ('approved', 'rejected')
-                AND cr.approved_at IS NOT NULL
+                AND cr.approved_at >= CURDATE()
+                AND cr.approved_at < CURDATE() + INTERVAL 1 DAY
               THEN TIMESTAMPDIFF(
                 MINUTE,
                 cr.requested_at,
@@ -828,10 +844,13 @@ const getApprovalSummary = async (req, res) => {
         awaitingReview: Number(
           summary.awaiting_review || 0
         ),
-        approvedMonth: Number(
+        // Returns today's approved correction count.
+        approvedToday: Number(
           summary.approved_month || 0
         ),
-        rejectedMonth: Number(
+
+        // Returns today's rejected correction count.
+        rejectedToday: Number(
           summary.rejected_month || 0
         ),
         averageTurnaroundHours: Number(
@@ -850,12 +869,114 @@ const getApprovalSummary = async (req, res) => {
     });
   }
 };
+// Returns the five most recently approved or rejected correction requests.
+const getCorrectionHistory = async (req, res) => {
+  try {
+    // Gets the logged-in user's role and ID.
+    const role = req.user.role;
+    const userId = req.user.id;
 
+    // Restricts Team Leads to requests from their assigned team and projects.
+    let scopeCondition = "";
+    const queryValues = [];
+
+    // Applies the same Team Lead visibility rules as the existing approvals API.
+    if (role === "teamLead") {
+      scopeCondition = `
+        AND u.team_lead_id = ?
+        AND EXISTS (
+          SELECT 1
+          FROM project_assignment pa
+          WHERE pa.project_id = cr.project_id
+            AND pa.user_id = ?
+        )
+      `;
+
+      // Supplies the Team Lead's ID for both scope conditions.
+      queryValues.push(userId, userId);
+    } else if (
+      role !== "coreTeam" &&
+      role !== "administrator"
+    ) {
+      // Blocks unauthorized roles from viewing correction history.
+      return res.status(403).json({
+        success: false,
+        message: "You are not allowed to view correction history",
+      });
+    }
+
+    // Fetches the latest five reviewed correction requests.
+    const [requests] = await db.query(
+      `
+        SELECT
+          cr.request_id,
+          p.project_name,
+          CONCAT_WS(
+          ' / ',
+          tlrc.name,
+          rc.name
+          ) AS reporting_category,
+          DATE_FORMAT(cr.production_date, '%Y-%m-%d') AS production_date,
+          cr.field_name,
+          cr.old_value,
+          cr.new_value,
+          u.full_name AS employee_name,
+          UPPER(cs.code) AS status,
+          DATE_FORMAT(cr.approved_at, '%Y-%m-%d %H:%i:%s') AS reviewed_at
+
+        FROM correction_request cr
+
+        JOIN correction_status cs
+          ON cs.status_id = cr.status_id
+
+        JOIN users u
+          ON u.user_id = cr.requested_by
+
+        JOIN project p
+          ON p.project_id = cr.project_id
+
+        LEFT JOIN daily_entry de
+          ON de.entry_id = cr.entry_id
+
+        LEFT JOIN reporting_category rc
+          ON rc.category_id = de.category_id
+          AND rc.role_type = 'indexer'
+
+        LEFT JOIN reporting_category tlrc
+          ON tlrc.category_id = de.team_lead_category_id
+          AND tlrc.role_type = 'teamLead'
+
+        WHERE cs.code IN ('approved', 'rejected')
+          ${scopeCondition}
+
+        ORDER BY cr.approved_at DESC, cr.request_id DESC
+      `,
+      queryValues
+    );
+
+    // Returns the history records to the frontend.
+    return res.status(200).json({
+      success: true,
+      count: requests.length,
+      requests,
+    });
+  } catch (error) {
+    // Logs unexpected database errors.
+    console.error("Get Correction History Error:", error);
+
+    // Returns a safe error response.
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load correction history",
+    });
+  }
+};
 
 module.exports = {
   getPendingApprovals,
   getApprovalSummary,
   approveCorrectionRequest,
   rejectCorrectionRequest,
+  getCorrectionHistory,
 };
 

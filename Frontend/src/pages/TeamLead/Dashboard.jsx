@@ -156,14 +156,27 @@ function CompletionSplit({ split, loading }) {
     );
   }
 
-  const completed = split?.completed ?? 0;
-  const pending = split?.pending ?? 0;
-  const inReview = split?.inReview ?? 0;
-  const total = completed + pending + inReview || 1;
+  // Gets the completed documents, including submitted entries.
+  const completed = Number(split?.completed ?? 0);
+
+  // Gets the pending documents.
+  const pending = Number(split?.pending ?? 0);
+
+  // Gets submitted documents awaiting review.
+  const inReview = Number(split?.inReview ?? 0);
+
+  // Separates reviewed work from submitted work to prevent double-counting.
+  const reviewedCompleted = Math.max(completed - inReview, 0);
+
+  // Calculates the total without counting any documents twice.
+  const total = reviewedCompleted + inReview + pending || 1;
+
+  // Gets the completion percentage from the backend.
   const pct = split?.completionPct ?? 0;
 
+  // Creates mutually exclusive donut segments.
   const DONUT = [
-    { label: "Completed", value: completed, color: "#20a36b" },
+    { label: "Completed", value: reviewedCompleted, color: "#20a36b" },
     { label: "Pending", value: pending, color: "#e09a20" },
     { label: "In review", value: inReview, color: "#3478ed" },
   ];
@@ -409,17 +422,17 @@ function ProjectDailySummaryTable({
               {/* Display Reporting Category with the same layout as Admin. */}
               <Typography
                 sx={{
-                  fontFamily: FONT,          
-                  fontSize: 13,               
-                  fontWeight: 500,            
-                  color: HEAD,               
-                  minWidth: 0,               
-                  width: "100%",             
-                  whiteSpace: "normal",      
+                  fontFamily: FONT,
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: HEAD,
+                  minWidth: 0,
+                  width: "100%",
+                  whiteSpace: "normal",
                   overflowWrap: "break-word",
-                  lineHeight: 1.6,           
-                  pr: 3,                     
-                  boxSizing: "border-box",   
+                  lineHeight: 1.6,
+                  pr: 3,
+                  boxSizing: "border-box",
                 }}
               >
                 {row.categoryName || "Uncategorized"}

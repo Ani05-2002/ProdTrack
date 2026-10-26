@@ -8,6 +8,7 @@ const {
   getApprovalSummary,
   approveCorrectionRequest,
   rejectCorrectionRequest,
+  getCorrectionHistory,
 
 } = require("../../controllers/teamLead/approvalController");
 
@@ -17,10 +18,10 @@ router.get(
   "/approvals",
   authenticate,
   allowRoles(
-      "teamLead",
-      "coreTeam",
-      "administrator"
-    ),
+    "teamLead",
+    "coreTeam",
+    "administrator"
+  ),
   getPendingApprovals
 );
 
@@ -45,13 +46,19 @@ router.patch("/approvals/:id/reject", ...rejectCorrection);
 router.get(
   "/approvals/summary",
   authenticate,
-    allowRoles(
+  allowRoles(
     "teamLead",
     "coreTeam",
     "administrator"
   ),
   getApprovalSummary
 );
-
+// Returns the latest five approved or rejected correction requests.
+router.get(
+  "/approvals/history",
+  authenticate,
+  allowRoles("teamLead", "coreTeam", "administrator"),
+  getCorrectionHistory
+);
 module.exports = router;
 

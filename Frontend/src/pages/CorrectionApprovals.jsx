@@ -541,10 +541,17 @@ function CorrectionsCoreTeam({
   const toast = useToast();
   const { confirm, ConfirmElement } = useConfirm();
   const [rows, setRows] = useState([]);
+  const [correctionHistory, setCorrectionHistory] = useState([]);
+  // Tracks the current page of correction history.
+  const [historyPage, setHistoryPage] = useState(0);
+
+  // Displays five history records per page.
+  const HISTORY_ROWS_PER_PAGE = 5;
+  // Stores the daily correction approval statistics.
   const [approvalSummary, setApprovalSummary] = useState({
     awaitingReview: 0,
-    approvedMonth: 0,
-    rejectedMonth: 0,
+    approvedToday: 0,
+    rejectedToday: 0,
     averageTurnaroundHours: 0,
   });
   const [correctionPage, setCorrectionPage] = useState(0);
@@ -564,8 +571,10 @@ function CorrectionsCoreTeam({
       try {
         const data = await apiRequest("/team-lead/approvals");
 
+        // Maps correction requests, including their reporting categories.
         const backendRows = (data.requests || []).map((request) => [
           request.project_name,
+          request.reporting_category || "—",
           request.production_date,
           request.field_name,
           `${request.old_value ?? "—"} → ${request.new_value ?? "—"}`,
@@ -583,6 +592,21 @@ function CorrectionsCoreTeam({
 
     loadPendingRequests();
   }, [roleKey]);
+
+  // Loads the latest five approved or rejected correction requests.
+  const loadCorrectionHistory = async () => {
+    try {
+      // Fetches correction history from the backend.
+      const data = await apiRequest("/team-lead/approvals/history");
+
+      // Saves the latest five records in component state.
+      setCorrectionHistory(data.requests || []);
+    } catch (error) {
+      // Logs errors without interrupting the existing approvals page.
+      console.error("Load correction history error:", error);
+      toast.error(error.message);
+    }
+  };
 
   const loadApprovalSummary = async () => {
     if (
@@ -607,10 +631,11 @@ function CorrectionsCoreTeam({
 
   useEffect(() => {
     loadApprovalSummary();
+    loadCorrectionHistory();
   }, [roleKey]);
 
   const updateStatus = async (rowIndex, newStatus) => {
-    const requestId = rows[rowIndex]?.[6];
+    const requestId = rows[rowIndex]?.[7];
 
     if (!requestId) {
       toast.warning("Correction request ID is missing");
@@ -620,7 +645,8 @@ function CorrectionsCoreTeam({
     const isDanger = newStatus === "REJECTED";
     const confirmed = await confirm({
       title: newStatus === "APPROVED" ? "Approve correction?" : "Reject correction?",
-      message: `${newStatus === "APPROVED" ? "Approve" : "Reject"} the correction request from ${rows[rowIndex]?.[4] || "this employee"}?`,
+      // Displays the correct employee name in the confirmation dialog.
+      message: `${newStatus === "APPROVED" ? "Approve" : "Reject"} the correction request from ${rows[rowIndex]?.[5] || "this employee"}?`,
       confirmLabel: newStatus === "APPROVED" ? "Approve" : "Reject",
       danger: isDanger,
     });
@@ -646,16 +672,18 @@ function CorrectionsCoreTeam({
         }
       );
 
+      // Updates the status without changing the reporting category or request ID.
       setRows((currentRows) =>
         currentRows.map((row, index) =>
           index === rowIndex
-            ? [...row.slice(0, 5), newStatus, row[6]]
+            ? [...row.slice(0, 6), newStatus, row[7]]
             : row
         )
       );
 
       toast.success(data.message);
       await loadApprovalSummary();
+      await loadCorrectionHistory();
     } catch (error) {
       console.error("Update correction status error:", error);
       toast.error(error.message);
@@ -679,21 +707,21 @@ function CorrectionsCoreTeam({
     },
     {
       icon: <CheckCircleRoundedIcon />,
-      label: "Approved (mo.)",
-      value: approvalSummary.approvedMonth,
+      label: "Approved (today)",
+      value: approvalSummary.approvedToday,
       background: "#e2f6ec",
       iconColor: "#087a4d",
     },
     {
       icon: <CancelRoundedIcon />,
-      label: "Rejected (mo.)",
-      value: approvalSummary.rejectedMonth,
+      label: "Rejected (today)",
+      value: approvalSummary.rejectedToday,
       background: "#fde8e8",
       iconColor: "#b42318",
     },
     {
       icon: <AccessTimeRoundedIcon />,
-      label: "Avg. turnaround",
+      label: "Avg. turnaround (today)",
       value: `${approvalSummary.averageTurnaroundHours}h`,
       background: "#eaf1ff",
       iconColor: "#2f6df6",
@@ -858,6 +886,7 @@ function CorrectionsCoreTeam({
               <TableRow sx={{ backgroundColor: "#f8fafc" }}>
                 {[
                   "PROJECT",
+                  "REPORTING CATEGORY",
                   "PROD. DATE",
                   "FIELD",
                   "OLD → NEW",
@@ -883,117 +912,135 @@ function CorrectionsCoreTeam({
             <TableBody>
               {rows.slice(correctionPage * CORRECTION_ROWS_PER_PAGE, (correctionPage + 1) * CORRECTION_ROWS_PER_PAGE).map((row, rowIndex) => {
                 const globalIndex = correctionPage * CORRECTION_ROWS_PER_PAGE + rowIndex;
-                return (<TableRow key={row[6] || `${row[0]}-${rowIndex}`} hover>
-                  <TableCell>{row[0]}</TableCell>
+                return (
+                  <TableRow key={row[7] || `${row[0]}-${rowIndex}`} hover>
 
-                  <TableCell>{row[1]}</TableCell>
+                    {/* Project name */}
+                    <TableCell>{row[0]}</TableCell>
 
-                  <TableCell>
-                    {row[2] === "docs_completed"
-                      ? "Documents Completed"
-                      : row[2] === "batches_processed"
-                        ? "Batches Processed"
-                        : row[2]}
-                  </TableCell>
+                    {/* Reporting category */}
+                    <TableCell>{row[1]}</TableCell>
 
-                  <TableCell sx={{ color: "#6A7585" }}>{row[3]}</TableCell>
+                    {/* Production date */}
+                    <TableCell>{row[2]}</TableCell>
 
-                  <TableCell>
-                    <Box
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 1,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      <Avatar
-                        sx={{
-                          width: 32,
-                          height: 32,
-                          bgcolor: "#5b5ce2",
-                          color: "#ffffff",
-                          fontSize: 11,
-                          fontWeight: 800,
-                        }}
-                      >
-                        {row[4]
-                          .split(" ")
-                          .map((name) => name[0])
-                          .join("")
-                          .slice(0, 2)
-                          .toUpperCase()}
-                      </Avatar>
+                    {/* Correction field */}
+                    <TableCell>
+                      {row[3] === "docs_completed"
+                        ? "Documents Completed"
+                        : row[3] === "batches_processed"
+                          ? "Batches Processed"
+                          : row[3]}
+                    </TableCell>
 
-                      <Typography
-                        sx={{
-                          fontSize: 13,
-                          color: "#1A2434",
-                        }}
-                      >
-                        {row[4]}
-                      </Typography>
-                    </Box>
-                  </TableCell>
+                    {/* Old and new values */}
+                    <TableCell sx={{ color: "#6A7585" }}>
+                      {row[4]}
+                    </TableCell>
 
-                  <TableCell>
-                    <Chip
-                      label={row[5]}
-                      size="small"
-                      sx={{
-                        ...statusColors[row[5]],
-                        height: 25,
-                        fontSize: 10,
-                        fontWeight: 800,
-                      }}
-                    />
-                  </TableCell>
-
-                  <TableCell>
-                    {row[5] === "PENDING" && (
+                    {/* Employee who requested the correction */}
+                    <TableCell>
                       <Box
                         sx={{
                           display: "flex",
                           alignItems: "center",
-                          gap: 0.7,
+                          gap: 1,
+                          whiteSpace: "nowrap",
                         }}
                       >
-                        <Button
-                          variant="contained"
-                          size="small"
-                          onClick={() => updateStatus(globalIndex, "APPROVED")}
+                        <Avatar
                           sx={{
-                            minWidth: 84,
-                            height: 38,
-                            borderRadius: "10px",
-                            textTransform: "none",
-                            fontWeight: 700,
-                            boxShadow: "none",
+                            width: 32,
+                            height: 32,
+                            bgcolor: "#5b5ce2",
+                            color: "#ffffff",
+                            fontSize: 11,
+                            fontWeight: 800,
                           }}
                         >
-                          Approve
-                        </Button>
+                          {String(row[5] || "")
+                            .split(" ")
+                            .filter(Boolean)
+                            .map((name) => name[0])
+                            .join("")
+                            .slice(0, 2)
+                            .toUpperCase()}
+                        </Avatar>
 
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          onClick={() => updateStatus(globalIndex, "REJECTED")}
+                        <Typography
                           sx={{
-                            minWidth: 70,
-                            height: 38,
-                            borderRadius: "10px",
-                            textTransform: "none",
-                            color: "#17233a",
-                            borderColor: "#dbe3ec",
-                            fontWeight: 500,
+                            fontSize: 13,
+                            color: "#1A2434",
                           }}
                         >
-                          Reject
-                        </Button>
+                          {row[5]}
+                        </Typography>
                       </Box>
-                    )}
-                  </TableCell>
-                </TableRow>
+                    </TableCell>
+
+                    {/* Correction status */}
+                    <TableCell>
+                      <Chip
+                        label={row[6]}
+                        size="small"
+                        sx={{
+                          ...statusColors[row[6]],
+                          height: 25,
+                          fontSize: 10,
+                          fontWeight: 800,
+                        }}
+                      />
+                    </TableCell>
+
+                    {/* Approve and Reject actions */}
+                    <TableCell>
+                      {row[6] === "PENDING" && (
+                        <Box
+                          sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 0.7,
+                          }}
+                        >
+                          {/* Approve button */}
+                          <Button
+                            variant="contained"
+                            size="small"
+                            onClick={() => updateStatus(globalIndex, "APPROVED")}
+                            sx={{
+                              minWidth: 84,
+                              height: 38,
+                              borderRadius: "10px",
+                              textTransform: "none",
+                              fontWeight: 700,
+                              boxShadow: "none",
+                            }}
+                          >
+                            Approve
+                          </Button>
+
+                          {/* Reject button */}
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={() => updateStatus(globalIndex, "REJECTED")}
+                            sx={{
+                              minWidth: 70,
+                              height: 38,
+                              borderRadius: "10px",
+                              textTransform: "none",
+                              color: "#17233a",
+                              borderColor: "#dbe3ec",
+                              fontWeight: 500,
+                            }}
+                          >
+                            Reject
+                          </Button>
+                        </Box>
+                      )}
+                    </TableCell>
+
+                  </TableRow>
                 );
               })}
             </TableBody>
@@ -1008,6 +1055,205 @@ function CorrectionsCoreTeam({
             <Button size="small" disabled={correctionPage >= Math.ceil(rows.length / CORRECTION_ROWS_PER_PAGE) - 1} onClick={() => setCorrectionPage((p) => p + 1)} sx={{ minWidth: 28, height: 28, p: 0, fontSize: 16, color: "#6A7585" }}>›</Button>
           </Box>
         )}
+        {/* Displays the five most recently reviewed correction requests. */}
+        <Box sx={{ mt: 3 }}>
+          {/* History section heading. */}
+          <Typography
+            sx={{
+              fontSize: 17,
+              fontWeight: 800,
+              color: "#1A2434",
+              mb: 0.5,
+            }}
+          >
+            Recent Correction History
+          </Typography>
+
+          {/* Explains which records appear in the history. */}
+          <Typography
+            sx={{
+              fontSize: 12.5,
+              color: "#6A7585",
+              mb: 2,
+            }}
+          >
+            Latest 5 approved or rejected correction requests.
+          </Typography>
+
+          {/* History table container. */}
+          <TableContainer
+            component={Paper}
+            elevation={0}
+            sx={{
+              border: "1px solid #dbe3ec",
+              borderRadius: "12px",
+              overflowX: "auto",
+            }}
+          >
+            <Table size="small" sx={{ minWidth: 1150 }}>
+              {/* History table headings. */}
+              <TableHead>
+                <TableRow sx={{ backgroundColor: "#f8fafc" }}>
+                  {[
+                    "PROJECT",
+                    "REPORTING CATEGORY", // Displays the reporting category column.
+                    "PROD. DATE",
+                    "FIELD",
+                    "OLD → NEW",
+                    "REQUESTED BY",
+                    "STATUS",
+                    "REVIEWED AT",
+                  ].map((heading) => (
+                    <TableCell
+                      key={heading}
+                      sx={{
+                        py: 1.5,
+                        color: "#6A7585",
+                        fontSize: 11,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {heading}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              </TableHead>
+
+              {/* History table records. */}
+              <TableBody>
+                {/* Displays only the correction history records for the current page. */}
+                {correctionHistory
+                  .slice(
+                    historyPage * HISTORY_ROWS_PER_PAGE,
+                    (historyPage + 1) * HISTORY_ROWS_PER_PAGE
+                  )
+                  .map((request) => (
+                    <TableRow key={request.request_id} hover>
+                      {/* Project name. */}
+                      <TableCell>{request.project_name}</TableCell>
+
+                      <TableCell>{request.reporting_category || "—"}</TableCell>
+
+                      {/* Production date. */}
+                      <TableCell>{request.production_date}</TableCell>
+
+                      {/* Human-readable corrected field. */}
+                      <TableCell>
+                        {request.field_name === "docs_completed"
+                          ? "Documents Completed"
+                          : request.field_name === "batches_processed"
+                            ? "Batches Processed"
+                            : request.field_name}
+                      </TableCell>
+
+                      {/* Original and requested values. */}
+                      <TableCell sx={{ color: "#6A7585" }}>
+                        {request.old_value ?? "—"} → {request.new_value ?? "—"}
+                      </TableCell>
+
+                      {/* Employee who requested the correction. */}
+                      <TableCell>{request.employee_name}</TableCell>
+
+                      {/* Approved or rejected status. */}
+                      <TableCell>
+                        <Chip
+                          label={request.status}
+                          size="small"
+                          sx={{
+                            ...correctionStatusStyles[request.status],
+                            height: 25,
+                            fontSize: 10,
+                            fontWeight: 800,
+                          }}
+                        />
+                      </TableCell>
+
+                      {/* Date and time of the review. */}
+                      <TableCell>{request.reviewed_at || "—"}</TableCell>
+                    </TableRow>
+                  ))}
+
+                {/* Displays a message when no reviewed corrections exist. */}
+                {correctionHistory.length === 0 && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={8}
+                      align="center"
+                      sx={{ py: 4, color: "#6A7585" }}
+                    >
+                      No approved or rejected correction requests found.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+
+          {/* Pagination controls for Recent Correction History. */}
+          {correctionHistory.length > 0 && (
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-end",
+                gap: 1,
+                px: 2,
+                py: 1,
+                border: "1px solid #dbe3ec",
+                borderTop: "none",
+                borderRadius: "0 0 12px 12px",
+                backgroundColor: "#fff",
+              }}
+            >
+              {/* Displays the current range and total history records. */}
+              <Typography sx={{ fontSize: 12, color: "#6A7585" }}>
+                {historyPage * HISTORY_ROWS_PER_PAGE + 1}–
+                {Math.min(
+                  (historyPage + 1) * HISTORY_ROWS_PER_PAGE,
+                  correctionHistory.length
+                )}{" "}
+                of {correctionHistory.length}
+              </Typography>
+
+              {/* Previous page button. */}
+              <Button
+                size="small"
+                disabled={historyPage === 0}
+                onClick={() => setHistoryPage((page) => page - 1)}
+                sx={{
+                  minWidth: 28,
+                  height: 28,
+                  p: 0,
+                  fontSize: 16,
+                  color: "#6A7585",
+                }}
+              >
+                ‹
+              </Button>
+
+              {/* Next page button. */}
+              <Button
+                size="small"
+                disabled={
+                  historyPage >=
+                  Math.ceil(correctionHistory.length / HISTORY_ROWS_PER_PAGE) - 1
+                }
+                onClick={() => setHistoryPage((page) => page + 1)}
+                sx={{
+                  minWidth: 28,
+                  height: 28,
+                  p: 0,
+                  fontSize: 16,
+                  color: "#6A7585",
+                }}
+              >
+                ›
+              </Button>
+            </Box>
+          )}
+
+        </Box>
+
       </CorePageShell>
       {ConfirmElement}
     </>

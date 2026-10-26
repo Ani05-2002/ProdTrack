@@ -18,8 +18,8 @@ const calculateProductivity = ({
 
     return hours > 0
       ? Number(
-          (batches / hours).toFixed(2)
-        )
+        (batches / hours).toFixed(2)
+      )
       : 0;
   }
 
@@ -33,9 +33,9 @@ const calculateProductivity = ({
 
   return totalReceived > 0
     ? Math.round(
-        (totalCompleted / totalReceived) *
-          100
-      )
+      (totalCompleted / totalReceived) *
+      100
+    )
     : 0;
 };
 
@@ -51,11 +51,10 @@ const getMyReportSummary = async (
     const userId = req.user.id;
     const role = req.user.role;
 
-    const period =
-      req.query.period === "month"
-        ? "month"
-        : "week";
-
+    // Accept daily, weekly, and monthly report periods.
+    const period = ["day", "week", "month"].includes(req.query.period)
+      ? req.query.period
+      : "week";
     const rawProjectId =
       req.query.projectId;
 
@@ -64,13 +63,13 @@ const getMyReportSummary = async (
 
     const projectId =
       rawProjectId &&
-      rawProjectId !== "all"
+        rawProjectId !== "all"
         ? Number(rawProjectId)
         : null;
 
     const employeeId =
       rawEmployeeId &&
-      rawEmployeeId !== "all"
+        rawEmployeeId !== "all"
         ? Number(rawEmployeeId)
         : null;
 
@@ -207,9 +206,10 @@ const getMyReportSummary = async (
       role === "coreTeam" ||
       role === "administrator"
     ) {
+      // Include Team Lead received counts and Indexer completed counts.
       const conditions = [
         "u.status = 'active'",
-        "r.code = 'indexer'",
+        "r.code IN ('indexer', 'lead')",
         dateCondition,
       ];
 
@@ -284,11 +284,11 @@ const getMyReportSummary = async (
     const completionRate =
       totalReceived > 0
         ? Math.round(
-            (
-              totalCompleted /
-              totalReceived
-            ) * 100
-          )
+          (
+            totalCompleted /
+            totalReceived
+          ) * 100
+        )
         : 0;
 
     return res.status(200).json({
@@ -327,10 +327,10 @@ const getMyDailyProduction = async (
     const userId = req.user.id;
     const role = req.user.role;
 
-    const period =
-      req.query.period === "month"
-        ? "month"
-        : "week";
+    // Accept daily, weekly, and monthly report periods.
+    const period = ["day", "week", "month"].includes(req.query.period)
+      ? req.query.period
+      : "week";
 
     const rawProjectId =
       req.query.projectId;
@@ -340,13 +340,13 @@ const getMyDailyProduction = async (
 
     const projectId =
       rawProjectId &&
-      rawProjectId !== "all"
+        rawProjectId !== "all"
         ? Number(rawProjectId)
         : null;
 
     const employeeId =
       rawEmployeeId &&
-      rawEmployeeId !== "all"
+        rawEmployeeId !== "all"
         ? Number(rawEmployeeId)
         : null;
 
@@ -515,9 +515,10 @@ const getMyDailyProduction = async (
       role === "coreTeam" ||
       role === "administrator"
     ) {
+      // Include both roles in daily production totals.
       const conditions = [
         "u.status = 'active'",
-        "r.code = 'indexer'",
+        "r.code IN ('indexer', 'lead')",
         dateCondition,
       ];
 
@@ -624,10 +625,10 @@ const getEmployeeProduction = async (
     const userId = req.user.id;
     const role = req.user.role;
 
-    const period =
-      req.query.period === "month"
-        ? "month"
-        : "week";
+    // Accept daily, weekly, and monthly report periods.
+    const period = ["day", "week", "month"].includes(req.query.period)
+      ? req.query.period
+      : "week";
 
     const rawProjectId =
       req.query.projectId;
@@ -637,13 +638,13 @@ const getEmployeeProduction = async (
 
     const projectId =
       rawProjectId &&
-      rawProjectId !== "all"
+        rawProjectId !== "all"
         ? Number(rawProjectId)
         : null;
 
     const employeeId =
       rawEmployeeId &&
-      rawEmployeeId !== "all"
+        rawEmployeeId !== "all"
         ? Number(rawEmployeeId)
         : null;
 
@@ -934,11 +935,10 @@ const getEmployeeProduction = async (
                   AND
                   a.approved_by IS NOT NULL
 
-                THEN ${
-                  excludeApprovedLeave
-                    ? 0
-                    : 8
-                }
+                THEN ${excludeApprovedLeave
+          ? 0
+          : 8
+        }
 
                 ELSE COALESCE(
                   a.hours,
@@ -969,59 +969,110 @@ const getEmployeeProduction = async (
         `,
         queryValues
       );
+    // Identify the start of the selected reporting period.
+    const now = new Date();
+    const periodStart = new Date(now);
 
+    if (period === "month") {
+      // Start from the first day of the current month.
+      periodStart.setDate(1);
+    } else if (period === "week") {
+      // Start from Monday of the current week.
+      periodStart.setDate(
+        now.getDate() - ((now.getDay() + 6) % 7)
+      );
+    }
+
+    // Reset the period start to midnight.
+    periodStart.setHours(0, 0, 0, 0);
+
+    // Count elapsed working days, excluding Sundays.
+    let workingDays = 0;
+    const currentDay = new Date(periodStart);
+
+    while (currentDay <= now) {
+      if (currentDay.getDay() !== 0) {
+        workingDays += 1;
+      }
+
+      currentDay.setDate(currentDay.getDate() + 1);
+    }
+
+    // Get the IDs of employees returned by the existing report.
+    const employeeIds = employees.map((employee) => employee.id);
+
+    // Store each employee's combined daily project target.
+    const targetByEmployee = new Map();
+
+    if (employeeIds.length > 0) {
+      // Load targets from each employee's assigned projects.
+      const [targetRows] = await db.query(
+        `
+      SELECT
+        pa.user_id,
+        COALESCE(SUM(p.daily_target), 0) AS dailyTarget
+      FROM (
+        SELECT DISTINCT user_id, project_id
+        FROM project_assignment
+      ) pa
+      JOIN project p
+        ON p.project_id = pa.project_id
+      WHERE pa.user_id IN (?)
+        AND (? IS NULL OR p.project_id = ?)
+      GROUP BY pa.user_id
+    `,
+        [employeeIds, projectId, projectId]
+      );
+
+      // Map combined daily targets to individual employees.
+      targetRows.forEach((row) => {
+        targetByEmployee.set(
+          Number(row.user_id),
+          Number(row.dailyTarget || 0)
+        );
+      });
+    }
     const productivityUnit =
       baseMetric ===
-      "batches_processed"
+        "batches_processed"
         ? "batches/hour"
         : "%";
 
-    const employeesWithProductivity =
-      employees.map(
-        (employee) => ({
-          ...employee,
+    // Calculate employee productivity against assigned project targets.
+    const employeesWithProductivity = employees.map((employee) => {
+      // Combine the daily targets of assigned projects.
+      const dailyTarget =
+        targetByEmployee.get(Number(employee.id)) || 0;
 
-          received: Number(
-            employee.received || 0
-          ),
+      // Calculate the target for elapsed working days.
+      const target = dailyTarget * workingDays;
 
-          completed: Number(
-            employee.completed || 0
-          ),
+      // Read the actual completed documents.
+      const completed = Number(employee.completed || 0);
 
-          pending: Number(
-            employee.pending || 0
-          ),
+      // Calculate documents remaining against the target.
+      const targetRemaining = Math.max(target - completed, 0);
 
-          batchesProcessed: Number(
-            employee.batchesProcessed ||
-              0
-          ),
+      // Calculate productivity; null means no target is configured.
+      const productivity =
+        target > 0
+          ? Number(((completed / target) * 100).toFixed(2))
+          : null;
 
-          availableHours: Number(
-            employee.availableHours || 0
-          ),
-
-          productivity:
-            calculateProductivity({
-              baseMetric,
-
-              received:
-                employee.received,
-
-              completed:
-                employee.completed,
-
-              batchesProcessed:
-                employee.batchesProcessed,
-
-              availableHours:
-                employee.availableHours,
-            }),
-
-          productivityUnit,
-        })
-      );
+      return {
+        ...employee,
+        received: Number(employee.received || 0),
+        completed,
+        pending: Number(employee.pending || 0),
+        batchesProcessed: Number(employee.batchesProcessed || 0),
+        availableHours: Number(employee.availableHours || 0),
+        dailyTarget,
+        target,
+        targetRemaining,
+        productivity,
+        productivityUnit: "%",
+      };
+    });
 
     return res.status(200).json({
       success: true,
@@ -1067,20 +1118,20 @@ const getProjectProduction = async (req, res) => {
     const userId = req.user.id;
     const role = req.user.role;
 
-    const period =
-      req.query.period === "month"
-        ? "month"
-        : "week";
+    // Accept daily, weekly, and monthly report periods.
+    const period = ["day", "week", "month"].includes(req.query.period)
+      ? req.query.period
+      : "week";
 
     const projectId =
       req.query.projectId &&
-      req.query.projectId !== "all"
+        req.query.projectId !== "all"
         ? Number(req.query.projectId)
         : null;
 
     const employeeId =
       req.query.employeeId &&
-      req.query.employeeId !== "all"
+        req.query.employeeId !== "all"
         ? Number(req.query.employeeId)
         : null;
 
@@ -1129,8 +1180,9 @@ const getProjectProduction = async (req, res) => {
       role === "coreTeam" ||
       role === "administrator"
     ) {
+      // Include Team Lead and Indexer production in project totals.
       conditions.push(
-        "r.code = 'indexer'",
+        "r.code IN ('indexer', 'lead')",
         "u.status = 'active'"
       );
     } else {
@@ -1266,20 +1318,20 @@ const getCorrectionReport = async (
     const userId = req.user.id;
     const role = req.user.role;
 
-    const period =
-      req.query.period === "month"
-        ? "month"
-        : "week";
+    // Accept daily, weekly, and monthly report periods.
+    const period = ["day", "week", "month"].includes(req.query.period)
+      ? req.query.period
+      : "week";
 
     const projectId =
       req.query.projectId &&
-      req.query.projectId !== "all"
+        req.query.projectId !== "all"
         ? Number(req.query.projectId)
         : null;
 
     const employeeId =
       req.query.employeeId &&
-      req.query.employeeId !== "all"
+        req.query.employeeId !== "all"
         ? Number(req.query.employeeId)
         : null;
 
@@ -1435,6 +1487,152 @@ const getCorrectionReport = async (
   }
 };
 // ======================================================
+// ALL DAILY ENTRIES REPORT — ADMIN / CORE TEAM
+// ======================================================
+
+const getAllDailyEntriesReport = async (req, res) => {
+  try {
+    // Allow only Administrator and Core Team.
+    const role = req.user.role;
+
+    if (!["administrator", "coreTeam"].includes(role)) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied",
+      });
+    }
+
+
+    // Read optional project and employee filters.
+    const projectId =
+      req.query.projectId && req.query.projectId !== "all"
+        ? Number(req.query.projectId)
+        : null;
+
+    const employeeId =
+      req.query.employeeId && req.query.employeeId !== "all"
+        ? Number(req.query.employeeId)
+        : null;
+
+    // Validate the supplied filter IDs.
+    if (
+      (projectId !== null &&
+        (!Number.isInteger(projectId) || projectId <= 0)) ||
+      (employeeId !== null &&
+        (!Number.isInteger(employeeId) || employeeId <= 0))
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid project or employee ID",
+      });
+    }
+
+    // Include all historical entries from Indexers and Team Leads.
+    const conditions = [
+      "r.code IN ('indexer', 'lead')",
+    ];
+
+    // Store parameterized SQL filter values.
+    const queryValues = [];
+
+    // Apply the project filter when selected.
+    if (projectId !== null) {
+      conditions.push("de.project_id = ?");
+      queryValues.push(projectId);
+    }
+
+    // Apply the employee filter when selected.
+    if (employeeId !== null) {
+      conditions.push("de.user_id = ?");
+      queryValues.push(employeeId);
+    }
+
+    // Fetch each daily entry with its creator, project and categories.
+    const [entries] = await db.query(
+      `
+      SELECT
+        de.entry_id AS id,
+        de.user_id AS employee_id,
+        u.full_name AS employee_name,
+        u.emp_code AS employee_code,
+        r.code AS employee_role,
+        p.project_name,
+
+        DATE_FORMAT(
+          de.production_date,
+          '%Y-%m-%d'
+        ) AS production_date,
+
+        tlrc.name AS team_lead_category,
+        rc.name AS indexer_category,
+
+        CONCAT_WS(
+          ' / ',
+          tlrc.name,
+          rc.name
+        ) AS reporting_category,
+
+
+        de.docs_received AS received,
+        de.docs_completed AS completed,
+        de.batches_processed AS batches_processed,
+        de.remarks AS notes,
+
+        es.code AS status,
+        es.name AS status_name
+
+      FROM daily_entry de
+
+      JOIN users u
+        ON u.user_id = de.user_id
+
+      JOIN role r
+        ON r.role_id = u.role_id
+
+      JOIN project p
+        ON p.project_id = de.project_id
+
+      JOIN entry_status es
+        ON es.status_id = de.status_id
+
+
+      LEFT JOIN reporting_category rc
+        ON rc.category_id = de.category_id
+        AND rc.role_type = 'indexer'
+
+      LEFT JOIN reporting_category tlrc
+        ON tlrc.category_id = COALESCE(
+        de.team_lead_category_id,
+        de.category_id
+        )
+        AND tlrc.role_type = 'teamLead'
+
+      WHERE ${conditions.join(" AND ")}
+
+      ORDER BY
+        de.production_date DESC,
+        de.entry_id DESC
+      `,
+      queryValues
+    );
+
+    // Return all matching individual daily entries.
+    return res.status(200).json({
+      success: true,
+      count: entries.length,
+      entries,
+    });
+  } catch (error) {
+    // Log errors for backend troubleshooting.
+    console.error("All Daily Entries Report Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load all daily entries",
+    });
+  }
+};
+// ======================================================
 // PRODUCTION DATE CONDITION
 // ======================================================
 
@@ -1442,6 +1640,13 @@ const getProductionDateCondition = (
   period,
   alias = "de"
 ) => {
+  // Filter production records for today's date only.
+  if (period === "day") {
+    return `
+      ${alias}.production_date >= CURDATE()
+      AND ${alias}.production_date < DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+    `;
+  }
   if (period === "month") {
     return `
       ${alias}.production_date >=
@@ -1488,6 +1693,13 @@ const getAttendanceDateCondition = (
   period,
   alias = "a"
 ) => {
+  // Filter attendance records for today's date only.
+  if (period === "day") {
+    return `
+      ${alias}.att_date >= CURDATE()
+      AND ${alias}.att_date < DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+    `;
+  }
   if (period === "month") {
     return `
       ${alias}.att_date >=
@@ -1532,4 +1744,5 @@ module.exports = {
   getEmployeeProduction,
   getProjectProduction,
   getCorrectionReport,
+  getAllDailyEntriesReport,
 };

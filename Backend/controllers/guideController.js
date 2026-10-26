@@ -1539,7 +1539,7 @@ const createGuide = async (req, res) => {
     if (!version || !req.file) {
       return res.status(400).json({
         success: false,
-       message: "Version and PDF, Word, or Excel file are required",
+        message: "Version and PDF, Word, or Excel file are required",
       });
     }
 
@@ -1665,6 +1665,229 @@ const createGuide = async (req, res) => {
 
 
 // ======================================================
+// PREVIEW GUIDE FILE
+// ======================================================
+
+// Imports filesystem promises for secure file validation.
+const fsPromises = require("fs/promises");
+
+// Sends an authorized PDF guide for inline browser viewing.
+const previewGuide = async (req, res, next) => {
+  try {
+    // Validate the requested guide version.
+    const versionId = Number(req.params.versionId);
+
+    if (!Number.isSafeInteger(versionId) || versionId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid guide version ID",
+      });
+    }
+
+    // Identify the logged-in user and their role.
+    const userId = req.user.id;
+    const role = req.user.role;
+
+    // Determine whether the user has management permissions.
+    const isManager = ["coreTeam", "administrator"].includes(role);
+
+    // Get the guide version and its project.
+    const [rows] = await db.query(
+      `
+       SELECT
+         gv.version_id,
+         gv.file_path,
+         gv.is_latest,
+         g.project_id,
+         p.status AS project_status
+       FROM guide_version gv
+       JOIN guide g ON g.guide_id = gv.guide_id
+       JOIN project p ON p.project_id = g.project_id
+       WHERE gv.version_id = ?
+       LIMIT 1
+       `,
+      [versionId]
+    );
+
+    // Reject missing guide versions.
+    if (rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Guide version not found",
+      });
+    }
+
+    const guide = rows[0];
+
+    // Indexers and Team Leads may preview only
+    // the latest guide for an active assigned project.
+    if (!isManager) {
+      if (!["indexer", "teamLead"].includes(role)) {
+        return res.status(403).json({
+          success: false,
+          message: "Guide preview access denied",
+        });
+      }
+
+      if (
+        Number(guide.is_latest) !== 1 ||
+        guide.project_status !== "active"
+      ) {
+        return res.status(403).json({
+          success: false,
+          message: "This guide is not the latest active version",
+        });
+      }
+
+      // Verify that this project is assigned to the user.
+      const [assignments] = await db.query(
+        `
+         SELECT assignment_id
+         FROM project_assignment
+         WHERE project_id = ?
+           AND user_id = ?
+         LIMIT 1
+         `,
+        [guide.project_id, userId]
+      );
+
+      if (assignments.length === 0) {
+        return res.status(403).json({
+          success: false,
+          message: "This project is not assigned to you",
+        });
+      }
+    }
+
+    // Verify that the guide has a stored file.
+    if (!guide.file_path) {
+      return res.status(404).json({
+        success: false,
+        message: "Guide file is missing",
+      });
+    }
+
+    // Define the allowed guide storage directory.
+    const backendRoot = path.resolve(__dirname, "..");
+    const guideDirectory = path.join(
+      backendRoot,
+      "uploads",
+      "guides"
+    );
+
+    // Resolve the database file path.
+    const requestedFile = path.resolve(
+      backendRoot,
+      guide.file_path
+    );
+
+    // Check whether a file is inside the permitted directory.
+    const isInside = (directory, file) => {
+      const relative = path.relative(directory, file);
+
+      return (
+        relative !== "" &&
+        relative !== ".." &&
+        !relative.startsWith(`..${path.sep}`) &&
+        !path.isAbsolute(relative)
+      );
+    };
+
+    // Reject path traversal attempts.
+    if (!isInside(guideDirectory, requestedFile)) {
+      return res.status(403).json({
+        success: false,
+        message: "Invalid guide file location",
+      });
+    }
+
+    // Resolve real paths to reject symlinks outside storage.
+    const realDirectory = await fsPromises.realpath(guideDirectory);
+    const realFile = await fsPromises.realpath(requestedFile);
+
+    if (!isInside(realDirectory, realFile)) {
+      return res.status(403).json({
+        success: false,
+        message: "Invalid guide file location",
+      });
+    }
+
+    // Confirm that the file exists and is a regular file.
+    const stats = await fsPromises.stat(realFile);
+
+    if (!stats.isFile()) {
+      return res.status(404).json({
+        success: false,
+        message: "Guide file not found",
+      });
+    }
+
+    // This viewer supports PDF files only.
+     // Gets the original uploaded guide extension.
+    const extension = path.extname(realFile).toLowerCase();
+
+    // Maps PDF, Word, and Excel extensions to their MIME types.
+    const mimeTypes = {
+      ".pdf": "application/pdf",
+      ".doc": "application/msword",
+      ".docx":
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ".xls": "application/vnd.ms-excel",
+      ".xlsx":
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    };
+
+    // Rejects file formats outside the supported upload types.
+    if (!mimeTypes[extension]) {
+      return res.status(415).json({
+        success: false,
+        message: "Unsupported guide file format",
+      });
+    }
+
+    // Disables caching and sends the original document MIME type.
+    res.set({
+      "Cache-Control": "private, no-store",
+      "Pragma": "no-cache",
+      "X-Content-Type-Options": "nosniff",
+      "Content-Type": mimeTypes[extension],
+      "Content-Disposition":
+        `inline; filename="guide-${versionId}${extension}"`,
+    });
+
+    // Sends the original guide without triggering a download.
+    return res.sendFile(realFile, (error) => {
+      // Stops when the file has been sent successfully.
+      if (!error) return;
+
+      // Forwards errors if response headers have already been sent.
+      if (res.headersSent) {
+        return next(error);
+      }
+
+      // Returns an error when the guide cannot be sent.
+      return res.status(500).json({
+        success: false,
+        message: "Failed to preview guide",
+      });
+    });
+  } catch (error) {
+    // Handle missing files separately from server errors.
+    const missingFile = ["ENOENT", "ENOTDIR"].includes(error.code);
+
+    console.error("Preview Guide Error:", error);
+
+    return res.status(missingFile ? 404 : 500).json({
+      success: false,
+      message: missingFile
+        ? "Guide file not found"
+        : "Failed to preview guide",
+    });
+  }
+};
+
+
+// ======================================================
 // EXPORTS
 // ======================================================
 
@@ -1674,6 +1897,7 @@ module.exports = {
   acknowledgeGuide,
   getGuideHistory,
   downloadGuide,
+  previewGuide,
   getGuideManagerList,
   getGuideCompliance,
   uploadGuideVersion,

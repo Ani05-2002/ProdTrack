@@ -1991,6 +1991,7 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
   const toast = useToast();
   const [projects, setProjects] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [editingEntryStatus, setEditingEntryStatus] = useState(null);
   // Stores the calculated Received, Completed and Pending totals for the selected project/date.
   const [projectSummary, setProjectSummary] = useState({
     projectName: "",
@@ -2167,11 +2168,12 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
   }, [loadEntries]);
 
   const handleEditEntry = (entry) => {
-    if (saving || entry.status !== "DRAFT") return;
+    if (saving || !["DRAFT", "SUBMITTED"].includes(entry.status)) return;
 
     const original = entry.raw;
 
     setEditingEntryId(entry.id);
+    setEditingEntryStatus(entry.status);
 
     // Loads only the fields used by the Team Lead form while editing.
     setFormData({
@@ -2234,6 +2236,11 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
       return;
     }
 
+    const statusToSend =
+      editingEntryId !== null && editingEntryStatus === "SUBMITTED"
+        ? "submitted"
+        : status;
+
     setSaving(true);
 
     try {
@@ -2253,7 +2260,7 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
             documentsPending: numbers.documentsPending,
             batchesPending: numbers.batchesPending,
             notes: formData.notes,
-            status,
+            status: statusToSend,
           }),
         });
 
@@ -2263,6 +2270,7 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
 
       toast.success(`${data.message}. Entry ID: ${data.entryId}`);
       setEditingEntryId(null);
+      setEditingEntryStatus(null);
       await loadEntries();
       // Refreshes the project summary after saving the Team Lead daily entry.
       await loadProjectSummary();
@@ -2290,7 +2298,7 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
     <Box sx={{ width: "100%" }}>
       {editingEntryId !== null && (
         <Typography sx={{ mb: 2, color: "#2563eb", fontWeight: 600 }}>
-          Editing draft #{editingEntryId} — click Save draft to update it.
+          Editing {editingEntryStatus?.toLowerCase()} entry #{editingEntryId}
         </Typography>
       )}
       {/* =================================================
@@ -2376,28 +2384,17 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
             variant="outlined"
             type="button"
             onClick={() => handleSaveEntry("draft")}
-            disabled={saving || projects.length === 0}
+            disabled={saving}
             sx={{
-              bgcolor: "#fff",
-              color: "#173b66",
-              borderColor: "#dbe3ec",
-              textTransform: "none",
-              fontSize: 14,
-              fontWeight: 600,
-              borderRadius: "10px",
-              px: 2.25,
-              height: 46,
-              minWidth: {
-                xs: 0,
-                sm: 125,
-              },
-              flex: {
-                xs: 1,
-                sm: "unset",
-              },
+              // Keep your existing button styling here.
             }}
           >
-            {saving ? "Saving..." : "Save draft"}
+            {/* Displays the appropriate label for the entry status. */}
+            {saving
+              ? "Saving..."
+              : editingEntryStatus === "SUBMITTED"
+                ? "Save changes"
+                : "Save draft"}
           </Button>
 
           <Button
@@ -3076,7 +3073,7 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
                   />
                 </TableCell>
                 <TableCell sx={{ py: 0.8 }}>
-                  {entry.status === "DRAFT" && (
+                  {["DRAFT", "SUBMITTED"].includes(entry.status) && (
                     <Button
                       size="small"
                       variant="outlined"

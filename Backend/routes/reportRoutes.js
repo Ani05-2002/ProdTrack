@@ -9,6 +9,7 @@ const {
   getEmployeeProduction,
   getProjectProduction,
   getCorrectionReport,
+  getAllDailyEntriesReport,
 } = require("../controllers/reportController");
 
 const router = express.Router();
@@ -18,11 +19,11 @@ router.get(
   "/my-summary",
   authenticate,
   allowRoles(
-  "indexer",
-  "teamLead",
-  "coreTeam",
-  "administrator"
-),
+    "indexer",
+    "teamLead",
+    "coreTeam",
+    "administrator"
+  ),
   getMyReportSummary
 );
 
@@ -31,11 +32,11 @@ router.get(
   "/my-daily-production",
   authenticate,
   allowRoles(
-  "indexer",
-  "teamLead",
-  "coreTeam",
-  "administrator"
-),
+    "indexer",
+    "teamLead",
+    "coreTeam",
+    "administrator"
+  ),
   getMyDailyProduction
 );
 
@@ -43,11 +44,11 @@ router.get(
   "/employee-production",
   authenticate,
   allowRoles(
-  "indexer",
-  "teamLead",
-  "coreTeam",
-  "administrator"
-),
+    "indexer",
+    "teamLead",
+    "coreTeam",
+    "administrator"
+  ),
   getEmployeeProduction
 );
 
@@ -76,7 +77,14 @@ router.get(
   ),
   getCorrectionReport
 );
-
+// Fetch all Indexer and Team Lead Daily Entries.
+// Only Administrator and Core Team can access this API.
+router.get(
+  "/all-daily-entries",
+  authenticate,
+  allowRoles("administrator", "coreTeam"),
+  getAllDailyEntriesReport
+);
 
 
 module.exports = router;

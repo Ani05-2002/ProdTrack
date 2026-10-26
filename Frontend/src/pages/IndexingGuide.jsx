@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import apiRequest, { apiDownload } from "../lib/api.js";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
+import GuideViewer from "../components/GuideViewer.jsx";
 import {
   Box,
   Typography,
@@ -23,6 +24,7 @@ import {
 
 import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
 import FileDownloadRoundedIcon from "@mui/icons-material/FileDownloadRounded";
+
 
 const FONT =
   '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
@@ -52,6 +54,7 @@ export default function IndexingGuide({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [downloading, setDownloading] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [history, setHistory] = useState([]);
@@ -519,11 +522,11 @@ export default function IndexingGuide({
             Version history
           </Button>
 
+          {/* Opens the uploaded guide in a popup instead of downloading it. */}
           <Button
             variant="contained"
-            onClick={handleDownload}
-            disabled={downloading}
-            startIcon={<DownloadRoundedIcon />}
+            onClick={() => setPreviewOpen(true)}
+            disabled={!guide?.version_id}
             sx={{
               height: 36,
               borderRadius: "8px",
@@ -534,7 +537,7 @@ export default function IndexingGuide({
               "&:hover": { backgroundColor: "#2458cf", boxShadow: "none" },
             }}
           >
-            {downloading ? "Downloading..." : "Download"}
+            View Guide
           </Button>
         </Box>
       </Box>
@@ -899,6 +902,13 @@ export default function IndexingGuide({
           </Button>
         </DialogActions>
       </Dialog>
+      <GuideViewer
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        versionId={guide?.version_id}
+        title={guide?.name || "Indexing Guide"}
+        filePath={guide?.file_path || ""}
+      />
       {ConfirmElement}
     </Box>
   );

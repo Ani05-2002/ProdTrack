@@ -161,65 +161,124 @@ const getTeamProductivity = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // 3. COMPLETION SPLIT (donut)   GET /api/team-lead/dashboard/completion-split
 // ─────────────────────────────────────────────────────────────────────────────
+// Calculates completion split using the new Daily Entry workflow.
 const getCompletionSplit = async (req, res) => {
   try {
+    // Gets the logged-in Team Lead.
     const teamLeadId = req.user.id;
-    const memberIds = await getTeamMemberIds(teamLeadId);
 
-    if (memberIds.length === 0) {
+    // Gets the projects assigned to this Team Lead.
+    const [projectRows] = await db.query(
+      `
+      SELECT DISTINCT project_id
+      FROM project_assignment
+      WHERE user_id = ?
+      `,
+      [teamLeadId]
+    );
+
+    // Returns zero totals when no projects are assigned.
+    if (projectRows.length === 0) {
       return res.status(200).json({
         success: true,
-        completionSplit: { received: 0, completed: 0, pending: 0, inReview: 0, completionPct: 0 },
+        completionSplit: {
+          received: 0,
+          completed: 0,
+          pending: 0,
+          inReview: 0,
+          completionPct: 0,
+        },
       });
     }
 
-    const placeholders = memberIds.map(() => "?").join(",");
+    // Creates SQL placeholders for assigned projects.
+    const projectIds = projectRows.map((row) => row.project_id);
+    const placeholders = projectIds.map(() => "?").join(",");
 
-    // all-time totals per status
-    const [rows] = await db.query(
-      `SELECT
-     COALESCE(SUM(de.docs_received), 0) AS received,
-
-     COALESCE(
-       SUM(
-         CASE
-           WHEN es.code IN ('reviewed', 'locked')
-           THEN de.docs_completed
-           ELSE 0
-         END
-       ), 0
-     ) AS completed,
-
-     COALESCE(
-       SUM(
-         CASE
-           WHEN es.code = 'submitted'
-           THEN de.docs_completed
-           ELSE 0
-         END
-       ), 0
-     ) AS in_review
-
-   FROM daily_entry de
-   JOIN entry_status es
-     ON es.status_id = de.status_id
-   WHERE de.user_id IN (${placeholders})`,
-      memberIds
+    // Gets documents received from Team Lead Daily Entries.
+    const [receivedRows] = await db.query(
+      `
+      SELECT COALESCE(SUM(de.docs_received), 0) AS received
+      FROM daily_entry de
+      JOIN users u ON u.user_id = de.user_id
+      JOIN role r ON r.role_id = u.role_id
+      JOIN entry_status es ON es.status_id = de.status_id
+      WHERE de.project_id IN (${placeholders})
+        AND u.user_id = ?
+        AND r.code IN ('teamLead', 'team_lead', 'lead')
+        AND es.code IN ('submitted', 'reviewed', 'locked')
+      `,
+      [...projectIds, teamLeadId]
     );
 
-    const received = Number(rows[0].received);
-    const completed = Number(rows[0].completed);
-    const inReview = Number(rows[0].in_review);
-    const pending = Math.max(received - completed, 0);
-    const completionPct = received > 0 ? Math.round((completed / received) * 100) : 0;
+    // Gets completed and in-review documents from Indexer Daily Entries.
+    const [indexerRows] = await db.query(
+      `
+      SELECT
+        COALESCE(SUM(
+          CASE
+            WHEN es.code IN ('submitted', 'reviewed', 'locked')
+            THEN de.docs_completed
+            ELSE 0
+          END
+        ), 0) AS completed,
 
+        COALESCE(SUM(
+          CASE
+            WHEN es.code = 'submitted'
+            THEN de.docs_completed
+            ELSE 0
+          END
+        ), 0) AS in_review
+
+      FROM daily_entry de
+      JOIN users u ON u.user_id = de.user_id
+      JOIN role r ON r.role_id = u.role_id
+      JOIN entry_status es ON es.status_id = de.status_id
+
+      WHERE de.project_id IN (${placeholders})
+        AND u.team_lead_id = ?
+        AND r.code = 'indexer'
+        AND es.code IN ('submitted', 'reviewed', 'locked')
+      `,
+      [...projectIds, teamLeadId]
+    );
+
+    // Converts SQL totals to numbers.
+    const received = Number(receivedRows[0].received || 0);
+    const completed = Number(indexerRows[0].completed || 0);
+    const inReview = Number(indexerRows[0].in_review || 0);
+
+    // Calculates work that is neither completed nor awaiting review.
+   const pending = Math.max(received - completed, 0);
+
+    // Calculates the completion percentage against received documents.
+    const completionPct =
+      received > 0
+        ? Math.round((Math.min(completed, received) / received) * 100)
+        : 0;
+
+    // Returns the updated Completion Split data.
     return res.status(200).json({
       success: true,
-      completionSplit: { received, completed, pending, inReview, completionPct },
+      completionSplit: {
+        received,
+        completed,
+        pending,
+        inReview,
+        completionPct,
+      },
     });
   } catch (err) {
+    // Logs backend errors for debugging.
     console.error("Completion Split Error:", err);
-    return res.status(500).json({ success: false, message: "Failed to load completion split", error: err.message });
+
+    // Returns the API error response.
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load completion split",
+      error: err.message,
+    });
   }
 };
 
