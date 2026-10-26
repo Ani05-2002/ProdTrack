@@ -23,11 +23,15 @@ import { useToast } from "../components/ToastProvider.jsx";
 // ============================================================
 
 // Maps backend role IDs to the labels already used by the Users UI.
+// Available roles and their actual database IDs.
 const roleOptions = [
   { label: "Indexer", value: "1" },
-  { label: "Team Lead", value: "2" },
-  { label: "Core Team", value: "3" },
-  { label: "Administrator", value: "4" },
+  { label: "Team Leader", value: "2" },
+  { label: "Assistant Manager", value: "5" },
+  { label: "Manager", value: "3" },
+  { label: "Operations Manager", value: "6" },
+  { label: "HR", value: "7" },
+  { label: "Admin", value: "4" },
 ];
 
 // Converts a role ID into the text shown in the form.
@@ -49,15 +53,22 @@ const getRoleIdFromLabel = (label) => {
 };
 
 // Converts backend role codes into the uppercase labels shown in the table.
+// Converts database role codes into readable labels.
 const getRoleDisplayLabel = (role) => {
   const roleLabels = {
     indexer: "INDEXER",
-    lead: "TEAM LEAD",
-    core: "CORE TEAM",
-    admin: "ADMINISTRATOR",
+    lead: "TEAM LEADER",
+    core: "MANAGER", // Supports legacy Core Team records.
+    assistant_manager: "ASSISTANT MANAGER",
+    manager: "MANAGER",
+    operations_manager: "OPERATIONS MANAGER",
+    hr: "HR",
+    admin: "ADMIN",
   };
 
-  return roleLabels[role] || String(role || "").toUpperCase();
+  // Show the mapped label or a fallback for unknown roles.
+  return roleLabels[String(role || "").toLowerCase()]
+    || String(role || "").toUpperCase();
 };
 
 

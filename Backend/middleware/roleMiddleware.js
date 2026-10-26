@@ -1,16 +1,31 @@
 // Maps legacy/raw DB role codes to the canonical role keys used in allowRoles().
 // This handles old tokens that were signed before the roleKeyMap was applied,
 // or databases where role.code is stored differently.
+// Maps database role codes to existing permission groups.
 const ROLE_ALIASES = {
+  indexer: "indexer",
+
   lead: "teamLead",
   team_lead: "teamLead",
   teamlead: "teamLead",
+
+  // Legacy Core Team roles remain supported.
   core: "coreTeam",
   core_team: "coreTeam",
   coreteam: "coreTeam",
+
+  // All three management roles share Core Team permissions.
+  assistant_manager: "coreTeam",
+  assistantmanager: "coreTeam",
+  manager: "coreTeam",
+  operations_manager: "coreTeam",
+  operationsmanager: "coreTeam",
+
+  // HR has no management permissions yet.
+  hr: "hr",
+
   admin: "administrator",
   administrator: "administrator",
-  indexer: "indexer",
 };
 
 const normalizeRole = (role) => {

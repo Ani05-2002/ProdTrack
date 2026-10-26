@@ -13,7 +13,19 @@ const TEAM_LEAD_ROLE_SQL = `(
   )
 )`;
 
-const CORE_TEAM_ROLE_SQL = `(${ROLE_CODE_SQL} IN ('core', 'core_team', 'coreteam'))`;
+// Includes legacy Core Team and all three new management roles.
+const CORE_TEAM_ROLE_SQL = `(
+  ${ROLE_CODE_SQL} IN (
+    'core',
+    'core_team',
+    'coreteam',
+    'assistant_manager',
+    'assistantmanager',
+    'manager',
+    'operations_manager',
+    'operationsmanager'
+  )
+)`;
 
 const ADMIN_ROLE_SQL = `(${ROLE_CODE_SQL} IN ('admin', 'administrator'))`;
 
@@ -31,7 +43,21 @@ const normalizeRoleCode = (code) => {
 
   if (key === "indexer") return "indexer";
   if (["lead", "team_lead", "teamlead"].includes(key)) return "lead";
-  if (["core", "core_team", "coreteam"].includes(key)) return "core";
+  // Normalizes management designations to the existing Core Team group.
+  if (
+    [
+      "core",
+      "core_team",
+      "coreteam",
+      "assistant_manager",
+      "assistantmanager",
+      "manager",
+      "operations_manager",
+      "operationsmanager",
+    ].includes(key)
+  ) {
+    return "core";
+  }
   if (["admin", "administrator"].includes(key)) return "admin";
   return key;
 };

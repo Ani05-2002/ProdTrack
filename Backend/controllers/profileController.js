@@ -37,6 +37,10 @@ const getMyProfile = async (req, res) => {
           WHEN 'indexer' THEN 'indexer'
           WHEN 'lead' THEN 'teamLead'
           WHEN 'core' THEN 'coreTeam'
+          WHEN 'assistant_manager' THEN 'coreTeam'
+          WHEN 'manager' THEN 'coreTeam'
+          WHEN 'operations_manager' THEN 'coreTeam'
+          WHEN 'hr' THEN 'hr'
           WHEN 'admin' THEN 'administrator'
           ELSE r.code
         END AS roleKey,
@@ -76,8 +80,8 @@ const getMyProfile = async (req, res) => {
 
     // Gets projects directly assigned to an Indexer
     if (role === "indexer") {
-    [projects] = await db.query(
-  `
+      [projects] = await db.query(
+        `
       SELECT
         p.project_id AS id,
         p.project_id,
@@ -103,8 +107,8 @@ const getMyProfile = async (req, res) => {
 
       ORDER BY p.project_name ASC
       `,
-      [userId]
-    );
+        [userId]
+      );
     }
 
     // Gets projects handled by members of the Team Lead's team

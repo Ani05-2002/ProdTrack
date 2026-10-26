@@ -9,16 +9,30 @@ const { getAppSetting } = require("../utils/appSettings");
 
 const { sendError } = require("../utils/httpError");
 
+// Maps database role codes to existing application role permissions.
 const roleKeyMap = {
+  // Existing Indexer role.
   indexer: "indexer",
+
+  // Existing Team Leader role.
   lead: "teamLead",
   team_lead: "teamLead",
   teamlead: "teamLead",
-  teamLead: "teamLead",
+
+  // Legacy Core Team roles.
   core: "coreTeam",
   core_team: "coreTeam",
   coreteam: "coreTeam",
-  coreTeam: "coreTeam",
+
+  // New management roles share the Core Team dashboard.
+  assistant_manager: "coreTeam",
+  manager: "coreTeam",
+  operations_manager: "coreTeam",
+
+  // HR has its own restricted role.
+  hr: "hr",
+
+  // Existing Admin role.
   admin: "administrator",
   administrator: "administrator",
 };

@@ -867,7 +867,11 @@ const updateUser = async (req, res) => {
     // --------------------------------------------------------
     // Validate role
     // --------------------------------------------------------
+    // Debug the role ID received from the User Master frontend.
+    console.log("UPDATE USER - Received roleId:", roleId);
 
+    // Debug the data type of the received role ID.
+    console.log("UPDATE USER - Role ID type:", typeof roleId);
     if (roleId !== undefined) {
       const [roleRows] = await db.query(
         `

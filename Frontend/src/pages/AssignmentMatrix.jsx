@@ -62,6 +62,29 @@ const ROLE_STYLE = {
     border: "#bcd2ff",
   },
 
+  // Display separate badges for the three management roles.
+  Manager: {
+    label: "MANAGER",
+    bg: "#eaf1ff",
+    color: "#2458c7",
+    border: "#bcd2ff",
+  },
+
+  "Assistant Manager": {
+    label: "ASSISTANT MANAGER",
+    bg: "#eaf1ff",
+    color: "#2458c7",
+    border: "#bcd2ff",
+  },
+
+  "Operations Manager": {
+    label: "OPERATIONS MANAGER",
+    bg: "#eaf1ff",
+    color: "#2458c7",
+    border: "#bcd2ff",
+  },
+
+  // Keep this entry for older Core Team data.
   "Core Team": {
     label: "CORE TEAM",
     bg: "#eaf1ff",
@@ -87,24 +110,33 @@ const AVATAR_COLORS = [
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 // Converts backend role codes into the same role labels used by the original UI.
+// Convert actual database role codes into readable role names.
 function getRoleLabel(role) {
   const roleMap = {
     indexer: "Indexer",
-    INDEXER: "Indexer",
     lead: "Team Lead",
-    TEAM_LEAD: "Team Lead",
     team_lead: "Team Lead",
     teamLead: "Team Lead",
+    TEAM_LEAD: "Team Lead",
+
+    // New management role labels.
+    manager: "Manager",
+    assistant_manager: "Assistant Manager",
+    operations_manager: "Operations Manager",
+
+    // Keep legacy Core Team values supported.
     core: "Core Team",
-    CORE_TEAM: "Core Team",
     core_team: "Core Team",
     coreTeam: "Core Team",
+    CORE_TEAM: "Core Team",
+
     admin: "Administrator",
-    ADMIN: "Administrator",
     administrator: "Administrator",
+    hr: "HR",
   };
 
-  return roleMap[role] || roleMap[String(role || "").toLowerCase()] || "Indexer";
+  // Return the correct label or a fallback for unknown roles.
+  return roleMap[role] || roleMap[String(role || "").toLowerCase()] || "Unknown";
 }
 
 
@@ -148,7 +180,7 @@ function RoleChip({ role }) {
       sx={{
         display: "inline-flex",
         alignItems: "center",
-        px: 1.2,
+        py: 1.1,
         py: "3px",
         borderRadius: "5px",
         bgcolor: s.bg,
@@ -208,9 +240,9 @@ function AccessDot({
         "&:hover": locked
           ? {}
           : {
-              transform:
-                "scale(1.35)",
-            },
+            transform:
+              "scale(1.35)",
+          },
       }}
     />
   );
@@ -347,7 +379,7 @@ function MobileUserCard({
               <AccessDot
                 on={
                   user.access[
-                    pi
+                  pi
                   ] || false
                 }
                 locked={locked}
@@ -458,10 +490,7 @@ function AssignmentMatrixPage({
               name: user.name,
 
               // Converts backend role code into the original visible role label.
-              role:
-                getRoleLabel(
-                  user.role
-                ),
+              role: getRoleLabel(user.role_code ?? user.roleCode ?? user.role),
 
               // Stores whether this row can be manually edited.
               editable:
@@ -507,7 +536,7 @@ function AssignmentMatrixPage({
         // Shows the backend load error through the existing Snackbar style.
         setErrorMessage(
           error.message ||
-            "Failed to load assignment matrix"
+          "Failed to load assignment matrix"
         );
       }
     };
@@ -562,7 +591,7 @@ function AssignmentMatrixPage({
                   projectIndex
                 ) =>
                   projectIndex ===
-                  projIdx
+                    projIdx
                     ? !value
                     : value
               ),
@@ -613,7 +642,7 @@ function AssignmentMatrixPage({
                       ) =>
                         user
                           .access[
-                          projectIndex
+                        projectIndex
                         ]
                     )
                     .map(
@@ -653,7 +682,7 @@ function AssignmentMatrixPage({
         // Shows the backend message when save fails.
         setErrorMessage(
           error.message ||
-            "Failed to save assignment changes"
+          "Failed to save assignment changes"
         );
       } finally {
         // Ends save state whether the request succeeds or fails.
@@ -665,11 +694,8 @@ function AssignmentMatrixPage({
   // ─── Dynamic desktop grid ──────────────────────────────────────────────────
 
   // Keeps the original User + Role columns and adds one equal-width column per live project.
-  const desktopGridColumns =
-    `2fr 1.2fr repeat(${Math.max(
-      projects.length,
-      1
-    )}, 1fr)`;
+  // Give the user and role columns consistent widths.
+  const desktopGridColumns = `200px 170px repeat(${Math.max(projects.length, 1)}, minmax(90px, 1fr))`;
 
 
   // ─── Render ────────────────────────────────────────────────────────────────
@@ -855,9 +881,9 @@ function AssignmentMatrixPage({
                 minWidth:
                   Math.max(
                     640,
-                    300 +
-                      projects.length *
-                        105
+                    370 +
+                    projects.length *
+                    90
                   ),
               }}
             >
@@ -941,10 +967,10 @@ function AssignmentMatrixPage({
                       borderTop:
                         `1px solid ${LINE2}`,
                       "&:hover":
-                        {
-                          bgcolor:
-                            "#fafbff",
-                        },
+                      {
+                        bgcolor:
+                          "#fafbff",
+                      },
                     }}
                   >
                     {/* USER - keeps the original avatar/name design. */}
@@ -963,8 +989,8 @@ function AssignmentMatrixPage({
                           height: 32,
                           bgcolor:
                             AVATAR_COLORS[
-                              ui %
-                                AVATAR_COLORS.length
+                            ui %
+                            AVATAR_COLORS.length
                             ],
                           fontSize:
                             12,
@@ -1064,8 +1090,8 @@ function AssignmentMatrixPage({
                 }
                 avatarColor={
                   AVATAR_COLORS[
-                    ui %
-                      AVATAR_COLORS.length
+                  ui %
+                  AVATAR_COLORS.length
                   ]
                 }
                 projects={
@@ -1161,7 +1187,7 @@ export default function AssignmentMatrix(
     <AssignmentMatrixPage
       roleLabel={
         labelMap[
-          props.roleKey
+        props.roleKey
         ] ??
         "Administrator"
       }

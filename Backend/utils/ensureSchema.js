@@ -2,17 +2,21 @@ const { writeLog } = require("./fileLogger");
 const { SEES_ALL_PROJECTS_SQL } = require("./roleSql");
 
 const ensureProjectVisibility = async (db) => {
+  // Keep global project visibility enabled for Admin and management roles.
   await db.query(`
-    UPDATE role
-    SET sees_all_projects = 1
-    WHERE LOWER(REPLACE(REPLACE(code, '-', '_'), ' ', '')) IN (
-      'admin',
-      'administrator',
-      'core',
-      'core_team',
-      'coreteam'
-    )
-  `);
+  UPDATE role
+  SET sees_all_projects = 1
+  WHERE LOWER(REPLACE(REPLACE(code, '-', '_'), ' ', '')) IN (
+    'admin',
+    'administrator',
+    'core',
+    'core_team',
+    'coreteam',
+    'assistant_manager',
+    'manager',
+    'operations_manager'
+  )
+`);
 
   // phpMyAdmin dumps shipped a stub view: SELECT 1 AS user_id, 1 AS project_id.
   // That hid every real project outside Project Master.

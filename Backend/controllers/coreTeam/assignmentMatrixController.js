@@ -170,9 +170,10 @@ const getAssignmentMatrix = async (req, res) => {
         accessType = "direct";
       }
 
-
-      // Core Team always has access to everything.
-      else if (role === "core") {
+      // All three management roles receive global Core Team project access.
+      else if (
+        ["core", "assistant_manager", "manager", "operations_manager"].includes(role)
+      ) {
         projectIds = [...allProjectIds];
 
         editable = false;
@@ -192,18 +193,20 @@ const getAssignmentMatrix = async (req, res) => {
       projectIds.sort((a, b) => a - b);
 
 
+      // Return each user's actual business role alongside their permission-group role.
       return {
         id: user.id,
         employee_id: user.employee_id,
         name: user.name,
 
+        // Keep the existing normalized role for backward compatibility.
         role,
 
-        team_lead_id:
-          user.team_lead_id,
+        // Send the actual database role code for displaying the correct badge.
+        role_code: user.role,
 
+        team_lead_id: user.team_lead_id,
         project_ids: projectIds,
-
         editable,
         accessType,
       };
