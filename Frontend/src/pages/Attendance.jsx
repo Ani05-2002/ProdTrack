@@ -194,7 +194,6 @@ export default function Attendance({ roleLabel = "Indexer", roleKey, }) {
 
   // Pagination state for the three tables.
   const [attendancePage, setAttendancePage] = useState(0);
-  const [teamLeavePage, setTeamLeavePage] = useState(0);
   const [myLeavePage, setMyLeavePage] = useState(0);
   const ROWS_PER_PAGE = 10;
   const [leaveErrors, setLeaveErrors] = useState({
@@ -207,17 +206,6 @@ export default function Attendance({ roleLabel = "Indexer", roleKey, }) {
   const [leaveRequests, setLeaveRequests] = useState([]);
   const [leaveLoading, setLeaveLoading] = useState(true);
   const [leaveError, setLeaveError] = useState("");
-  const [teamLeaveRequests, setTeamLeaveRequests] =
-  useState([]);
-
-  const [teamLeaveLoading, setTeamLeaveLoading] =
-    useState(false);
-
-  const [teamLeaveError, setTeamLeaveError] =
-    useState("");
-
-  const [reviewingLeaveId, setReviewingLeaveId] =
-    useState(null);
 
   const loadLeaveRequests = useCallback(async () => {
   setLeaveLoading(true);
@@ -238,70 +226,7 @@ export default function Attendance({ roleLabel = "Indexer", roleKey, }) {
   }
 }, []);
 
-const loadTeamLeaveRequests = useCallback(
-  async () => {
-    setTeamLeaveLoading(true);
-    setTeamLeaveError("");
 
-    try {
-      const data = await apiRequest(
-        "/team-lead/leave-requests"
-      );
-
-      setTeamLeaveRequests(
-        data.requests || []
-      );
-    } catch (error) {
-      setTeamLeaveError(
-        error.message ||
-          "Failed to load team leave requests"
-      );
-    } finally {
-      setTeamLeaveLoading(false);
-    }
-  },
-  []
-);
-
-useEffect(() => {
-  if (roleKey === "teamLead") {
-    loadTeamLeaveRequests();
-  }
-}, [roleKey, loadTeamLeaveRequests]);
-
-const handleLeaveDecision = async (
-  requestId,
-  decision
-) => {
-  if (reviewingLeaveId !== null) return;
-
-  setReviewingLeaveId(requestId);
-
-  try {
-    const data = await apiRequest(
-      `/team-lead/leave-requests/${requestId}/${decision}`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          reviewComment: "",
-        }),
-      }
-    );
-
-    toast.success(data.message);
-
-    setTeamLeaveRequests((current) =>
-      current.filter(
-        (request) =>
-          request.id !== requestId
-      )
-    );
-  } catch (error) {
-    toast.error(error.message);
-  } finally {
-    setReviewingLeaveId(null);
-  }
-};
 
 useEffect(() => {
   loadLeaveRequests();
@@ -895,172 +820,6 @@ useEffect(() => {
           </Box>
         )}
       </Paper>
-      {roleKey === "teamLead" && (
-  <Paper
-    elevation={0}
-    sx={{
-      mt: 3,
-      border: "1px solid #e5e7eb",
-      borderRadius: 1,
-      overflow: "hidden",
-    }}
-  >
-    <Box
-      sx={{
-        px: 2.5,
-        py: 2,
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        borderBottom: "1px solid #e5e7eb",
-      }}
-    >
-      <Typography
-        sx={{ fontSize: 16, fontWeight: 700 }}
-      >
-        Pending team leave requests
-      </Typography>
-
-      <Button
-        onClick={loadTeamLeaveRequests}
-        disabled={teamLeaveLoading}
-        sx={{ textTransform: "none" }}
-      >
-        Refresh
-      </Button>
-    </Box>
-
-    {teamLeaveError && (
-      <Alert severity="error" sx={{ m: 2 }}>
-        {teamLeaveError}
-      </Alert>
-    )}
-
-    <TableContainer>
-      <Table size="small" sx={{ minWidth: 850 }}>
-        <TableHead>
-          <TableRow sx={{ bgcolor: "#f8fafc" }}>
-            {[
-              "Employee",
-              "Leave type",
-              "From",
-              "To",
-              "Reason",
-              "Actions",
-            ].map((heading) => (
-              <TableCell
-                key={heading}
-                sx={{ fontWeight: 700 }}
-              >
-                {heading}
-              </TableCell>
-            ))}
-          </TableRow>
-        </TableHead>
-
-        <TableBody>
-          {teamLeaveLoading ? (
-            <TableRow>
-              <TableCell colSpan={6}>
-                Loading leave requests...
-              </TableCell>
-            </TableRow>
-          ) : teamLeaveRequests.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={6}>
-                No pending team leave requests.
-              </TableCell>
-            </TableRow>
-          ) : (
-          teamLeaveRequests.slice(teamLeavePage * ROWS_PER_PAGE, (teamLeavePage + 1) * ROWS_PER_PAGE).map((request) => (
-              <TableRow key={request.id}>
-                <TableCell>
-                  {request.employee_name}
-                  <Typography
-                    sx={{
-                      fontSize: 11,
-                      color: "#64748b",
-                    }}
-                  >
-                    {request.employee_id}
-                  </Typography>
-                </TableCell>
-
-                <TableCell>
-                  {request.leave_type}
-                </TableCell>
-
-                <TableCell>
-                  {request.start_date}
-                </TableCell>
-
-                <TableCell>
-                  {request.end_date}
-                </TableCell>
-
-                <TableCell>
-                  {request.reason}
-                </TableCell>
-
-                <TableCell>
-                  <Box
-                    sx={{
-                      display: "flex",
-                      gap: 1,
-                    }}
-                  >
-                    <Button
-                      size="small"
-                      variant="contained"
-                      color="success"
-                      disabled={
-                        reviewingLeaveId !== null
-                      }
-                      onClick={() =>
-                        handleLeaveDecision(
-                          request.id,
-                          "approve"
-                        )
-                      }
-                    >
-                      Approve
-                    </Button>
-
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      color="error"
-                      disabled={
-                        reviewingLeaveId !== null
-                      }
-                      onClick={() =>
-                        handleLeaveDecision(
-                          request.id,
-                          "reject"
-                        )
-                      }
-                    >
-                      Reject
-                    </Button>
-                  </Box>
-                </TableCell>
-              </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
-    </TableContainer>
-        {Math.ceil(teamLeaveRequests.length / ROWS_PER_PAGE) > 1 && (
-          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 1, px: 2, py: 1, borderTop: "1px solid #e5e7eb" }}>
-            <Typography sx={{ fontSize: 12, color: "#6A7585" }}>
-              {teamLeavePage * ROWS_PER_PAGE + 1}–{Math.min((teamLeavePage + 1) * ROWS_PER_PAGE, teamLeaveRequests.length)} of {teamLeaveRequests.length}
-            </Typography>
-            <Button size="small" disabled={teamLeavePage === 0} onClick={() => setTeamLeavePage((p) => p - 1)} sx={{ minWidth: 28, height: 28, p: 0, fontSize: 16 }}>‹</Button>
-            <Button size="small" disabled={teamLeavePage >= Math.ceil(teamLeaveRequests.length / ROWS_PER_PAGE) - 1} onClick={() => setTeamLeavePage((p) => p + 1)} sx={{ minWidth: 28, height: 28, p: 0, fontSize: 16 }}>›</Button>
-          </Box>
-        )}
-  </Paper>
-)}
       <Paper
         elevation={0}
         sx={{
