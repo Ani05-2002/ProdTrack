@@ -13,10 +13,10 @@ import { useToast } from "../components/ToastProvider.jsx";
 const FONT =
   '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 const CARD_SHADOW = "0 1px 3px rgba(16,30,54,.07), 0 4px 16px rgba(16,30,54,.06)";
-const LINE  = "#dfe4ec";
+const LINE = "#dfe4ec";
 const LINE2 = "#e8ecf3";
 const MUTED = "#6a7585";
-const HEAD  = "#1a2434";
+const HEAD = "#1a2434";
 
 
 const COLS = "1.4fr 1fr 1.4fr 1fr 1.2fr 1.8fr";
@@ -52,13 +52,13 @@ function GuideChip({ value }) {
 
 function StatusChip({ value }) {
   const present = value === "PRESENT";
-  const leave   = value === "LEAVE";
+  const leave = value === "LEAVE";
 
   const chipStyle = present
     ? { bgcolor: "#e4f6ee", color: "#177a53", border: "1.5px solid #b7e3cc" }
     : leave
-    ? { bgcolor: "#fdecea", color: "#c0392b", border: "1.5px solid #f5b7b1" }
-    : { bgcolor: "#f3f4f6", color: "#6a7585", border: `1.5px solid ${LINE}` };
+      ? { bgcolor: "#fdecea", color: "#c0392b", border: "1.5px solid #f5b7b1" }
+      : { bgcolor: "#f3f4f6", color: "#6a7585", border: `1.5px solid ${LINE}` };
 
   return (
     <Box
@@ -159,66 +159,65 @@ export default function MyTeam({ onNavigate }) {
   const [teamPage, setTeamPage] = useState(0);
   const TEAM_ROWS_PER_PAGE = 10;
 
-useEffect(() => {
-  const loadMyTeam = async () => {
-    try {
-      const data = await apiRequest("/team-lead/my-team");
+  useEffect(() => {
+    const loadMyTeam = async () => {
+      try {
+        const data = await apiRequest("/team-lead/my-team");
 
-      const avatarColors = [
-        "#4f73e3",
-        "#3aab8e",
-        "#5b5ce2",
-        "#e05a3a",
-        "#7c4dbd",
-      ];
+        const avatarColors = [
+          "#4f73e3",
+          "#3aab8e",
+          "#5b5ce2",
+          "#e05a3a",
+          "#7c4dbd",
+        ];
 
-      const formattedMembers = (data.members || []).map(
-        (member, index) => {
-          const memberName =
-            member.name || member.full_name || "";
+        const formattedMembers = (data.members || []).map(
+          (member, index) => {
+            const memberName =
+              member.name || member.full_name || "";
 
-          const initials = memberName
-            .split(" ")
-            .filter(Boolean)
-            .map((part) => part[0])
-            .join("")
-            .slice(0, 2)
-            .toUpperCase();
-            
+            const initials = memberName
+              .split(" ")
+              .filter(Boolean)
+              .map((part) => part[0])
+              .join("")
+              .slice(0, 2)
+              .toUpperCase();
+
             const attendanceStatus = String(
-            member.attendance_status ||
-                "NOT MARKED"
+              member.attendance_status || "ABSENT"
             ).toUpperCase();
 
-          return {
-            id: member.id || member.user_id,
-            initials,
-            name: memberName,
-            empId:
-              member.employee_id ||
-              member.employee_code ||
-              "—",
-            avatarColor:
-              avatarColors[index % avatarColors.length],
-            projects: member.projects || "—",
-            today: Number(member.today_completed || 0),
-            guide: String(
-              member.guide_acknowledgement || "DONE"
-            ).toUpperCase(),
-            status: attendanceStatus,
-          };
-        }
-      );
+            return {
+              id: member.id || member.user_id,
+              initials,
+              name: memberName,
+              empId:
+                member.employee_id ||
+                member.employee_code ||
+                "—",
+              avatarColor:
+                avatarColors[index % avatarColors.length],
+              projects: member.projects || "—",
+              today: Number(member.today_completed || 0),
+              guide: String(
+                member.guide_acknowledgement || "DONE"
+              ).toUpperCase(),
+              status: attendanceStatus,
+            };
+          }
+        );
 
-      setTeam(formattedMembers);
-    } catch (error) {
-      console.error("Load My Team Error:", error);
-      toast.error(error.message);
-    }
-  };
+        setTeam(formattedMembers);
+      } catch (error) {
+        console.error("Load My Team Error:", error);
+        toast.error(error.message);
+      }
+    };
 
-  loadMyTeam();
-}, [toast]);
+    loadMyTeam();
+  }, [toast]);
 
   return (
     <Box sx={{ width: "100%", boxSizing: "border-box" }}>
@@ -305,7 +304,7 @@ useEffect(() => {
         {/* data rows */}
         <Box sx={{ overflowX: "auto" }}>
           {team.slice(teamPage * TEAM_ROWS_PER_PAGE, (teamPage + 1) * TEAM_ROWS_PER_PAGE).map((member) => (
-         <MemberRow
+            <MemberRow
               key={member.id}
               {...member}
             />

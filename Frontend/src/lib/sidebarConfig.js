@@ -11,16 +11,24 @@ const common = [
 
 // Defines the original sidebar menu structure for every application role.
 export const sidebarConfig = {
+  // HR has its own navigation and restricted pages.
+  hr: [
+    { label: "Dashboard", icon: "🏠", page: "dashboard" },
+    { label: "Attendance", icon: "🗓️", page: "attendance" },
+    { label: "Our Team", icon: "👥", page: "our-team" },
+    { label: "Notifications", icon: "🔔", page: "notifications" },
+    { label: "My Profile", icon: "👤", page: "my-profile" },
+  ],
   indexer: [
     { label: "Dashboard", icon: "🏠", page: "dashboard" },
     { label: "Daily Entry", icon: "📝", page: "daily-entry" },
-     // Uncomment if the client wants the Projects page again.
-   // { label: "Projects", icon: "📁", page: "projects" },
+    // Uncomment if the client wants the Projects page again.
+    // { label: "Projects", icon: "📁", page: "projects" },
 
     // The NEW badge is now injected dynamically from Sidebar.jsx.
     { label: "Indexing Guide", icon: "📘", page: "indexing-guide" },
-     // Uncomment if the client wants the Reports page again.
-  //{ label: "Reports", icon: "📊", page: "reports" },
+    // Uncomment if the client wants the Reports page again.
+    //{ label: "Reports", icon: "📊", page: "reports" },
     { label: "Attendance", icon: "🗓️", page: "attendance" },
     ...common.filter((item) => item.page !== "reports"),
   ],

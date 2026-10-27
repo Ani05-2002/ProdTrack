@@ -1,4 +1,65 @@
 const db = require("../config/db");
+
+/**
+ * Marks the employee Present on the actual submission date.
+ * Does not replace approved leave or special attendance statuses.
+ */
+const markPresentOnDailyEntrySubmission = async (userId) => {
+  try {
+    // Find the configured Present status.
+    const [statuses] = await db.query(
+      `SELECT status_id
+       FROM attendance_status
+       WHERE code = 'present'
+       LIMIT 1`
+    );
+
+    // Stop if the Present status is not configured.
+    if (!statuses.length) {
+      throw new Error("Present attendance status not found");
+    }
+
+    // Read existing attendance for the current date.
+    const [existing] = await db.query(
+      `SELECT a.attendance_id, ast.code, ast.is_leave
+       FROM attendance a
+       JOIN attendance_status ast
+         ON ast.status_id = a.status_id
+       WHERE a.user_id = ?
+         AND a.att_date = CURDATE()
+       LIMIT 1`,
+      [userId]
+    );
+
+    // Preserve leave and other special attendance statuses.
+    if (
+      existing.length &&
+      existing[0].code !== "absent"
+    ) {
+      return;
+    }
+
+    // Mark Present on the actual submission date.
+    await db.query(
+      `INSERT INTO attendance
+         (user_id, att_date, status_id, hours, note, approved_by)
+       VALUES
+         (?, CURDATE(), ?, 8,
+          'Auto Present - Daily Entry submitted', NULL)
+       ON DUPLICATE KEY UPDATE
+         status_id = VALUES(status_id),
+         hours = VALUES(hours),
+         note = VALUES(note),
+         approved_by = NULL`,
+      [userId, statuses[0].status_id]
+    );
+
+  } catch (error) {
+    // Log attendance errors without failing an already saved entry.
+    console.error("Daily Entry Attendance Error:", error);
+  }
+};
+
 // Returns Team Lead categories assigned to the selected project.
 const getProjectTeamLeadCategories = async (req, res) => {
   try {
@@ -805,17 +866,24 @@ const createEntry = async (req, res) => {
       }
     }
 
-    // Commits the main entry and all dynamic values together.
+
+    // Commit the Daily Entry transaction.
     await connection.commit();
 
-    // Sends the existing notification after a successful submitted entry.
+    // Run attendance only for successfully submitted entries.
     if (selectedStatus.code === "submitted") {
+
+      // Mark the current submission date as Present.
+      await markPresentOnDailyEntrySubmission(req.user.id);
+
+      // Keep the existing submission notification.
       await sendEntrySubmissionNotification(
         db,
         req.user.id,
         entryId
       );
     }
+
 
     // Returns the same response format currently expected by the frontend.
     return res.status(201).json({
@@ -1748,17 +1816,23 @@ const updateEntry = async (req, res) => {
       ]
     );
 
-    // Commits fixed values, dynamic values, and audit logging together.
+    // Commit the updated Daily Entry transaction.
     await connection.commit();
 
-    // Sends the existing submission notification after the transaction succeeds.
+    // Run attendance only after a successful submission.
     if (statusCode === "submitted") {
+
+      // Mark Present using today's actual submission date.
+      await markPresentOnDailyEntrySubmission(userId);
+
+      // Preserve the existing notification functionality.
       await sendEntrySubmissionNotification(
         db,
         userId,
         entryId
       );
     }
+
 
     // Returns the existing API response shape.
     return res.json({

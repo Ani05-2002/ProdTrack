@@ -93,6 +93,8 @@ const adminLockingRulesRoutes = require("./routes/administrator/lockingRulesRout
 const settingsRoutes = require("./routes/settingsRoutes");
 const adminDashboardRoutes = require("./routes/administrator/dashboardRoutes");
 const searchRoutes = require("./routes/searchRoutes");
+// Import the HR API router.
+const hrRoutes = require("./routes/HR/hrRoutes");
 
 app.set("trust proxy", 1);
 
@@ -236,6 +238,8 @@ app.use("/api/admin", adminLockingRulesRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/admin", adminDashboardRoutes);
 app.use("/api/search", searchRoutes);
+// Register protected HR endpoints.
+app.use("/api/hr", hrRoutes);
 
 const runAutoLock = async () => {
   try {

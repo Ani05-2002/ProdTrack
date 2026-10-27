@@ -38,110 +38,79 @@ const roleKeyMap = {
 };
 
 // Successful Indexer login par today's attendance Present mark karta hai.
-const markIndexerPresentOnLogin = async (user) => {
+
+const markManagementPresentOnLogin = async (user) => {
   try {
-    // Sirf Indexer ki attendance automatically mark hogi.
-    if (String(user.role_code || "").toLowerCase() !== "indexer") {
+    // Read the user's actual database role.
+    const roleCode = String(user.role_code || "").toLowerCase();
+
+    // Indexers and Team Leads must submit Daily Entry for attendance.
+    if (["indexer", "lead", "team_lead", "teamlead"].includes(roleCode)) {
       return;
     }
 
-    // Approved leave check karta hai.
+    // Do not override approved leave.
     const [approvedLeaves] = await db.query(
-      `
-      SELECT leave_request_id
-      FROM leave_request
-      WHERE user_id = ?
-        AND status = 'APPROVED'
-        AND CURDATE() BETWEEN start_date AND end_date
-      LIMIT 1
-      `,
-      [user.user_id],
+      `SELECT leave_request_id
+       FROM leave_request
+       WHERE user_id = ?
+         AND status = 'APPROVED'
+         AND CURDATE() BETWEEN start_date AND end_date
+       LIMIT 1`,
+      [user.user_id]
     );
 
-    // Approved leave hai toh Present mark nahi karna.
-    if (approvedLeaves.length > 0) {
-      return;
-    }
+    if (approvedLeaves.length > 0) return;
 
-    // Aaj ka existing attendance record check karta hai.
-    const [existingAttendance] = await db.query(
-      `
-      SELECT
-        a.attendance_id,
-        ats.code AS status_code,
-        ats.is_leave
-      FROM attendance a
-      JOIN attendance_status ats
-        ON ats.status_id = a.status_id
-      WHERE a.user_id = ?
-        AND a.att_date = CURDATE()
-      LIMIT 1
-      `,
-      [user.user_id],
+    // Check whether attendance already exists for today.
+    const [existing] = await db.query(
+      `SELECT a.attendance_id, ats.code, ats.is_leave
+       FROM attendance a
+       JOIN attendance_status ats ON ats.status_id = a.status_id
+       WHERE a.user_id = ? AND a.att_date = CURDATE()
+       LIMIT 1`,
+      [user.user_id]
     );
 
-    // Leave/Holiday/Training jaise existing records overwrite nahi honge.
+    // Preserve existing special statuses and already marked Present.
     if (
-      existingAttendance.length > 0 &&
-      existingAttendance[0].status_code !== "absent"
+      existing.length > 0 &&
+      existing[0].code !== "absent"
     ) {
       return;
     }
 
-    // Present status ka ID load karta hai.
-    const [presentStatuses] = await db.query(
-      `
-      SELECT status_id
-      FROM attendance_status
-      WHERE code = 'present'
-      LIMIT 1
-      `,
+    // Get the configured Present status.
+    const [statuses] = await db.query(
+      `SELECT status_id
+       FROM attendance_status
+       WHERE code = 'present'
+       LIMIT 1`
     );
 
-    if (presentStatuses.length === 0) {
-      db.logError(
-        "Login attendance skipped: Present status is not configured",
-        new Error("attendance_status.code=present is missing"),
-      );
-      return;
+    if (!statuses.length) {
+      throw new Error("Present attendance status is missing");
     }
 
-    const presentStatusId = presentStatuses[0].status_id;
-
-    // Aaj ka record nahi hai toh create karega.
-    // Absent record hai toh Present mein update karega.
+    // Insert today's attendance or update an existing Absent record.
     await db.query(
-      `
-      INSERT INTO attendance
-      (
-        user_id,
-        att_date,
-        status_id,
-        hours,
-        note,
-        approved_by
-      )
-      VALUES (
-        ?,
-        CURDATE(),
-        ?,
-        8,
-        'Automatically marked Present after successful login',
-        NULL
-      )
-
-      ON DUPLICATE KEY UPDATE
-        status_id = VALUES(status_id),
-        hours = VALUES(hours),
-        note = VALUES(note),
-        approved_by = NULL
-      `,
-      [user.user_id, presentStatusId],
+      `INSERT INTO attendance
+       (user_id, att_date, status_id, hours, note, approved_by)
+       VALUES (?, CURDATE(), ?, 8,
+         'Automatically marked Present after successful login', NULL)
+       ON DUPLICATE KEY UPDATE
+         status_id = VALUES(status_id),
+         hours = VALUES(hours),
+         note = VALUES(note),
+         approved_by = NULL`,
+      [user.user_id, statuses[0].status_id]
     );
   } catch (error) {
-    db.logError("Login attendance failed (login will still continue)", error);
+    // Attendance errors must not prevent successful login.
+    db.logError("Automatic login attendance failed", error);
   }
 };
+
 
 const recordLoginEvent = async ({
   req,
@@ -377,7 +346,7 @@ const login = async (req, res) => {
       [user.user_id],
     );
 
-    await markIndexerPresentOnLogin(user);
+    await markManagementPresentOnLogin(user);
 
     await recordLoginEvent({
       req,

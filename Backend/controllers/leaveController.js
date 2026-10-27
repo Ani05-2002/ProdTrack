@@ -76,18 +76,18 @@ const createLeaveRequest = async (req, res) => {
     }
 
     // Find the employee and assigned Team Lead
+    // Find the employee submitting the leave request.
     const [users] = await connection.query(
       `
-      SELECT
-        full_name,
-        team_lead_id
-      FROM users
-      WHERE user_id = ?
-      LIMIT 1
-      `,
+  SELECT
+    full_name
+  FROM users
+  WHERE user_id = ?
+    AND status = 'active'
+  LIMIT 1
+  `,
       [userId]
     );
-
     if (users.length === 0) {
       reject(404, "User not found");
     }
@@ -115,33 +115,51 @@ const createLeaveRequest = async (req, res) => {
       ]
     );
 
-    const teamLeadId = users[0].team_lead_id;
+    // Find all active HR users who should receive leave requests.
+    const [hrUsers] = await connection.query(
+      `
+  SELECT u.user_id
+  FROM users u
+  JOIN role r ON r.role_id = u.role_id
+  WHERE r.code = 'hr'
+    AND u.status = 'active'
+  `
+    );
 
-    // Notify Team Lead if one is assigned
-    if (
-      teamLeadId &&
-      Number(teamLeadId) !== Number(userId)
-    ) {
+    // Notify every active HR user about the new leave request.
+    // Send a new leave request notification to every active HR user.
+    for (const hrUser of hrUsers) {
       await connection.query(
         `
-        INSERT INTO notification
-        (
-          user_id,
-          title,
-          body,
-          is_read
-        )
-        VALUES (?, ?, ?, 0)
-        `,
+    INSERT INTO notification
+    (
+      user_id,
+      type_id,
+      title,
+      body,
+      is_read
+    )
+    VALUES (
+      ?,
+      (SELECT type_id
+       FROM notification_type
+       WHERE code = 'leave_request'),
+      ?,
+      ?,
+      0
+    )
+    `,
         [
-          teamLeadId,
+          hrUser.user_id,
           "New leave request",
           `${users[0].full_name} submitted leave request #${result.insertId} for ${startDate} to ${endDate}.`,
         ]
       );
     }
-
+    // Commit the leave request and HR notifications together.
     await connection.commit();
+
+    // Mark the transaction as completed.
     transactionStarted = false;
 
     return res.status(201).json({

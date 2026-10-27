@@ -66,32 +66,33 @@ const [members] = await db.query(
       ELSE 'DONE'
     END AS guide_acknowledgement,
 
-    CASE
-      WHEN EXISTS (
-        SELECT 1
-        FROM leave_request lr
-        WHERE lr.user_id = u.user_id
-          AND lr.status = 'APPROVED'
-          AND CURDATE() BETWEEN lr.start_date AND lr.end_date
-      )
-      THEN 'LEAVE'
+   
+-- Check whether the employee is on approved leave.
+CASE
+  WHEN EXISTS (
+    SELECT 1
+    FROM leave_request lr
+    WHERE lr.user_id = u.user_id
+      AND lr.status = 'APPROVED'
+      AND CURDATE() BETWEEN lr.start_date AND lr.end_date
+  )
+  THEN 'LEAVE'
 
-      ELSE COALESCE(
-        (
-          SELECT ats.name
-          FROM attendance a
+  -- Otherwise read today's recorded attendance.
+  ELSE COALESCE(
+    (
+      SELECT ats.name
+      FROM attendance a
+      JOIN attendance_status ats
+        ON ats.status_id = a.status_id
+      WHERE a.user_id = u.user_id
+        AND a.att_date = CURDATE()
+      LIMIT 1
+    ),
+    'ABSENT'
+  )
+END AS attendance_status
 
-          JOIN attendance_status ats
-            ON ats.status_id = a.status_id
-
-          WHERE a.user_id = u.user_id
-            AND a.att_date = CURDATE()
-
-          LIMIT 1
-        ),
-        'NOT MARKED'
-      )
-    END AS attendance_status
 
   FROM users u
 

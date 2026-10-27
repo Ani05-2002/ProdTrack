@@ -20,21 +20,26 @@ import Settings from "../pages/Settings.jsx";
 import MyProfile from "../pages/MyProfile.jsx";
 import Reports from "../pages/Reports.jsx";
 import Notifications from "../pages/Notifications.jsx";
-
+// Import the separate HR Dashboard.
+import HRDashboard from "../pages/HR/Dashboard.jsx";
+// Import HR Attendance page for leave approval and rejection.
+import HRAttendance from "../pages/HR/Attendance.jsx";
+import HROurTeam from "../pages/HR/OurTeam.jsx";
 const dashboards = {
   indexer: IndexerDashboard,
   teamLead: TeamLeadDashboard,
   coreTeam: CoreTeamDashboard,
   administrator: AdministratorDashboard,
+  hr: HRDashboard,
 };
 
 const rolePages = {
   indexer: {
     "daily-entry": DailyEntry,
     "indexing-guide": IndexingGuide,
-      // Temporarily disabled for Indexer.
-  // Uncomment if the client wants the Projects page again.
-  // projects: Projects,
+    // Temporarily disabled for Indexer.
+    // Uncomment if the client wants the Projects page again.
+    // projects: Projects,
     attendance: Attendance,
     corrections: CorrectionApprovals,
   },
@@ -56,17 +61,22 @@ const rolePages = {
     compliance: Compliance,
   },
   administrator: {
-  "analytics-kpis": AnalyticsKpis,
-  "project-master": ProjectMaster,
-  users: UserMaster,
-  "assignment-matrix": AssignmentMatrix,
-  "guide-manager": GuideManager,
-  corrections: CorrectionApprovals,
-  compliance: Compliance,          // ← yeh line add karo
-  "locking-rules": LockingRules,
-  "audit-log": AuditLog,
-  settings: Settings,
-},
+    "analytics-kpis": AnalyticsKpis,
+    "project-master": ProjectMaster,
+    users: UserMaster,
+    "assignment-matrix": AssignmentMatrix,
+    "guide-manager": GuideManager,
+    corrections: CorrectionApprovals,
+    compliance: Compliance,          // ← yeh line add karo
+    "locking-rules": LockingRules,
+    "audit-log": AuditLog,
+    settings: Settings,
+  },
+  hr: {
+    // HR can review Indexer and Team Leader leave requests.
+    attendance: HRAttendance,
+    "our-team": HROurTeam,
+  },
 };
 
 const commonPages = {
@@ -75,18 +85,18 @@ const commonPages = {
   notifications: Notifications,
 };
 
-export default function AppRoutes({ user, currentPage, onNavigate, onReviewGuide, searchSelection,navigationData }) {
+export default function AppRoutes({ user, currentPage, onNavigate, onReviewGuide, searchSelection, navigationData }) {
   const roleKey = user.roleKey;
   const Dashboard = dashboards[roleKey] ?? IndexerDashboard;
   // Reports are common for other roles but are not accessible to Indexer.
-const isIndexerRestrictedPage =
-  roleKey === "indexer" &&
-  ["projects", "reports"].includes(currentPage);
+  const isIndexerRestrictedPage =
+    roleKey === "indexer" &&
+    ["projects", "reports"].includes(currentPage);
 
-// Resolves the page only when the current role is allowed to access it.
-const Page = isIndexerRestrictedPage
-  ? null
-  : commonPages[currentPage] ?? rolePages[roleKey]?.[currentPage];
+  // Resolves the page only when the current role is allowed to access it.
+  const Page = isIndexerRestrictedPage
+    ? null
+    : commonPages[currentPage] ?? rolePages[roleKey]?.[currentPage];
 
   if (!Page || currentPage === "dashboard") {
     return (

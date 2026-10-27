@@ -13,6 +13,11 @@ import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import TrendingUpRoundedIcon from "@mui/icons-material/TrendingUpRounded";
 import LockRoundedIcon from "@mui/icons-material/LockRounded";
+// Icon for new leave requests received by HR.
+import EventNoteRoundedIcon from "@mui/icons-material/EventNoteRounded";
+
+// Icon for rejected leave requests.
+import CancelRoundedIcon from "@mui/icons-material/CancelRounded";
 
 
 // =========================================================
@@ -51,26 +56,65 @@ export default function Notifications({ user }) {
             notification.type || ""
           ).toLowerCase();
 
+
+          // Default notification icon and color.
           let Icon = ErrorOutlineRoundedIcon;
           let color = "#dc3545";
 
-          if (type.includes("guide")) {
+          // Combine notification type and title for matching.
+          const notificationText = `${notification.type || ""} ${notification.title || ""}`.toLowerCase();
+
+          // Leave approved notification.
+          if (
+            notificationText.includes("leave") &&
+            notificationText.includes("approved")
+          ) {
+            Icon = CheckCircleRoundedIcon;
+            color = "#15803d";
+
+            // Leave rejected notification.
+          } else if (
+            notificationText.includes("leave") &&
+            notificationText.includes("rejected")
+          ) {
+            Icon = CancelRoundedIcon;
+            color = "#dc2626";
+
+            // New leave request notification for HR.
+          } else if (
+            notificationText.includes("leave") &&
+            (
+              notificationText.includes("request") ||
+              notificationText.includes("pending")
+            )
+          ) {
+            Icon = EventNoteRoundedIcon;
+            color = "#2563eb";
+
+            // Existing guide notifications.
+          } else if (type.includes("guide")) {
             Icon = MenuBookRoundedIcon;
             color = "#3478ed";
-            // Shows the green tick for approved corrections and submitted daily entries.
+
+            // Existing approval and entry notifications.
           } else if (
             type.includes("approved") ||
             type.includes("entry_submission_confirmation")
           ) {
             Icon = CheckCircleRoundedIcon;
             color = "#20a36b";
+
+            // Existing backlog notifications.
           } else if (type.includes("backlog")) {
             Icon = TrendingUpRoundedIcon;
             color = "#8060d9";
+
+            // Existing locking notifications.
           } else if (type.includes("lock")) {
             Icon = LockRoundedIcon;
             color = "#f59e0b";
           }
+
 
           const createdDate = new Date(
             notification.created_at

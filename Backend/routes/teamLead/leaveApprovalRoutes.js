@@ -40,11 +40,11 @@ const rejectLeave = [
 
 // POST is the primary method — some CWP Apache proxies drop PATCH and the
 // browser then shows "Cannot reach API".
-router.post("/leave-requests/:id/approve", ...approveLeave);
-router.patch("/leave-requests/:id/approve", ...approveLeave);
+// router.post("/leave-requests/:id/approve", ...approveLeave);
+// router.patch("/leave-requests/:id/approve", ...approveLeave);
 
-router.post("/leave-requests/:id/reject", ...rejectLeave);
-router.patch("/leave-requests/:id/reject", ...rejectLeave);
+// router.post("/leave-requests/:id/reject", ...rejectLeave);
+// router.patch("/leave-requests/:id/reject", ...rejectLeave);
 
 
 // Exports the router so index.js can register these APIs.
