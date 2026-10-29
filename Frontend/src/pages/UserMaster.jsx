@@ -320,7 +320,20 @@ function UserMasterPage({
         placeholder: "e.g. Aditya Rao",
         required: true,
       },
-      // Show username and password fields when Admin adds a user.
+
+      // Show Username when Administrator edits an existing user.
+      ...(administrator && selectedUser
+        ? [
+          {
+            name: "username",
+            label: "Username",
+            placeholder: "Enter username",
+            required: true,
+          },
+        ]
+        : []),
+
+      // Keep the existing username and password fields for Add User.
       ...(administrator && !selectedUser
         ? [
           // Admin chooses the username.
@@ -533,10 +546,20 @@ function UserMasterPage({
     }
 
     return {
+      // Load the existing Employee ID.
       employeeId: selectedUser.employee_id || "",
+
+      // Load the existing Employee name.
       employee: selectedUser.name || "",
+
+      // Load the existing Username.
+      username: selectedUser.username || "",
+
+      // Keep password fields empty for security.
       password: "",
       confirmPassword: "",
+
+      // Load the existing email.
       email: selectedUser.email || "",
       department:
         selectedUser.department || "",
@@ -670,11 +693,36 @@ function UserMasterPage({
           }
         }
         // Builds the PATCH body using fields supported by updateUser().
+        // Get the username entered in the Edit User form.
+        const updatedUsername = String(
+          values.username || ""
+        ).trim();
+
+        // Validate the username before sending the request.
+        if (
+          administrator &&
+          !/^[a-zA-Z0-9._-]{3,60}$/.test(updatedUsername)
+        ) {
+          toast.error(
+            "Username must contain 3–60 letters, numbers, dots, underscores or hyphens."
+          );
+          return;
+        }
+
+        // Build the request body for updating the selected user.
         const updateBody = {
+          // Send the updated employee name.
           name: values.employee,
+
+          // Send both Employee ID and Username for Administrator edits.
           ...(administrator
-            ? { employeeId: values.employeeId }
+            ? {
+              employeeId: values.employeeId,
+              username: updatedUsername,
+            }
             : {}),
+
+          // Preserve the existing user settings.
           departmentId,
           designation: values.designation,
           roleId,

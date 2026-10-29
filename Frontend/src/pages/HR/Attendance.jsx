@@ -81,25 +81,33 @@ export default function Attendance() {
     // LOAD PENDING LEAVE REQUESTS
     // =====================================================
 
-    const loadRequests = useCallback(async () => {
-        // Start pending requests loading.
-        setLoading(true);
+    // Load pending requests, optionally without showing the loading indicator.
+    const loadRequests = useCallback(async (showLoader = true) => {
+        // Show the loading state for initial and manual refreshes.
+        if (showLoader) {
+            setLoading(true);
+        }
+
+        // Clear the previous API error.
         setError("");
 
         try {
-            // Fetch pending requests using existing authentication.
+            // Fetch the latest pending leave requests from the backend.
+            // Fetch pending requests from the HR API.
             const data = await apiRequest("/hr/leave-requests");
 
-            // Store pending leave requests.
+            // Store the returned pending leave requests.
             setRequests(data.requests || []);
         } catch (err) {
-            // Show backend errors.
+            // Show the error if fetching pending requests fails.
             setError(
                 err.message || "Failed to load pending leave requests"
             );
         } finally {
-            // Stop loading.
-            setLoading(false);
+            // Hide the loading indicator when this call enabled it.
+            if (showLoader) {
+                setLoading(false);
+            }
         }
     }, []);
 
@@ -136,8 +144,32 @@ export default function Attendance() {
     // =====================================================
 
     // Load pending leave requests when HR opens Attendance.
+    // Load pending requests initially and automatically refresh the list.
     useEffect(() => {
+        // Fetch pending requests when HR opens Attendance.
         loadRequests();
+
+        // Refresh pending requests every 15 seconds.
+        const refreshInterval = window.setInterval(() => {
+            // Avoid background API calls while the browser tab is hidden.
+            if (document.visibilityState === "visible") {
+                loadRequests(false);
+            }
+        }, 15000);
+
+        // Refresh requests when HR returns to the browser tab.
+        const handleWindowFocus = () => {
+            loadRequests(false);
+        };
+
+        // Register the browser focus listener.
+        window.addEventListener("focus", handleWindowFocus);
+
+        // Clean up the interval and listener when the component unmounts.
+        return () => {
+            window.clearInterval(refreshInterval);
+            window.removeEventListener("focus", handleWindowFocus);
+        };
     }, [loadRequests]);
 
     // Load history when HR opens Approved or Rejected tabs.
@@ -277,7 +309,7 @@ export default function Attendance() {
         currentPage * ROWS_PER_PAGE,
         (currentPage + 1) * ROWS_PER_PAGE
     );
-
+   
     // =====================================================
     // USER INTERFACE
     // =====================================================

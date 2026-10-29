@@ -111,7 +111,10 @@ const AVATAR_COLORS = [
 
 // Converts backend role codes into the same role labels used by the original UI.
 // Convert actual database role codes into readable role names.
+
+// Converts backend role values into the correct visible role labels.
 function getRoleLabel(role) {
+  // Maps current and legacy backend role codes to display names.
   const roleMap = {
     indexer: "Indexer",
     lead: "Team Lead",
@@ -119,26 +122,35 @@ function getRoleLabel(role) {
     teamLead: "Team Lead",
     TEAM_LEAD: "Team Lead",
 
-    // New management role labels.
+    // Supports the new management roles.
     manager: "Manager",
+    MANAGER: "Manager",
     assistant_manager: "Assistant Manager",
+    ASSISTANT_MANAGER: "Assistant Manager",
     operations_manager: "Operations Manager",
+    OPERATIONS_MANAGER: "Operations Manager",
 
-    // Keep legacy Core Team values supported.
-    core: "Core Team",
-    core_team: "Core Team",
-    coreTeam: "Core Team",
-    CORE_TEAM: "Core Team",
+    // Maps the legacy Core Team code to the new Manager display label.
+    core: "Manager",
+    core_team: "Manager",
+    coreTeam: "Manager",
+    CORE_TEAM: "Manager",
 
+    // Keeps administrator and HR labels supported.
     admin: "Administrator",
     administrator: "Administrator",
+    ADMIN: "Administrator",
     hr: "HR",
+    HR: "HR",
   };
 
-  // Return the correct label or a fallback for unknown roles.
-  return roleMap[role] || roleMap[String(role || "").toLowerCase()] || "Unknown";
+  // Tries the exact value first, then a lowercase version.
+  return (
+    roleMap[role] ||
+    roleMap[String(role || "").toLowerCase()] ||
+    "Unknown"
+  );
 }
-
 
 // Generates initials for the existing avatar UI.
 function getInitials(name = "") {
@@ -416,6 +428,8 @@ function AssignmentMatrixPage({
     users,
     setUsers,
   ] = useState([]);
+
+  const [selectedUserId, setSelectedUserId] = useState(null);
 
   // Controls the existing success Snackbar.
   const [
@@ -952,25 +966,41 @@ function AssignmentMatrixPage({
                   ui
                 ) => (
                   <Box
-                    key={
-                      user.id
-                    }
+                    key={user.id}
+                    onClick={() => setSelectedUserId(user.id)}
                     sx={{
-                      display:
-                        "grid",
-                      gridTemplateColumns:
-                        desktopGridColumns,
+                      display: "grid",
+                      gridTemplateColumns: desktopGridColumns,
                       px: 2.5,
                       py: 1.4,
-                      alignItems:
-                        "center",
-                      borderTop:
-                        `1px solid ${LINE2}`,
-                      "&:hover":
-                      {
+                      alignItems: "center",
+                      borderTop: `1px solid ${LINE2}`,
+
+                      // Uses a stronger blue background for the selected user.
+                      bgcolor:
+                        selectedUserId === user.id
+                          ? "#D6E5FF"
+                          : "#FFFFFF",
+
+                      // Adds a darker blue left border for clear identification.
+                      borderLeft:
+                        selectedUserId === user.id
+                          ? "4px solid #1D4ED8"
+                          : "4px solid transparent",
+
+                      // Shows that the row can be selected.
+                      cursor: "pointer",
+
+                      // Keeps the selected background when hovering.
+                      "&:hover": {
                         bgcolor:
-                          "#fafbff",
+                          selectedUserId === user.id
+                            ? "#EAF2FF"
+                            : "#F5F8FF",
                       },
+
+                      // Smoothly transitions between row backgrounds.
+                      transition: "background-color 0.15s ease",
                     }}
                   >
                     {/* USER - keeps the original avatar/name design. */}

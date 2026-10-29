@@ -294,6 +294,7 @@ const createUser = async (req, res) => {
   let connection;
 
   try {
+    const createStartedAt = Date.now();
     const {
       name,
       username,
@@ -537,16 +538,28 @@ const createUser = async (req, res) => {
 
     await connection.beginTransaction();
 
+    // Measure the time required to generate an employee code.
+    const employeeCodeStartedAt = Date.now();
 
-    const employeeCode =
-      await generateEmployeeCode(connection);
+    const employeeCode = await generateEmployeeCode(connection);
+
+    console.log(
+      "[PERF] Employee code generation:",
+      Date.now() - employeeCodeStartedAt,
+      "ms"
+    );
 
 
-    const passwordHash =
-      await bcrypt.hash(
-        actualPassword,
-        10
-      );
+    // Measure the time required to hash the password.
+    const passwordHashStartedAt = Date.now();
+
+    const passwordHash = await bcrypt.hash(actualPassword, 10);
+
+    console.log(
+      "[PERF] Password hashing:",
+      Date.now() - passwordHashStartedAt,
+      "ms"
+    );
 
 
     // --------------------------------------------------------
@@ -595,18 +608,21 @@ const createUser = async (req, res) => {
     // --------------------------------------------------------
     // Assign projects
     // --------------------------------------------------------
+    // Start measuring the time required to assign projects.
+    const assignmentsStartedAt = Date.now();
 
+    // Assign each selected project to the newly created user.
     for (const projectId of uniqueProjectIds) {
       await connection.query(
         `
-        INSERT INTO project_assignment
-        (
-          user_id,
-          project_id,
-          assigned_by
-        )
-        VALUES (?, ?, ?)
-        `,
+    INSERT INTO project_assignment
+    (
+      user_id,
+      project_id,
+      assigned_by
+    )
+    VALUES (?, ?, ?)
+    `,
         [
           userId,
           projectId,
@@ -614,6 +630,14 @@ const createUser = async (req, res) => {
         ]
       );
     }
+
+    // Log the duration and number of project assignments.
+    console.log(
+      "[PERF] Project assignments:",
+      Date.now() - assignmentsStartedAt,
+      "ms | Count:",
+      uniqueProjectIds.length
+    );
 
 
     await connection.commit();
@@ -638,29 +662,32 @@ const createUser = async (req, res) => {
     //   );
     // }
     // Track whether credentials were delivered by email.
+    // Track whether the password email was sent successfully.
+    // Track whether an email address is available for delivery.
     let emailSent = false;
 
-    // Send an email only when an address is available.
+    // Start sending the password email only when an address exists.
     if (normalizedEmail) {
-      try {
-        // Send the existing account-creation email.
-        await sendPasswordEmail({
-          name,
-          email: normalizedEmail,
-          password: actualPassword,
-          passwordSource: "New User",
-          subject: "Your ProdTrack account password",
+      // Send the email without making the API wait for SMTP.
+      void sendPasswordEmail({
+        name,
+        email: normalizedEmail,
+        password: actualPassword,
+        passwordSource: "New User",
+        subject: "Your ProdTrack account password",
+      })
+        .then(() => {
+          // Log successful email delivery after the operation finishes.
+          emailSent = true;
+          console.log("[EMAIL] Password email sent successfully.");
+        })
+        .catch((emailError) => {
+          // Log email failure without undoing the created account.
+          console.error(
+            "[EMAIL] Password email failed:",
+            emailError.message
+          );
         });
-
-        // Record successful delivery.
-        emailSent = true;
-      } catch (emailError) {
-        // Do not fail account creation if email delivery fails.
-        console.error(
-          "Create User Email Error:",
-          emailError.message
-        );
-      }
     }
     // return res.status(201).json({
     //   success: true,
@@ -685,13 +712,16 @@ const createUser = async (req, res) => {
       success: true,
 
       // Explain how the account credentials will be delivered.
+      // Explain the email status at the time the response is returned.
       message: !normalizedEmail
         ? "User created. Admin must provide login credentials."
-        : emailSent
-          ? "User created and password emailed successfully"
-          : "User created, but password email could not be sent",
+        : "User created successfully. Password email is being sent.",
 
-      emailSent,
+      // Null means email delivery has not yet been confirmed.
+      emailSent: normalizedEmail ? null : false,
+
+      // Expose the current email-delivery state explicitly.
+      emailStatus: normalizedEmail ? "sending" : "not_required",
 
       // Return the new user's basic details.
       user: {
@@ -756,13 +786,39 @@ const updateUser = async (req, res) => {
       });
     }
     // Prevents Core Team or any other role from changing Employee ID.
-    if (
-      employeeId !== undefined &&
-      req.user?.role !== "administrator"
-    ) {
+    // Identify whether the logged-in user is an Administrator.
+    const isAdministrator =
+      String(req.user?.role || "").toLowerCase() === "administrator";
+
+    // Prevent non-Administrators from changing Employee ID.
+    if (employeeId !== undefined && !isAdministrator) {
       return res.status(403).json({
         success: false,
         message: "Only Administrator can change Employee ID",
+      });
+    }
+
+    // Prevent non-Administrators from changing Username.
+    if (username !== undefined && !isAdministrator) {
+      return res.status(403).json({
+        success: false,
+        message: "Only Administrator can change Username",
+      });
+    }
+
+    // Normalize the supplied username before validating or saving it.
+    const normalizedUsername =
+      username === undefined ? undefined : String(username).trim();
+
+    // Validate the username when the request includes it.
+    if (
+      normalizedUsername !== undefined &&
+      !/^[a-zA-Z0-9._-]{3,60}$/.test(normalizedUsername)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Username must contain 3–60 letters, numbers, dots, underscores or hyphens.",
       });
     }
 
@@ -825,40 +881,34 @@ const updateUser = async (req, res) => {
     // Check duplicate username/email
     // --------------------------------------------------------
 
-    if (email || username) {
-      const [duplicateRows] =
-        await db.query(
-          `
-          SELECT user_id
+    // Check whether another user already has the supplied email or username.
+    if (email || normalizedUsername !== undefined) {
+      const [duplicateRows] = await db.query(
+        `
+    SELECT user_id
+    FROM users
+    WHERE user_id <> ?
+      AND (
+        (? IS NOT NULL AND email = ?)
+        OR
+        (? IS NOT NULL AND username = ?)
+      )
+    LIMIT 1
+    `,
+        [
+          userId,
+          email || null,
+          email || null,
+          normalizedUsername || null,
+          normalizedUsername || null,
+        ]
+      );
 
-          FROM users
-
-          WHERE user_id <> ?
-
-            AND (
-              (? IS NOT NULL AND email = ?)
-
-              OR
-
-              (? IS NOT NULL AND username = ?)
-            )
-
-          LIMIT 1
-          `,
-          [
-            userId,
-            email || null,
-            email || null,
-            username || null,
-            username || null,
-          ]
-        );
-
+      // Reject usernames or emails already assigned to another user.
       if (duplicateRows.length > 0) {
         return res.status(400).json({
           success: false,
-          message:
-            "Email or username already exists",
+          message: "Email or username already exists",
         });
       }
     }
@@ -1001,9 +1051,10 @@ const updateUser = async (req, res) => {
     }
 
 
-    if (username !== undefined) {
+    // Save the validated username only when it was supplied.
+    if (normalizedUsername !== undefined) {
       fields.push("username = ?");
-      values.push(username);
+      values.push(normalizedUsername);
     }
 
 

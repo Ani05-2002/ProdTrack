@@ -1,5 +1,10 @@
 // Import the existing MySQL connection.
 const db = require("../../config/db");
+// Reuse shared role conditions for Indexers and Team Leaders.
+const {
+  INDEXER_ROLE_SQL,
+  TEAM_LEAD_ROLE_SQL,
+} = require("../../utils/roleSql");
 
 // Fetch pending leave requests from all active Indexers and Team Leaders.
 const getPendingLeaveRequests = async (req, res) => {
@@ -28,9 +33,12 @@ const getPendingLeaveRequests = async (req, res) => {
       JOIN role r
         ON r.role_id = u.role_id
 
-      WHERE lr.status = 'PENDING'
+     WHERE lr.status = 'PENDING'
         AND u.status = 'active'
-        AND r.code IN ('indexer', 'lead')
+        AND (
+        ${INDEXER_ROLE_SQL}
+        OR ${TEAM_LEAD_ROLE_SQL}
+      )
 
       ORDER BY lr.created_at DESC, lr.leave_request_id DESC
       `
@@ -119,7 +127,10 @@ const approveLeaveRequest = async (req, res) => {
       JOIN role r ON r.role_id = u.role_id
       WHERE u.user_id = ?
         AND u.status = 'active'
-        AND r.code IN ('indexer', 'lead')
+        AND (
+            ${INDEXER_ROLE_SQL}
+            OR ${TEAM_LEAD_ROLE_SQL}
+            ) 
       LIMIT 1
       `,
       [request.user_id]
@@ -282,33 +293,6 @@ const approveLeaveRequest = async (req, res) => {
         `Your leave request #${leaveRequestId} has been approved by HR.`,
       ]
     );
-    // Notify the employee that HR approved the leave request.
-    await connection.query(
-      `
-  INSERT INTO notification
-  (
-    user_id,
-    type_id,
-    title,
-    body,
-    is_read
-  )
-  VALUES (
-    ?,
-    (SELECT type_id
-     FROM notification_type
-     WHERE code = 'leave_approved'),
-    ?,
-    ?,
-    0
-  )
-  `,
-      [
-        request.user_id,
-        "Leave request approved",
-        `Your leave request #${leaveRequestId} has been approved by HR.`,
-      ]
-    );
 
     // Save all updates together.
     await connection.commit();
@@ -383,7 +367,10 @@ const rejectLeaveRequest = async (req, res) => {
       JOIN role r ON r.role_id = u.role_id
       WHERE lr.leave_request_id = ?
         AND u.status = 'active'
-        AND r.code IN ('indexer', 'lead')
+        AND (
+            ${INDEXER_ROLE_SQL}
+            OR ${TEAM_LEAD_ROLE_SQL}
+            )
       FOR UPDATE
       `,
       [leaveRequestId]
@@ -543,7 +530,10 @@ const getReviewedLeaveRequests = async (req, res) => {
       JOIN role r ON r.role_id = u.role_id
       WHERE lr.status IN ('APPROVED', 'REJECTED')
         AND u.status = 'active'
-        AND r.code IN ('indexer', 'lead')
+        AND (
+              ${INDEXER_ROLE_SQL}
+              OR ${TEAM_LEAD_ROLE_SQL}
+            )
       ORDER BY lr.reviewed_at DESC, lr.leave_request_id DESC
       `
     );
