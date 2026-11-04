@@ -243,7 +243,6 @@ export default function IndexingGuide({
       setSaving(false);
     }
   };
-  console.log("CURRENT GUIDE:", guide);
   // Downloads the selected guide file.
   // Downloads the selected guide file.
   const handleDownload = async () => {
@@ -522,7 +521,7 @@ export default function IndexingGuide({
             Version history
           </Button>
 
-          {/* Opens the uploaded guide in a popup instead of downloading it. */}
+          {/* Opens the uploaded guide in the full-screen document viewer. */}
           <Button
             variant="contained"
             onClick={() => setPreviewOpen(true)}

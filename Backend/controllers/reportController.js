@@ -837,7 +837,7 @@ const getEmployeeProduction = async (
           u.full_name AS employee_name,
 
           COALESCE(
-            projects.project_names,
+            projects.project_codes,
             '—'
           ) AS projects,
 
@@ -879,11 +879,11 @@ const getEmployeeProduction = async (
           SELECT
             pa.user_id,
 
-            GROUP_CONCAT(
-              DISTINCT p.project_name
-              ORDER BY p.project_name
-              SEPARATOR ', '
-            ) AS project_names
+          GROUP_CONCAT(
+            DISTINCT p.project_code
+            ORDER BY p.project_code
+            SEPARATOR ', '
+          ) AS project_codes
 
           FROM project_assignment pa
 
@@ -1572,10 +1572,15 @@ const getAllDailyEntriesReport = async (req, res) => {
           rc.name
         ) AS reporting_category,
 
-
         de.docs_received AS received,
         de.docs_completed AS completed,
+
+        -- Return received batches for Team Leaders.
+        de.batches_received AS batches_received,
+
+        -- Return processed batches for Indexers.
         de.batches_processed AS batches_processed,
+
         de.remarks AS notes,
 
         es.code AS status,

@@ -1,4 +1,3 @@
-
 import { useEffect, useRef, useState } from "react";
 
 // Imports Material UI components for the guide preview.
@@ -37,9 +36,11 @@ const getCellText = (cell) => {
   if (typeof cell === "object") {
     if (cell.result !== undefined) return String(cell.result ?? "");
     if (cell.text !== undefined) return String(cell.text ?? "");
+
     if (Array.isArray(cell.richText)) {
       return cell.richText.map((item) => item.text || "").join("");
     }
+
     return "";
   }
 
@@ -76,6 +77,7 @@ export default function GuideViewer({
   // References the Word document display container.
   const wordContainerRef = useRef(null);
 
+  // Loads the selected guide when the viewer opens.
   useEffect(() => {
     // Skips requests when the dialog is closed.
     if (!open || !versionId) return;
@@ -97,7 +99,7 @@ export default function GuideViewer({
       setWorksheets([]);
 
       try {
-        // Downloads the original file into memory using JWT authentication.
+        // Downloads the guide using the authenticated API.
         const blob = await apiDownload(
           `/guides/versions/${versionId}/preview`
         );
@@ -105,7 +107,7 @@ export default function GuideViewer({
         // Stops processing if the viewer was closed.
         if (!active) return;
 
-        // Reads the extension from the original uploaded file path.
+        // Reads the extension from the uploaded file path.
         const extension = filePath
           .split(/[\\/]/)
           .pop()
@@ -113,32 +115,32 @@ export default function GuideViewer({
           .pop()
           ?.toLowerCase();
 
-        // Reads the response MIME type.
-        const mimeType = blob.type.toLowerCase();
+        // Reads the response MIME type safely.
+        const mimeType = (blob.type || "").toLowerCase();
 
         // Detects PDF files.
         const isPdf =
           mimeType.includes("application/pdf") ||
           extension === "pdf";
 
-        // Detects modern Word files.
+        // Detects modern Word documents.
         const isDocx =
           mimeType.includes("wordprocessingml") ||
           extension === "docx";
 
-        // Detects modern Excel files.
+        // Detects modern Excel workbooks.
         const isXlsx =
           mimeType.includes("spreadsheetml.sheet") ||
           extension === "xlsx";
 
-        // Detects legacy Office formats.
+        // Detects older DOC and XLS file formats.
         const isLegacy =
           extension === "doc" ||
           extension === "xls" ||
           mimeType === "application/msword" ||
           mimeType === "application/vnd.ms-excel";
 
-        // Displays PDFs through the browser's built-in PDF viewer.
+        // Displays PDF documents using the browser PDF viewer.
         if (isPdf) {
           objectUrl = URL.createObjectURL(blob);
           setPreviewUrl(objectUrl);
@@ -146,45 +148,48 @@ export default function GuideViewer({
           return;
         }
 
-        // Prepares DOCX files for the Word renderer.
+        // Prepares DOCX documents for rendering.
         if (isDocx) {
           setWordBlob(blob);
           setFileType("word");
           return;
         }
 
-        // Reads XLSX files directly in the browser.
+        // Reads XLSX documents in the browser.
         if (isXlsx) {
-          // Creates an Excel workbook instance.
+          // Creates an Excel workbook.
           const workbook = new ExcelJS.Workbook();
 
           // Loads the uploaded workbook.
           await workbook.xlsx.load(await blob.arrayBuffer());
 
-          // Stops if the viewer was closed during parsing.
+          // Stops if the viewer closed during parsing.
           if (!active) return;
 
           // Extracts each worksheet and its cell values.
           const sheets = workbook.worksheets.map((sheet) => {
-            // Includes empty rows and columns within the used range.
+            // Stores the worksheet rows.
             const rows = [];
 
-            // Reads the worksheet rows.
+            // Reads worksheet rows, including empty rows in the used range.
             sheet.eachRow({ includeEmpty: true }, (row) => {
-              // Stores cell values in their original column positions.
+              // Stores the cell values in column order.
               const cells = [];
 
-              // Reads each cell from column 1 through the used range.
+              // Reads each cell in the row.
               for (let col = 1; col <= sheet.columnCount; col++) {
                 cells.push(getCellText(row.getCell(col).value));
               }
 
-              // Adds the row to the worksheet.
+              // Adds the row to the worksheet data.
               rows.push(cells);
             });
 
-            // Returns the worksheet name and rows.
-            return { name: sheet.name, rows };
+            // Returns the worksheet name and its rows.
+            return {
+              name: sheet.name,
+              rows,
+            };
           });
 
           // Stores the parsed worksheets.
@@ -193,30 +198,32 @@ export default function GuideViewer({
           return;
         }
 
-        // Explains why older binary Office formats are not displayed.
+        // Explains why older binary Office formats are unsupported.
         if (isLegacy) {
           throw new Error(
             "Legacy DOC/XLS preview needs an additional compatible renderer."
           );
         }
 
-        // Rejects unknown formats.
+        // Rejects unsupported file formats.
         throw new Error("Unsupported guide file format.");
       } catch (err) {
-        // Displays the error only while the viewer is active.
+        // Displays errors only while the viewer is active.
         if (active) {
           setError(err.message || "Failed to load guide preview.");
         }
       } finally {
         // Ends loading only while the viewer is active.
-        if (active) setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
     };
 
     // Starts loading the selected guide.
     loadPreview();
 
-    // Cleans up the temporary PDF URL.
+    // Cleans up the temporary PDF URL when the viewer closes.
     return () => {
       active = false;
 
@@ -226,9 +233,15 @@ export default function GuideViewer({
     };
   }, [open, versionId, filePath]);
 
+  // Renders DOCX documents after their container is mounted.
   useEffect(() => {
-    // Waits until the Word preview container is mounted.
-    if (fileType !== "word" || !wordBlob || !wordContainerRef.current) {
+    // Waits until the Word preview container is ready.
+    if (
+      !open ||
+      fileType !== "word" ||
+      !wordBlob ||
+      !wordContainerRef.current
+    ) {
       return;
     }
 
@@ -238,10 +251,10 @@ export default function GuideViewer({
     // Gets the Word preview container.
     const container = wordContainerRef.current;
 
-    // Clears the previous document.
+    // Clears any previous document content.
     container.innerHTML = "";
 
-    // Renders the DOCX document directly inside ProdTrack.
+    // Renders the Word document inside the viewer.
     renderAsync(wordBlob, container).catch((err) => {
       if (active) {
         setError(err.message || "Unable to render Word document.");
@@ -253,85 +266,156 @@ export default function GuideViewer({
       active = false;
       container.innerHTML = "";
     };
-  }, [fileType, wordBlob]);
+  }, [open, fileType, wordBlob]);
 
   return (
     <Dialog
       open={open}
       onClose={onClose}
-      fullWidth
-      maxWidth="lg"
+      fullScreen
+      PaperProps={{
+        sx: {
+          // Removes the default dialog margin.
+          m: 0,
+
+          // Uses the full browser viewport width.
+          width: "100vw",
+          maxWidth: "100vw",
+
+          // Uses the full available viewport height.
+          height: "100vh",
+          height: "100dvh",
+          maxHeight: "100dvh",
+
+          // Removes rounded popup corners.
+          borderRadius: 0,
+
+          // Keeps the toolbar and document in one layout.
+          display: "flex",
+          flexDirection: "column",
+
+          // Keeps scrolling inside the document viewer.
+          overflow: "hidden",
+        },
+      }}
     >
+      {/* Full-screen toolbar containing the guide title and close button. */}
       <DialogTitle
         sx={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          gap: 2,
+          flexShrink: 0,
+          borderBottom: "1px solid",
+          borderColor: "divider",
+          px: { xs: 1.5, sm: 2.5 },
+          py: 1.25,
         }}
       >
-        <Box>
-          <Typography fontWeight={700}>{title}</Typography>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography fontWeight={700} noWrap>
+            {title}
+          </Typography>
 
           <Typography variant="caption" color="text.secondary">
             Read-only guide preview
           </Typography>
         </Box>
 
-        {/* Closes the preview dialog. */}
-        <IconButton onClick={onClose}>
+        {/* Closes the full-screen guide viewer. */}
+        <IconButton
+          onClick={onClose}
+          aria-label="Close guide preview"
+        >
           <CloseRoundedIcon />
         </IconButton>
       </DialogTitle>
 
-      <DialogContent dividers sx={{ minHeight: 350 }}>
-        {/* Displays a loading indicator. */}
+      {/* Main document area fills the remaining screen. */}
+      <DialogContent
+        dividers
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          flex: 1,
+          minHeight: 0,
+          overflow: "hidden",
+          width: "100%",
+          p: { xs: 1, sm: 1.5 },
+        }}
+      >
+        {/* Shows a loading indicator while the guide is fetched. */}
         {loading && (
           <Box
             sx={{
               display: "flex",
               justifyContent: "center",
-              py: 8,
+              alignItems: "center",
+              flex: 1,
+              minHeight: 0,
             }}
           >
             <CircularProgress />
           </Box>
         )}
 
-        {/* Displays errors returned by the API or renderer. */}
+        {/* Shows API or document-rendering errors. */}
         {error && <Alert severity="error">{error}</Alert>}
 
-        {/* Displays PDF guides. */}
+        {/* Displays PDF guides at full available size. */}
         {!loading && !error && fileType === "pdf" && (
           <Box
             component="iframe"
             src={previewUrl}
             title={title}
             sx={{
+              display: "block",
               width: "100%",
-              height: "75vh",
+              height: "100%",
+              flex: 1,
+              minHeight: 0,
               border: 0,
             }}
           />
         )}
 
-        {/* Displays DOCX guides. */}
+        {/* Displays DOCX guides with full-height scrolling. */}
         {!loading && !error && fileType === "word" && (
           <Box
             ref={wordContainerRef}
             sx={{
-              height: "75vh",
+              width: "100%",
+              height: "100%",
+              flex: 1,
+              minHeight: 0,
               overflow: "auto",
               bgcolor: "#f5f5f5",
+
+              // Keeps Word document pages centered in the viewer.
               "& .docx-wrapper": {
                 backgroundColor: "#f5f5f5",
+                padding: { xs: "8px", sm: "20px" },
+              },
+
+              // Prevents wide Word pages from overflowing the viewer.
+              "& .docx": {
+                maxWidth: "100%",
               },
             }}
           />
         )}
 
-        {/* Displays XLSX guides. */}
+        {/* Displays XLSX guides with horizontal and vertical scrolling. */}
         {!loading && !error && fileType === "excel" && (
-          <Box sx={{ maxHeight: "75vh", overflow: "auto" }}>
+          <Box
+            sx={{
+              flex: 1,
+              minHeight: 0,
+              overflow: "auto",
+              width: "100%",
+            }}
+          >
             {worksheets.map((sheet, sheetIndex) => (
               <Box key={sheetIndex} sx={{ mb: 4 }}>
                 {/* Displays the worksheet name. */}
@@ -339,18 +423,22 @@ export default function GuideViewer({
                   {sheet.name}
                 </Typography>
 
-                {/* Displays worksheet data in a scrollable table. */}
+                {/* Allows wide spreadsheet tables to scroll horizontally. */}
                 <Box sx={{ overflowX: "auto" }}>
                   <Box
                     component="table"
                     sx={{
                       borderCollapse: "collapse",
                       minWidth: "100%",
+                      backgroundColor: "#ffffff",
+
+                      // Styles spreadsheet cells.
                       "& td": {
                         border: "1px solid #ddd",
                         padding: "8px",
                         fontSize: 13,
                         whiteSpace: "pre-wrap",
+                        minWidth: "80px",
                       },
                     }}
                   >

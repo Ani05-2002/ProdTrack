@@ -4,13 +4,17 @@ import {
   Typography,
   Button,
   Card,
+  TextField,
+  Alert,
   FormControl,
   Select,
+  Menu,
   MenuItem,
   Avatar,
   Chip,
 } from "@mui/material";
 import apiRequest from "../lib/api.js";
+import ExcelJS from "exceljs";
 import { useToast } from "../components/ToastProvider.jsx";
 import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
@@ -38,8 +42,7 @@ const roleNames = {
 // =========================================================
 // SELECT FIELD
 // =========================================================
-
-function SelectField({ label, children, value, onChange, }) {
+function SelectField({ label, children, value, onChange }) {
   return (
     <Box sx={{ width: "100%" }}>
       <Typography
@@ -59,10 +62,75 @@ function SelectField({ label, children, value, onChange, }) {
             value !== undefined
               ? { value, onChange }
               : {
-                defaultValue:
-                  children[0]?.props?.value,
+                defaultValue: children[0]?.props?.value,
               }
           )}
+          // Keep dropdown height limited and make its scrollbar available.
+          MenuProps={{
+            // Support the classic MUI Menu API.
+            PaperProps: {
+              sx: {
+                maxHeight: 280,
+                overflowY: "auto",
+                overflowX: "hidden",
+                mt: 0.8,
+                borderRadius: "14px",
+                backgroundColor: "#fff",
+                boxShadow: "0 6px 14px rgba(0, 0, 0, 0.22)",
+                scrollbarWidth: "thin",
+                scrollbarColor: "#9AA9BD #F1F4F8",
+
+                "&::-webkit-scrollbar": {
+                  width: "8px",
+                },
+                "&::-webkit-scrollbar-track": {
+                  backgroundColor: "#F1F4F8",
+                },
+                "&::-webkit-scrollbar-thumb": {
+                  backgroundColor: "#9AA9BD",
+                  borderRadius: "10px",
+                },
+              },
+            },
+
+            // Support newer MUI Menu slot configuration.
+            slotProps: {
+              paper: {
+                sx: {
+                  maxHeight: 280,
+                  overflowY: "auto",
+                  overflowX: "hidden",
+                },
+              },
+            },
+
+            // Keep dropdown option styling.
+            MenuListProps: {
+              sx: {
+                py: 0.5,
+
+                "& .MuiMenuItem-root": {
+                  minHeight: 40,
+                  fontSize: 14,
+                  color: "#172B4D",
+                  px: 2.5,
+                },
+
+                "& .MuiMenuItem-root.Mui-selected": {
+                  backgroundColor: "#EAF1FF",
+                },
+
+                "& .MuiMenuItem-root.Mui-selected:hover": {
+                  backgroundColor: "#DCE8FF",
+                },
+
+                "& .MuiMenuItem-root:hover": {
+                  backgroundColor: "#F3F6FC",
+                },
+              },
+            },
+          }}
+
           sx={{
             height: 44,
             fontSize: 13,
@@ -265,6 +333,15 @@ function SimpleReportTable({
     </Card>
   );
 }
+// Returns today's date in the browser's local timezone.
+const getLocalDateInputValue = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+};
 
 export default function Reports({
   roleKey = "indexer",
@@ -278,12 +355,7 @@ export default function Reports({
   });
   const [period, setPeriod] = useState("week");
   // Display the correct label for the selected report period.
-  const periodLabel =
-    period === "day"
-      ? "today"
-      : period === "month"
-        ? "this month"
-        : "this week";
+  const periodLabel = period === "day" ? "today" : period === "month" ? "this month" : "this week";
   const [employeeReportPage, setEmployeeReportPage] = useState(0);
   const EMP_ROWS_PER_PAGE = 10;
   const [bars, setBars] = useState([]);
@@ -292,15 +364,26 @@ export default function Reports({
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState("all");
   const [selectedEmployee, setSelectedEmployee] = useState("all");
-  const [reportType, setReportType] =
-    useState("employee");
-  const [projectReportRows, setProjectReportRows] =
-    useState([]);
-
-  const [correctionReportRows, setCorrectionReportRows] =
-    useState([]);
+  const [reportType, setReportType] = useState("employee");
+  // Controls the Export dropdown menu.
+  const [exportMenuAnchor, setExportMenuAnchor] = useState(null);
+  // Checks whether the Export menu is open.
+  const exportMenuOpen = Boolean(exportMenuAnchor);
+  // Opens the Export menu.
+  const handleExportMenuOpen = (event) => { setExportMenuAnchor(event.currentTarget); };
+  // Closes the Export menu.
+  const handleExportMenuClose = () => { setExportMenuAnchor(null); };
+  const [projectReportRows, setProjectReportRows] = useState([]);
+  const [correctionReportRows, setCorrectionReportRows] = useState([]);
   const [allDailyEntries, setAllDailyEntries] = useState([]);
   const [dailyEntryRole, setDailyEntryRole] = useState("all");
+  // Stores the selected production date.
+  const [dailySummaryDate, setDailySummaryDate] = useState(getLocalDateInputValue);
+  // Stores project-wise daily summary records.
+  const [dailySummaryRows, setDailySummaryRows] = useState([]);
+  // Tracks report loading and errors.
+  const [dailySummaryLoading, setDailySummaryLoading] = useState(false);
+  const [dailySummaryError, setDailySummaryError] = useState("");
 
 
   useEffect(() => {
@@ -483,14 +566,88 @@ export default function Reports({
     };
 
     loadReports();
-  }, [
-    roleKey,
-    period,
-    selectedProject,
-    selectedEmployee,
-    toast,
-    reportType,
-  ]);
+  },
+
+
+    [
+      roleKey,
+      period,
+      selectedProject,
+      selectedEmployee,
+      toast,
+      reportType,
+    ]);
+  // Loads the dashboard's existing Project Daily Summary for the selected date.
+  useEffect(() => {
+    // Do not load this API for other report types.
+    if (reportType !== "dailySummary") return;
+
+    // Select the existing endpoint according to the logged-in role.
+    const summaryEndpoints = {
+      teamLead: "/team-lead/dashboard/project-daily-summary",
+      coreTeam: "/core-team/dashboard/project-daily-summary",
+      administrator: "/admin/dashboard/project-daily-summary",
+    };
+
+    const endpoint = summaryEndpoints[roleKey];
+
+    // Validate the selected date.
+    if (!dailySummaryDate) {
+      setDailySummaryRows([]);
+      setDailySummaryLoading(false);
+      setDailySummaryError("Select a production date.");
+      return;
+    }
+
+    // Check role access.
+    if (!endpoint) {
+      setDailySummaryRows([]);
+      setDailySummaryError("This role cannot access this report.");
+      return;
+    }
+
+    let active = true;
+
+    // Fetch the selected-date summary.
+    const loadProjectDailySummary = async () => {
+      setDailySummaryLoading(true);
+      setDailySummaryError("");
+
+      try {
+        // Reuses the existing dashboard calculation.
+        const data = await apiRequest(
+          `${endpoint}?date=${encodeURIComponent(dailySummaryDate)}`
+        );
+
+        if (!data.success) {
+          throw new Error(data.message || "Failed to load project summary");
+        }
+
+        if (active) {
+          setDailySummaryRows(data.summary || []);
+        }
+      } catch (error) {
+        if (active) {
+          setDailySummaryRows([]);
+          setDailySummaryError(
+            error.message || "Failed to load project summary"
+          );
+          toast.error(error.message || "Failed to load project summary");
+        }
+      } finally {
+        if (active) {
+          setDailySummaryLoading(false);
+        }
+      }
+    };
+
+    loadProjectDailySummary();
+
+    // Prevents old requests from updating the component.
+    return () => {
+      active = false;
+    };
+  }, [reportType, roleKey, dailySummaryDate, toast]);
   // Filter projects that have pending documents.
   const pendingProjectRows = [...projectReportRows]
     // Include only projects with pending greater than zero.
@@ -512,6 +669,18 @@ export default function Reports({
 
     // Match Indexer records.
     return entry.employee_role === "indexer";
+  });
+  // Filters the summary by the selected date and project.
+  const filteredDailySummaryRows = dailySummaryRows.filter((row) => {
+    const rowDate = String(row.productionDate || "").slice(0, 10);
+
+    const matchesDate = rowDate === dailySummaryDate;
+
+    const matchesProject =
+      selectedProject === "all" ||
+      String(row.projectId) === String(selectedProject);
+
+    return matchesDate && matchesProject;
   });
   const max = Math.max(
     1,
@@ -536,6 +705,85 @@ export default function Reports({
   const empTotalPages = Math.ceil(displayedEmployees.length / EMP_ROWS_PER_PAGE);
 
   const handleCsvDownload = () => {
+    // Exports Project Daily Summary for the selected date.
+    if (reportType === "dailySummary") {
+      if (!dailySummaryDate) {
+        toast.info("Select a production date before exporting");
+        return;
+      }
+
+      if (dailySummaryLoading) {
+        toast.info("Project Daily Summary is still loading");
+        return;
+      }
+
+      if (filteredDailySummaryRows.length === 0) {
+        toast.info("No data found for the selected date");
+        return;
+      }
+
+      // Defines the CSV columns.
+      const headings = [
+        "Date",
+        "Project",
+        "Reporting Category",
+        "Received",
+        "Completed",
+        "Backlog",
+        "Pending",
+        "Batches Received",
+        "Batches Processed",
+        "Pending Batches",
+      ];
+
+      // Converts summary records into CSV rows.
+      const reportRows = filteredDailySummaryRows.map((row) => [
+        row.productionDate || dailySummaryDate,
+        row.projectName || "",
+        row.categoryName || "Uncategorized",
+        Number(row.received || 0),
+        Number(row.completed || 0),
+        Number(row.backlog || 0),
+        Number(row.pending || 0),
+        Number(row.batchesReceived || 0),
+        Number(row.batchesProcessed || 0),
+        Number(row.pendingBatches || 0),
+      ]);
+
+      // Escapes CSV values and prevents spreadsheet formula injection.
+      const escapeCsvValue = (value) => {
+        const text = String(value ?? "");
+        const safeText = /^[\s]*[=+\-@\t\r]/.test(text)
+          ? `'${text}`
+          : text;
+
+        return `"${safeText.replace(/"/g, '""')}"`;
+      };
+
+      // Creates Excel-compatible CSV content.
+      const csvContent = [headings, ...reportRows]
+        .map((row) => row.map(escapeCsvValue).join(","))
+        .join("\r\n");
+
+      const file = new Blob(["\uFEFF", csvContent], {
+        type: "text/csv;charset=utf-8;",
+      });
+
+      // Starts the CSV download.
+      const downloadUrl = URL.createObjectURL(file);
+      const link = document.createElement("a");
+
+      link.href = downloadUrl;
+      link.download =
+        `prodtrack-project-daily-summary-${dailySummaryDate}.csv`;
+
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      URL.revokeObjectURL(downloadUrl);
+      return;
+    }
     // Export individual daily entries when Admin/Core Team selects this report.
     if (
       reportType === "allEntries" &&
@@ -676,6 +924,191 @@ export default function Reports({
     URL.revokeObjectURL(downloadUrl);
   };
 
+  // Downloads Project Daily Summary as a formatted Excel workbook.
+  const handleExcelDownload = async () => {
+    // Allow Excel export only for Project Daily Summary.
+    if (reportType !== "dailySummary") return;
+
+    // Validate the selected production date.
+    if (!dailySummaryDate) {
+      toast.info("Select a production date before exporting");
+      return;
+    }
+
+    // Prevent export while summary data is loading.
+    if (dailySummaryLoading) {
+      toast.info("Project Daily Summary is still loading");
+      return;
+    }
+
+    // Prevent empty Excel reports.
+    if (filteredDailySummaryRows.length === 0) {
+      toast.info("No data available for the selected date");
+      return;
+    }
+
+    try {
+      // Create a new Excel workbook.
+      const workbook = new ExcelJS.Workbook();
+
+      // Set workbook information.
+      workbook.creator = "ProdTrack";
+      workbook.subject = "Project Daily Summary";
+      workbook.title = `Project Daily Summary - ${dailySummaryDate}`;
+
+      // Create the worksheet.
+      const worksheet = workbook.addWorksheet("Daily Summary");
+
+      // Set the worksheet column headings.
+      const headings = [
+        "Date",
+        "Project",
+        "Reporting Category",
+        "Received",
+        "Completed",
+        "Backlog",
+        "Pending",
+        "Batches Received",
+        "Batches Processed",
+        "Pending Batches",
+      ];
+
+      // Add the heading row.
+      worksheet.addRow(headings);
+
+      // Add selected-date project summary data.
+      filteredDailySummaryRows.forEach((row) => {
+        // Convert YYYY-MM-DD into a local Excel date.
+        const dateText = String(
+          row.productionDate || dailySummaryDate
+        ).slice(0, 10);
+
+        const [year, month, day] = dateText.split("-").map(Number);
+
+        const excelDate =
+          year && month && day
+            ? new Date(year, month - 1, day)
+            : dateText;
+
+        worksheet.addRow([
+          excelDate,
+          row.projectName || "",
+          row.categoryName || "Uncategorized",
+          Number(row.received || 0),
+          Number(row.completed || 0),
+          Number(row.backlog || 0),
+          Number(row.pending || 0),
+          Number(row.batchesReceived || 0),
+          Number(row.batchesProcessed || 0),
+          Number(row.pendingBatches || 0),
+        ]);
+      });
+
+      // Set readable widths for all columns.
+      worksheet.columns = [
+        { width: 16 },
+        { width: 30 },
+        { width: 42 },
+        { width: 15 },
+        { width: 15 },
+        { width: 15 },
+        { width: 15 },
+        { width: 19 },
+        { width: 20 },
+        { width: 19 },
+      ];
+
+      // Freeze the heading row.
+      worksheet.views = [
+        { state: "frozen", ySplit: 1 },
+      ];
+
+      // Add filters to all report columns.
+      worksheet.autoFilter = {
+        from: "A1",
+        to: `J${worksheet.rowCount}`,
+      };
+
+      // Format the heading row.
+      const headerRow = worksheet.getRow(1);
+      headerRow.height = 32;
+
+      headerRow.eachCell((cell) => {
+        cell.font = {
+          bold: true,
+          color: { argb: "FFFFFFFF" },
+          size: 11,
+        };
+
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FF2F6DF6" },
+        };
+
+        cell.border = {
+          top: { style: "thin", color: { argb: "FFD5DEE9" } },
+          bottom: { style: "thin", color: { argb: "FFD5DEE9" } },
+          left: { style: "thin", color: { argb: "FFD5DEE9" } },
+          right: { style: "thin", color: { argb: "FFD5DEE9" } },
+        };
+      });
+
+      // Center-align every cell horizontally and vertically.
+      worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+        row.height = rowNumber === 1 ? 32 : 28;
+
+        row.eachCell({ includeEmpty: true }, (cell) => {
+          cell.alignment = {
+            horizontal: "center",
+            vertical: "middle",
+            wrapText: true,
+          };
+
+          // Add borders to every report cell.
+          cell.border = {
+            top: { style: "thin", color: { argb: "FFE2E8F0" } },
+            bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
+            left: { style: "thin", color: { argb: "FFE2E8F0" } },
+            right: { style: "thin", color: { argb: "FFE2E8F0" } },
+          };
+        });
+      });
+
+      // Display production dates in day-month-year format.
+      worksheet.getColumn(1).numFmt = "dd-mm-yyyy";
+
+      // Generate the Excel workbook.
+      const buffer = await workbook.xlsx.writeBuffer();
+
+      // Create the downloadable Excel file.
+      const file = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+
+      // Generate a temporary download URL.
+      const downloadUrl = URL.createObjectURL(file);
+      const link = document.createElement("a");
+
+      // Set the Excel filename.
+      link.href = downloadUrl;
+      link.download =
+        `prodtrack-project-daily-summary-${dailySummaryDate}.xlsx`;
+
+      // Start the download.
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // Release the temporary URL.
+      setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+    } catch (error) {
+      // Log and display Excel export errors.
+      console.error("Excel Export Error:", error);
+      toast.error(error.message || "Failed to export Excel report");
+    }
+  };
+
   const handlePdfDownload = () => {
     if (employees.length === 0) {
       toast.info("No report data is available to export");
@@ -798,10 +1231,11 @@ export default function Reports({
 
         {/* EXPORT BUTTONS */}
 
+        {/* EXPORT DROPDOWN */}
+
         <Box
           sx={{
             display: "flex",
-            gap: 1,
             flexShrink: 0,
             width: {
               xs: "100%",
@@ -809,56 +1243,95 @@ export default function Reports({
             },
           }}
         >
-          <Button
-            variant="outlined"
-            onClick={handleCsvDownload}
-            sx={{
-              height: 42,
-              flex: {
-                xs: 1,
-                md: "unset",
-              },
-              textTransform: "none",
-              borderRadius: "8px",
-              color: "#1A2434",
-              borderColor: "#d5dee9",
-              backgroundColor: "#fff",
-              fontSize: 13,
-              px: 2,
-              "&:hover": {
-                borderColor: "#2f6df6",
-                backgroundColor: "#f8fbff",
-              },
-            }}
-          >
-            ↓ CSV
-          </Button>
-
+          {/* Main Export dropdown button. */}
           <Button
             variant="contained"
-            startIcon={<DownloadRoundedIcon />}
-            onClick={handlePdfDownload}
+            onClick={handleExportMenuOpen}
+            endIcon={<span>▾</span>}
             sx={{
               height: 42,
-              flex: {
-                xs: 1,
-                md: "unset",
-              },
-              px: 2,
+              minWidth: 135,
+              px: 2.5,
               textTransform: "none",
               borderRadius: "8px",
+              backgroundColor: "#16834A",
               boxShadow: "none",
               fontSize: 13,
               fontWeight: 700,
               "&:hover": {
+                backgroundColor: "#116B3B",
                 boxShadow: "none",
               },
             }}
           >
-            PDF
+            Export
           </Button>
+
+          {/* Displays the available export formats. */}
+          <Menu
+            anchorEl={exportMenuAnchor}
+            open={exportMenuOpen}
+            onClose={handleExportMenuClose}
+            anchorOrigin={{
+              vertical: "bottom",
+              horizontal: "right",
+            }}
+            transformOrigin={{
+              vertical: "top",
+              horizontal: "right",
+            }}
+            slotProps={{
+              paper: {
+                sx: {
+                  mt: 0.8,
+                  minWidth: 180,
+                  borderRadius: "9px",
+                  boxShadow: "0 4px 18px rgba(15,23,42,0.15)",
+                },
+              },
+            }}
+          >
+            {/* CSV export option. */}
+            <MenuItem
+              onClick={() => {
+                handleExportMenuClose();
+                handleCsvDownload();
+              }}
+              sx={{ fontSize: 13, py: 1.2 }}
+            >
+              ↓ &nbsp; CSV (.csv)
+            </MenuItem>
+
+            {/* Excel export option for Project Daily Summary. */}
+            <MenuItem
+              disabled={reportType !== "dailySummary"}
+              onClick={() => {
+                handleExportMenuClose();
+                handleExcelDownload();
+              }}
+              sx={{ fontSize: 13, py: 1.2 }}
+            >
+              <span style={{ color: "#16834A", fontWeight: 700 }}>
+                X
+              </span>
+              &nbsp; Excel (.xlsx)
+            </MenuItem>
+
+            {/* PDF export option. */}
+            <MenuItem
+              disabled={reportType === "dailySummary"}
+              onClick={() => {
+                handleExportMenuClose();
+                handlePdfDownload();
+              }}
+              sx={{ fontSize: 13, py: 1.2 }}
+            >
+              ↓ &nbsp; PDF
+            </MenuItem>
+          </Menu>
         </Box>
-      </Box>
+
+      </Box> {/* Closes the main Reports header section. */}
 
       {/* =================================================
           FILTERS
@@ -919,6 +1392,12 @@ export default function Reports({
             <MenuItem value="correction">
               Correction request log
             </MenuItem>
+            {/* Makes Project Daily Summary available to management roles. */}
+            {["teamLead", "coreTeam", "administrator"].includes(roleKey) && (
+              <MenuItem value="dailySummary">
+                Project Daily Summary
+              </MenuItem>
+            )}
             {/* Shows all Indexer and Team Lead entries for Admin and Core Team. */}
             {["administrator", "coreTeam"].includes(roleKey) && (
               <MenuItem value="allEntries">
@@ -927,66 +1406,84 @@ export default function Reports({
             )}
           </SelectField>
 
-          {/* PERIOD */}
-
-          <SelectField
-            label="Project"
-            value={selectedProject}
-            onChange={(event) =>
-              setSelectedProject(event.target.value)
-            }
-          >
-            <MenuItem value="all">
-              All projects
-            </MenuItem>
-
-            {projects.map((project) => (
-              <MenuItem
-                key={project.project_id || project.id}
-                value={project.project_id || project.id}
+          {/* Shows production date with the same styling as SelectField. */}
+          {reportType === "dailySummary" ? (
+            <Box sx={{ width: "100%" }}>
+              {/* Keeps the label above the input, matching Report Type. */}
+              <Typography
+                sx={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "#6A7585",
+                  mb: 0.8,
+                }}
               >
-                {project.project_name}
-              </MenuItem>
-            ))}
-          </SelectField>
+                Production date
+              </Typography>
 
-          <SelectField
-            label="Period"
-            value={period}
-            onChange={(event) => setPeriod(event.target.value)}
-          >
-            {/* Show only today's records. */}
-            <MenuItem value="day">Today</MenuItem>
-
-            {/* Show records from the current week. */}
-            <MenuItem value="week">This week</MenuItem>
-
-            {/* Show records from the current month. */}
-            <MenuItem value="month">This month</MenuItem>
-          </SelectField>
-
-          {/* EMPLOYEE */}
-
-          <SelectField
-            label="Employee"
-            value={selectedEmployee}
-            onChange={(event) =>
-              setSelectedEmployee(event.target.value)
-            }
-          >
-            <MenuItem value="all">
-              All employees
-            </MenuItem>
-
-            {employeeOptions.map((employee) => (
-              <MenuItem
-                key={employee[7]}
-                value={employee[7]}
+              {/* Matches the existing SelectField dimensions and styling. */}
+              <TextField
+                type="date"
+                value={dailySummaryDate}
+                onChange={(event) =>
+                  setDailySummaryDate(event.target.value)
+                }
+                size="small"
+                fullWidth
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    height: 44,
+                    fontSize: 13,
+                    backgroundColor: "#fff",
+                    borderRadius: "8px",
+                    "& fieldset": {
+                      borderColor: "#d5dee9",
+                    },
+                    "&:hover fieldset": {
+                      borderColor: "#bfcbd9",
+                    },
+                    "&.Mui-focused fieldset": {
+                      borderColor: "#2f6df6",
+                    },
+                  },
+                }}
+              />
+            </Box>
+          ) : (
+            <>
+              {/* Existing period filter for other reports. */}
+              <SelectField
+                label="Period"
+                value={period}
+                onChange={(event) => setPeriod(event.target.value)}
               >
-                {employee[1]}
-              </MenuItem>
-            ))}
-          </SelectField>
+                <MenuItem value="week">This week</MenuItem>
+                <MenuItem value="month">This month</MenuItem>
+              </SelectField>
+
+              {/* Existing employee filter for other reports. */}
+              <SelectField
+                label="Employee"
+                value={selectedEmployee}
+                onChange={(event) =>
+                  setSelectedEmployee(event.target.value)
+                }
+              >
+                <MenuItem value="all">
+                  All employees
+                </MenuItem>
+
+                {employeeOptions.map((employee) => (
+                  <MenuItem
+                    key={employee[7]}
+                    value={employee[7]}
+                  >
+                    {employee[1]}
+                  </MenuItem>
+                ))}
+              </SelectField>
+            </>
+          )}
         </Box>
       </Card>
 
@@ -1305,6 +1802,67 @@ export default function Reports({
           </Box>
         </Card>
       </Box>
+
+      {/* Project Daily Summary for the selected production date. */}
+      {reportType === "dailySummary" && (
+        <>
+          {/* Displays API errors. */}
+          {dailySummaryError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {dailySummaryError}
+            </Alert>
+          )}
+
+          {/* Displays the project-wise summary. */}
+          <SimpleReportTable
+            key={`${dailySummaryDate}-${selectedProject}`}
+            title={`Project Daily Summary — ${dailySummaryDate}`}
+            loading={dailySummaryLoading}
+            emptyMessage="No summary data found for this date."
+            rows={filteredDailySummaryRows}
+            columns={[
+              { key: "productionDate", label: "DATE" },
+              { key: "projectName", label: "PROJECT" },
+              { key: "categoryName", label: "REPORTING CATEGORY" },
+              {
+                key: "received",
+                label: "RECEIVED",
+                render: (row) => Number(row.received || 0).toLocaleString(),
+              },
+              {
+                key: "completed",
+                label: "COMPLETED",
+                render: (row) => Number(row.completed || 0).toLocaleString(),
+              },
+              {
+                key: "backlog",
+                label: "BACKLOG",
+                render: (row) => Number(row.backlog || 0).toLocaleString(),
+              },
+              {
+                key: "pending",
+                label: "PENDING",
+                render: (row) => Number(row.pending || 0).toLocaleString(),
+              },
+              {
+                key: "batchesReceived",
+                label: "BATCHES RECEIVED",
+                render: (row) => Number(row.batchesReceived || 0).toLocaleString(),
+              },
+              {
+                key: "batchesProcessed",
+                label: "BATCHES PROCESSED",
+                render: (row) => Number(row.batchesProcessed || 0).toLocaleString(),
+              },
+              {
+                key: "pendingBatches",
+                label: "PENDING BATCHES",
+                render: (row) => Number(row.pendingBatches || 0).toLocaleString(),
+              },
+            ]}
+          />
+        </>
+      )}
 
       {/* =================================================
           EMPLOYEE TABLE
@@ -1822,14 +2380,16 @@ export default function Reports({
                       : "—",
                 },
 
-                // Display processed batches for Indexers.
+                // Display received batches for Team Leads and processed batches for Indexers.
                 {
                   key: "batches_processed",
                   label: "BATCHES",
                   render: (row) =>
-                    row.employee_role === "indexer"
-                      ? Number(row.batches_processed || 0)
-                      : "—",
+                    ["lead", "teamLead"].includes(row.employee_role)
+                      ? Number(row.batches_received || 0)
+                      : row.employee_role === "indexer"
+                        ? Number(row.batches_processed || 0)
+                        : "—",
                 },
 
                 // Display actual entry status.

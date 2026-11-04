@@ -934,7 +934,7 @@ export default function Dashboard({ onNavigate }) {
             color: HEAD,
           }}
         >
-          Admin dashboard
+          Managers Dashboard
         </Typography>
       }
       description="Organisation-wide production, backlogs and compliance across all projects."
