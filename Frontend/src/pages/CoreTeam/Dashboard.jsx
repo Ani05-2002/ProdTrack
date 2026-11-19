@@ -1,37 +1,30 @@
-// Imports React hooks to load and store dashboard data.
-import { useEffect, useState } from "react";
 
-// Imports Material UI components used on this page.
+import { useEffect, useState } from "react";
 import { Box, Button, Typography } from "@mui/material";
 
-// Imports the shared API helper used to call backend APIs with authentication.
 import { apiRequest } from "../../lib/api.js";
 
-// Imports the common Core Team page layout components.
 import CorePageShell, {
   SectionCard,
 } from "../../components/CorePageShell.jsx";
 
-// Imports icons used by the dashboard stat cards.
 import MoveToInboxRoundedIcon from "@mui/icons-material/MoveToInboxRounded";
 import AssignmentTurnedInRoundedIcon from "@mui/icons-material/AssignmentTurnedInRounded";
 import AccessTimeRoundedIcon from "@mui/icons-material/AccessTimeRounded";
 import PeopleAltRoundedIcon from "@mui/icons-material/PeopleAltRounded";
 
-/* ───────────────────────── tokens ───────────────────────── */
+// ======================================================
+// DESIGN TOKENS
+// ======================================================
 
-// Defines the light border/grid color used throughout the dashboard.
 const LINE2 = "#eef1f6";
-
-// Defines the muted text color used for secondary labels.
 const MUTED = "#6a7585";
-
-// Defines the main heading/text color.
 const HEAD = "#1a2434";
 
-/* ───────────────────────── data ───────────────────────── */
+// ======================================================
+// STAT CARDS
+// ======================================================
 
-// Stores the visual configuration for the four top statistic cards.
 const STAT_CARDS = [
   {
     label: "Total Received",
@@ -69,7 +62,10 @@ const STAT_CARDS = [
   },
 ];
 
-// Stores the temporary static KPI summary cards.
+// ======================================================
+// KPI CARDS
+// ======================================================
+
 const KPI_CARDS = [
   {
     label: "Pending corrections",
@@ -85,7 +81,7 @@ const KPI_CARDS = [
     note: "acknowledged this cycle",
     color: "#15966a",
     action: "Details",
-    nav: "compliance"
+    nav: "compliance",
   },
   {
     label: "Missing entries",
@@ -97,9 +93,10 @@ const KPI_CARDS = [
   },
 ];
 
-/* ───────────────────────── stat card ───────────────────────── */
+// ======================================================
+// STAT CARD COMPONENT
+// ======================================================
 
-// Displays one dashboard statistic card.
 function StatCard({
   icon: Icon,
   iconBg,
@@ -126,7 +123,8 @@ function StatCard({
         gap: "14px",
       }}
     >
-      {/* Displays the colored icon container. */}
+      {/* Icon container */}
+
       <Box
         sx={{
           width: 46,
@@ -144,7 +142,8 @@ function StatCard({
         <Icon sx={{ fontSize: 21 }} />
       </Box>
 
-      {/* Displays the card label, value and optional trend text. */}
+      {/* Card details */}
+
       <Box sx={{ minWidth: 0 }}>
         <Typography
           sx={{
@@ -187,50 +186,42 @@ function StatCard({
   );
 }
 
-/* ───────────────────────── trend chart ───────────────────────── */
+// ======================================================
+// MONTHLY PRODUCTION TREND
+// ======================================================
 
-// Builds the Monthly Production Trend chart using live backend data.
 function TrendChart({ data }) {
-  // Uses an empty array while the monthly trend API is loading.
   const trendData = data || [];
 
-  // Defines the SVG width used for horizontal chart positioning.
   const chartWidth = 800;
-
-  // Defines the SVG height used for vertical chart positioning.
   const chartHeight = 180;
-
-  // Adds spacing so chart points do not touch the chart edges.
   const verticalPadding = 18;
 
-  // Finds the highest completed value to scale all monthly values correctly.
   const maxCompleted = Math.max(
-    ...trendData.map((item) => Number(item.completed || 0)),
+    ...trendData.map((item) =>
+      Number(item.completed || 0)
+    ),
     1
   );
 
-  // Converts every completed value into an SVG x,y coordinate.
   const completedPoints = trendData
     .map((item, index) => {
-      // Calculates the horizontal position of each month.
       const x =
         trendData.length === 1
           ? chartWidth / 2
-          : (index / (trendData.length - 1)) * chartWidth;
+          : (index / (trendData.length - 1)) *
+            chartWidth;
 
-      // Calculates the vertical position using the completed production value.
       const y =
         chartHeight -
         verticalPadding -
         (Number(item.completed || 0) / maxCompleted) *
-        (chartHeight - verticalPadding * 2);
+          (chartHeight - verticalPadding * 2);
 
-      // Returns the position in SVG coordinate format.
       return `${x},${y}`;
     })
     .join(" ");
 
-  // Creates the shaded area underneath the completed production line.
   const completedFillPoints =
     trendData.length > 0
       ? `0,${chartHeight} ${completedPoints} ${chartWidth},${chartHeight}`
@@ -244,7 +235,8 @@ function TrendChart({ data }) {
         pb: 1.5,
       }}
     >
-      {/* Displays the chart itself. */}
+      {/* Chart */}
+
       <Box
         sx={{
           height: {
@@ -262,7 +254,6 @@ function TrendChart({ data }) {
           role="img"
           aria-label="Monthly production trend"
         >
-          {/* Defines the gradient used below the chart line. */}
           <defs>
             <linearGradient
               id="dashboardTrendFill"
@@ -285,7 +276,8 @@ function TrendChart({ data }) {
             </linearGradient>
           </defs>
 
-          {/* Draws horizontal grid lines behind the production chart. */}
+          {/* Horizontal grid lines */}
+
           {[36, 72, 108, 144, 180].map((y) => (
             <line
               key={y}
@@ -298,7 +290,8 @@ function TrendChart({ data }) {
             />
           ))}
 
-          {/* Draws the shaded area below the live completed trend line. */}
+          {/* Shaded completed production area */}
+
           {trendData.length > 0 && (
             <polygon
               points={completedFillPoints}
@@ -306,7 +299,8 @@ function TrendChart({ data }) {
             />
           )}
 
-          {/* Draws the completed-production trend line from live API data. */}
+          {/* Completed production line */}
+
           {trendData.length > 0 && (
             <polyline
               points={completedPoints}
@@ -318,20 +312,21 @@ function TrendChart({ data }) {
             />
           )}
 
-          {/* Draws one circle for every month returned by the API. */}
+          {/* Monthly production points */}
+
           {trendData.map((item, index) => {
-            // Calculates the horizontal position for this monthly point.
             const x =
               trendData.length === 1
                 ? chartWidth / 2
-                : (index / (trendData.length - 1)) * chartWidth;
+                : (index / (trendData.length - 1)) *
+                  chartWidth;
 
-            // Calculates the vertical position for this month's completed value.
             const y =
               chartHeight -
               verticalPadding -
-              (Number(item.completed || 0) / maxCompleted) *
-              (chartHeight - verticalPadding * 2);
+              (Number(item.completed || 0) /
+                maxCompleted) *
+                (chartHeight - verticalPadding * 2);
 
             return (
               <circle
@@ -346,7 +341,8 @@ function TrendChart({ data }) {
         </svg>
       </Box>
 
-      {/* Displays the month names underneath the production trend chart. */}
+      {/* Month labels */}
+
       <Box
         sx={{
           display: "flex",
@@ -369,7 +365,8 @@ function TrendChart({ data }) {
         ))}
       </Box>
 
-      {/* Displays the completed-production legend. */}
+      {/* Chart legend */}
+
       <Box
         sx={{
           display: "flex",
@@ -387,7 +384,6 @@ function TrendChart({ data }) {
             color: MUTED,
           }}
         >
-          {/* Displays the small blue legend line. */}
           <Box
             component="i"
             sx={{
@@ -405,29 +401,35 @@ function TrendChart({ data }) {
   );
 }
 
-/* ───────────────────────── backlog row ───────────────────────── */
+// ======================================================
+// BACKLOG BY PROJECT
+// ======================================================
 
-// Displays one project inside the Backlog by project section.
 function BacklogRow({ name, pct, total }) {
   return (
     <Box
       sx={{
         display: "grid",
+
         gridTemplateColumns: {
           xs: "1fr auto",
           sm: "minmax(110px,1fr) 1fr 36px",
         },
+
         alignItems: "center",
         gap: { xs: 1, sm: 1.5 },
         px: 2,
         py: 1.1,
+
         borderBottom: `1px solid ${LINE2}`,
+
         "&:last-of-type": {
           borderBottom: "none",
         },
       }}
     >
-      {/* Displays the project name. */}
+      {/* Project name */}
+
       <Typography
         sx={{
           fontSize: 12.5,
@@ -440,21 +442,23 @@ function BacklogRow({ name, pct, total }) {
         {name}
       </Typography>
 
-      {/* Displays the backlog progress bar. */}
+      {/* Backlog progress bar */}
+
       <Box
         sx={{
           order: { xs: 3, sm: 0 },
+
           gridColumn: {
             xs: "1 / -1",
             sm: "auto",
           },
+
           height: 7,
           bgcolor: "#edf1f6",
           borderRadius: 4,
           overflow: "hidden",
         }}
       >
-        {/* Sets the progress-bar width using the live backlog percentage. */}
         <Box
           sx={{
             width: `${pct}%`,
@@ -465,7 +469,8 @@ function BacklogRow({ name, pct, total }) {
         />
       </Box>
 
-      {/* Displays the live backlog quantity. */}
+      {/* Backlog quantity */}
+
       <Typography
         sx={{
           fontSize: 12.5,
@@ -480,19 +485,28 @@ function BacklogRow({ name, pct, total }) {
   );
 }
 
+// ======================================================
+// PROJECT DAILY SUMMARY
+//
+// NEW:
+// Documents Completed - manual Team Lead count.
+// Extracted Documents - manual Team Lead count.
+// Batches Processed - manual Team Lead count.
+//
+// Existing historical calculations are handled by backend.
+// ======================================================
 
-// Give all ten columns enough width, especially Reporting Category.
+// Eleven columns, including Extracted Documents.
+
 const DAILY_SUMMARY_COL =
-  "130px 210px 420px 110px 120px 100px 100px 170px 190px 170px";
+  "130px 210px 420px 110px 120px 180px 100px 100px 170px 190px 170px";
 
-// Displays date-wise and project-wise production summary.
 function ProjectDailySummaryTable({
   rows,
   page,
   setPage,
   rowsPerPage,
 }) {
-  // Gets only the five records for the current page.
   const paginatedRows = rows.slice(
     page * rowsPerPage,
     page * rowsPerPage + rowsPerPage
@@ -501,12 +515,19 @@ function ProjectDailySummaryTable({
   return (
     <SectionCard title="Project Daily Summary">
       <Box sx={{ overflowX: "auto" }}>
-        {/* Displays table headings. */}
+
+        {/* ============================================
+            TABLE HEADINGS
+        ============================================ */}
+
         <Box
           sx={{
             display: "grid",
             gridTemplateColumns: DAILY_SUMMARY_COL,
-            minWidth: 1850,
+
+            // Updated width for Extracted Documents.
+            minWidth: 2030,
+
             px: 2,
             py: 1.2,
             bgcolor: "#f8fafc",
@@ -519,6 +540,10 @@ function ProjectDailySummaryTable({
             "REPORTING CATEGORY",
             "RECEIVED",
             "COMPLETED",
+
+            // NEW COLUMN
+            "EXTRACTED DOCUMENTS",
+
             "BACKLOG",
             "PENDING",
             "BATCHES RECEIVED",
@@ -539,37 +564,52 @@ function ProjectDailySummaryTable({
           ))}
         </Box>
 
-        {/* Displays an empty message when no production records exist. */}
+        {/* ============================================
+            TABLE DATA
+        ============================================ */}
+
         {rows.length === 0 ? (
           <Box sx={{ px: 2, py: 2 }}>
-            <Typography sx={{ fontSize: 13, color: MUTED }}>
+            <Typography
+              sx={{
+                fontSize: 13,
+                color: MUTED,
+              }}
+            >
               No project production data found.
             </Typography>
           </Box>
         ) : (
-          // Displays the current page of production records.
           paginatedRows.map((row, index) => (
             <Box
               key={`${row.projectId}-${row.categoryId ?? "none"}-${row.productionDate}-${index}`}
               sx={{
                 display: "grid",
                 gridTemplateColumns: DAILY_SUMMARY_COL,
-                minWidth: 1850,
+                minWidth: 2030,
                 alignItems: "center",
                 px: 2,
                 py: 1.3,
                 borderBottom: `1px solid ${LINE2}`,
+
                 "&:hover": {
                   bgcolor: "#fafbff",
                 },
               }}
             >
-              {/* Displays production date. */}
-              <Typography sx={{ fontSize: 13, color: HEAD }}>
+              {/* Production date */}
+
+              <Typography
+                sx={{
+                  fontSize: 13,
+                  color: HEAD,
+                }}
+              >
                 {row.productionDate}
               </Typography>
 
-              {/* Displays project name. */}
+              {/* Project name */}
+
               <Typography
                 sx={{
                   fontSize: 13,
@@ -579,37 +619,71 @@ function ProjectDailySummaryTable({
               >
                 {row.projectName}
               </Typography>
-              {/* Display Reporting Category with proper spacing and wrapping. */}
+
+              {/* Reporting category */}
+
               <Typography
                 sx={{
-                  fontSize: 13,                
-                  width: "100%",              
-                  whiteSpace: "normal",       
-                  overflowWrap: "break-word", 
-                  lineHeight: 1.6,            
-                  pr: 3,                      
-                  boxSizing: "border-box",    
+                  fontSize: 13,
+                  width: "100%",
+                  whiteSpace: "normal",
+                  overflowWrap: "break-word",
+                  lineHeight: 1.6,
+                  pr: 3,
+                  boxSizing: "border-box",
                 }}
               >
                 {row.categoryName || "Uncategorized"}
               </Typography>
 
-              {/* Displays documents received. */}
-              <Typography sx={{ fontSize: 13, color: HEAD }}>
+              {/* Documents Received */}
+
+              <Typography
+                sx={{
+                  fontSize: 13,
+                  color: HEAD,
+                }}
+              >
                 {row.received?.toLocaleString()}
               </Typography>
 
-              {/* Displays documents completed. */}
-              <Typography sx={{ fontSize: 13, color: HEAD }}>
+              {/* Documents Completed */}
+
+              <Typography
+                sx={{
+                  fontSize: 13,
+                  color: HEAD,
+                }}
+              >
                 {row.completed?.toLocaleString()}
               </Typography>
 
-              {/* Displays remaining previous backlog. */}
-              <Typography sx={{ fontSize: 13, color: HEAD }}>
+              {/* NEW: Extracted Documents */}
+
+              <Typography
+                sx={{
+                  fontSize: 13,
+                  color: HEAD,
+                }}
+              >
+                {Number(
+                  row.extractedDocuments || 0
+                ).toLocaleString()}
+              </Typography>
+
+              {/* Previous remaining backlog */}
+
+              <Typography
+                sx={{
+                  fontSize: 13,
+                  color: HEAD,
+                }}
+              >
                 {row.backlog?.toLocaleString()}
               </Typography>
 
-              {/* Displays today's pending documents. */}
+              {/* Documents Pending */}
+
               <Typography
                 sx={{
                   fontSize: 13,
@@ -619,17 +693,35 @@ function ProjectDailySummaryTable({
               >
                 {row.pending?.toLocaleString()}
               </Typography>
-              {/* Displays batches received. */}
-              <Typography sx={{ fontSize: 13, color: HEAD }}>
-                {Number(row.batchesReceived || 0).toLocaleString()}
+
+              {/* Batches Received */}
+
+              <Typography
+                sx={{
+                  fontSize: 13,
+                  color: HEAD,
+                }}
+              >
+                {Number(
+                  row.batchesReceived || 0
+                ).toLocaleString()}
               </Typography>
 
-              {/* Displays batches processed. */}
-              <Typography sx={{ fontSize: 13, color: HEAD }}>
-                {Number(row.batchesProcessed || 0).toLocaleString()}
+              {/* Batches Processed */}
+
+              <Typography
+                sx={{
+                  fontSize: 13,
+                  color: HEAD,
+                }}
+              >
+                {Number(
+                  row.batchesProcessed || 0
+                ).toLocaleString()}
               </Typography>
 
-              {/* Displays pending batches including previous unfinished batches. */}
+              {/* Pending Batches */}
+
               <Typography
                 sx={{
                   fontSize: 13,
@@ -637,14 +729,19 @@ function ProjectDailySummaryTable({
                   color: HEAD,
                 }}
               >
-                {Number(row.pendingBatches || 0).toLocaleString()}
+                {Number(
+                  row.pendingBatches || 0
+                ).toLocaleString()}
               </Typography>
             </Box>
           ))
         )}
       </Box>
 
-      {/* Displays pagination when records are available. */}
+      {/* ==============================================
+          PAGINATION
+      ============================================== */}
+
       {rows.length > 0 && (
         <Box
           sx={{
@@ -657,17 +754,29 @@ function ProjectDailySummaryTable({
             borderTop: `1px solid ${LINE2}`,
           }}
         >
-          {/* Displays the current record range. */}
-          <Typography sx={{ fontSize: 12.5, color: MUTED }}>
+          {/* Current record range */}
+
+          <Typography
+            sx={{
+              fontSize: 12.5,
+              color: MUTED,
+            }}
+          >
             {page * rowsPerPage + 1}–
-            {Math.min((page + 1) * rowsPerPage, rows.length)} of{" "}
-            {rows.length}
+            {Math.min(
+              (page + 1) * rowsPerPage,
+              rows.length
+            )}{" "}
+            of {rows.length}
           </Typography>
 
-          {/* Goes to the previous page. */}
+          {/* Previous page */}
+
           <Button
             disabled={page === 0}
-            onClick={() => setPage((current) => current - 1)}
+            onClick={() =>
+              setPage((current) => current - 1)
+            }
             sx={{
               minWidth: 30,
               p: 0.5,
@@ -678,10 +787,15 @@ function ProjectDailySummaryTable({
             ‹
           </Button>
 
-          {/* Goes to the next page. */}
+          {/* Next page */}
+
           <Button
-            disabled={(page + 1) * rowsPerPage >= rows.length}
-            onClick={() => setPage((current) => current + 1)}
+            disabled={
+              (page + 1) * rowsPerPage >= rows.length
+            }
+            onClick={() =>
+              setPage((current) => current + 1)
+            }
             sx={{
               minWidth: 30,
               p: 0.5,
@@ -696,65 +810,88 @@ function ProjectDailySummaryTable({
     </SectionCard>
   );
 }
-/* ───────────────────────── main page ───────────────────────── */
 
-// Displays the complete Core Team dashboard page.
+// ======================================================
+// MAIN CORE TEAM DASHBOARD
+// ======================================================
+
 export default function Dashboard({ onNavigate }) {
-  // Stores the Core Team summary values returned by the backend.
+
+  // Main dashboard state.
+
   const [dashboard, setDashboard] = useState(null);
 
-  // Stores monthly production trend data returned by the backend.
+  // Monthly production trend.
+
   const [monthlyTrend, setMonthlyTrend] = useState([]);
 
-  // Stores live backlog-by-project data returned by the backend.
-  const [backlogProjects, setBacklogProjects] = useState([]);
+  // Project backlog state.
 
-  // Stores the live pending-corrections count returned by the backend.
-  const [pendingCorrections, setPendingCorrections] = useState(null);
+  const [backlogProjects, setBacklogProjects] =
+    useState([]);
 
-  // Stores the live guide-compliance data returned by the backend.
-  const [guideCompliance, setGuideCompliance] = useState(null);
+  // Pending corrections.
 
-  // Stores the live missing-entries count returned by the backend.
-  const [missingEntries, setMissingEntries] = useState(null);
+  const [pendingCorrections, setPendingCorrections] =
+    useState(null);
 
-  // Stores date-wise and project-wise production summary.
-  const [projectDailySummary, setProjectDailySummary] = useState([]);
+  // Guide compliance.
 
-  // Controls pagination for Project Daily Summary.
-  const [projectSummaryPage, setProjectSummaryPage] = useState(0);
+  const [guideCompliance, setGuideCompliance] =
+    useState(null);
 
-  // Shows five Project Daily Summary records per page.
+  // Missing daily entries.
+
+  const [missingEntries, setMissingEntries] =
+    useState(null);
+
+  // Project Daily Summary.
+
+  const [projectDailySummary, setProjectDailySummary] =
+    useState([]);
+
+  // Project Daily Summary pagination.
+
+  const [projectSummaryPage, setProjectSummaryPage] =
+    useState(0);
+
   const PROJECT_SUMMARY_ROWS_PER_PAGE = 5;
 
-  // Loads all required dashboard APIs when this page opens.
+  // ====================================================
+  // LOAD DASHBOARD APIs
+  // ====================================================
+
   useEffect(() => {
-    // Loads the main Core Team dashboard summary values.
+
+    // Load main Core Team dashboard.
+
     const loadDashboard = async () => {
       try {
-        // Calls the main Core Team dashboard endpoint.
-        const data = await apiRequest("/core-team/dashboard");
+        const data = await apiRequest(
+          "/core-team/dashboard"
+        );
 
-        // Saves the returned dashboard summary values.
         setDashboard(data.dashboard);
+
       } catch (error) {
-        // Logs dashboard-loading errors in the browser console.
-        console.error("Core Team Dashboard Error:", error);
+        console.error(
+          "Core Team Dashboard Error:",
+          error
+        );
       }
     };
 
-    // Loads monthly production trend data.
+    // Load monthly production trend.
+
     const loadMonthlyTrend = async () => {
       try {
-        // Calls the monthly production trend backend endpoint.
         const data = await apiRequest(
           "/core-team/dashboard/monthly-trend"
         );
 
-        // Stores the monthly trend array returned by the backend.
         setMonthlyTrend(data.trend || []);
+
       } catch (error) {
-        // Logs monthly-trend loading errors.
         console.error(
           "Monthly Production Trend Error:",
           error
@@ -762,18 +899,17 @@ export default function Dashboard({ onNavigate }) {
       }
     };
 
-    // Loads live backlog information for every project.
+    // Load backlog by project.
+
     const loadBacklogProjects = async () => {
       try {
-        // Calls the Core Team backlog-by-project backend endpoint.
         const data = await apiRequest(
           "/core-team/dashboard/backlog-by-project"
         );
 
-        // Stores the project backlog array returned by the backend.
         setBacklogProjects(data.projects || []);
+
       } catch (error) {
-        // Logs backlog API errors in the browser console.
         console.error(
           "Backlog By Project Error:",
           error
@@ -781,65 +917,87 @@ export default function Dashboard({ onNavigate }) {
       }
     };
 
-    // Loads the pending-corrections count from the backend.
+    // Load pending corrections.
+
     const loadPendingCorrections = async () => {
       try {
-        // Calls the Core Team pending-corrections API.
         const data = await apiRequest(
           "/core-team/dashboard/pending-corrections"
         );
 
-        // Stores the live pending-corrections count.
-        setPendingCorrections(data.pendingCorrections);
+        setPendingCorrections(
+          data.pendingCorrections
+        );
+
       } catch (error) {
-        // Logs pending-corrections API errors in the browser console.
-        console.error("Pending Corrections Error:", error);
+        console.error(
+          "Pending Corrections Error:",
+          error
+        );
       }
     };
-    // Loads the current guide-compliance information from the backend.
+
+    // Load guide compliance.
+
     const loadGuideCompliance = async () => {
       try {
-        // Calls the Core Team guide-compliance dashboard API.
         const data = await apiRequest(
           "/core-team/dashboard/guide-compliance"
         );
 
-        // Stores the compliance object returned by the backend.
         setGuideCompliance(data.compliance);
+
       } catch (error) {
-        // Logs guide-compliance API errors for debugging.
-        console.error("Guide Compliance Error:", error);
+        console.error(
+          "Guide Compliance Error:",
+          error
+        );
       }
     };
 
-    // Loads today's missing-entry employees from the backend.
+    // Load missing daily entries.
+
     const loadMissingEntries = async () => {
       try {
-        // Calls the Core Team missing-entries API.
         const data = await apiRequest(
           "/core-team/dashboard/missing-entries"
         );
 
-        // Stores the number of employees with missing entries.
         setMissingEntries(data.count);
+
       } catch (error) {
-        // Logs missing-entry API errors in the browser console.
-        console.error("Missing Entries Error:", error);
+        console.error(
+          "Missing Entries Error:",
+          error
+        );
       }
     };
 
-    // Loads date-wise and project-wise production summary.
+    // ==================================================
+    // LOAD PROJECT DAILY SUMMARY
+    //
+    // Backend returns:
+    // received
+    // completed
+    // extractedDocuments
+    // backlog
+    // pending
+    // batchesReceived
+    // batchesProcessed
+    // pendingBatches
+    // ==================================================
+
     const loadProjectDailySummary = async () => {
       try {
-        // Calls the Core Team Project Daily Summary API.
         const data = await apiRequest(
           "/core-team/dashboard/project-daily-summary"
         );
 
-        // Stores the returned Project Daily Summary records.
-        setProjectDailySummary(data.summary || []);
+        setProjectDailySummary(
+          data.summary || []
+        );
+
       } catch (error) {
-        // Logs Project Daily Summary API errors.
         console.error(
           "Project Daily Summary Error:",
           error
@@ -847,50 +1005,48 @@ export default function Dashboard({ onNavigate }) {
       }
     };
 
-    // Starts loading the main dashboard summary.
+    // Load all dashboard sections.
+
     loadDashboard();
-
-    // Starts loading monthly trend data.
     loadMonthlyTrend();
-
-    // Starts loading live project backlog data.
     loadBacklogProjects();
-
-    // Starts loading the live pending-corrections count.
     loadPendingCorrections();
-
-    // Starts loading the live guide-compliance data.
     loadGuideCompliance();
-
-    // Starts loading the live missing-entries count.
     loadMissingEntries();
-
-    // Starts loading the Project Daily Summary.
     loadProjectDailySummary();
+
   }, []);
 
-  // Replaces only the top-card values with live values from the backend.
-  const liveStatCards = STAT_CARDS.map((card, index) => {
-    // Creates the live value list only after dashboard data has loaded.
-    const values = dashboard
-      ? [
-        dashboard.totalReceived,
-        dashboard.totalCompleted,
-        dashboard.projectBacklog,
-        dashboard.activeEmployees,
-      ]
-      : [];
+  // ====================================================
+  // LIVE STAT CARDS
+  // ====================================================
 
-    // Keeps the original card design while replacing its displayed value.
-    return {
-      ...card,
-      value: values[index] ?? card.value,
-    };
-  });
+  const liveStatCards = STAT_CARDS.map(
+    (card, index) => {
+      const values = dashboard
+        ? [
+            dashboard.totalReceived,
+            dashboard.totalCompleted,
+            dashboard.projectBacklog,
+            dashboard.activeEmployees,
+          ]
+        : [];
 
-  // Creates the KPI cards using live backend data without changing the original UI.
+      return {
+        ...card,
+        value: values[index] ?? card.value,
+      };
+    }
+  );
+
+  // ====================================================
+  // LIVE KPI CARDS
+  // ====================================================
+
   const liveKpiCards = KPI_CARDS.map((card) => {
-    // Replaces Pending corrections with its live backend value.
+
+    // Pending corrections.
+
     if (card.label === "Pending corrections") {
       return {
         ...card,
@@ -898,17 +1054,21 @@ export default function Dashboard({ onNavigate }) {
       };
     }
 
-    // Replaces Guide compliance with the live compliance percentage.
+    // Guide compliance.
+
     if (card.label === "Guide compliance") {
       return {
         ...card,
+
         value:
           guideCompliance?.complianceRate !== undefined
             ? `${guideCompliance.complianceRate}%`
             : card.value,
       };
     }
-    // Replaces Missing entries with the live backend count.
+
+    // Missing daily entries.
+
     if (card.label === "Missing entries") {
       return {
         ...card,
@@ -916,9 +1076,12 @@ export default function Dashboard({ onNavigate }) {
       };
     }
 
-    // Keeps any other KPI cards unchanged.
     return card;
   });
+
+  // ====================================================
+  // DASHBOARD UI
+  // ====================================================
 
   return (
     <CorePageShell
@@ -926,10 +1089,12 @@ export default function Dashboard({ onNavigate }) {
         <Typography
           sx={{
             fontWeight: 800,
+
             fontSize: {
               xs: 18,
               sm: 20,
             },
+
             letterSpacing: "-0.3px",
             color: HEAD,
           }}
@@ -937,11 +1102,15 @@ export default function Dashboard({ onNavigate }) {
           Managers Dashboard
         </Typography>
       }
+
       description="Organisation-wide production, backlogs and compliance across all projects."
+
       actionLabel="Open analytics"
+
       actionHandler={() =>
         onNavigate("analytics-kpis")
       }
+
       headerExtra={
         <Button
           variant="outlined"
@@ -954,6 +1123,7 @@ export default function Dashboard({ onNavigate }) {
             textTransform: "none",
             fontWeight: 600,
             borderRadius: "8px",
+
             width: {
               xs: "100%",
               sm: "auto",
@@ -964,21 +1134,25 @@ export default function Dashboard({ onNavigate }) {
         </Button>
       }
     >
-      {/* ───────────────── STAT CARDS ───────────────── */}
+
+      {/* ==============================================
+          STAT CARDS
+      ============================================== */}
 
       <Box
         sx={{
           display: "grid",
+
           gridTemplateColumns: {
             xs: "1fr",
             sm: "repeat(2, 1fr)",
             md: "repeat(4, 1fr)",
           },
+
           gap: 2,
           mb: 2.5,
         }}
       >
-        {/* Displays the top cards using live backend summary values. */}
         {liveStatCards.map((card) => (
           <StatCard
             key={card.label}
@@ -987,33 +1161,38 @@ export default function Dashboard({ onNavigate }) {
         ))}
       </Box>
 
-      {/* ───────────────── TREND + BACKLOG ───────────────── */}
+      {/* ==============================================
+          MONTHLY PRODUCTION TREND
+          AND BACKLOG BY PROJECT
+      ============================================== */}
 
       <Box
         sx={{
           display: "grid",
+
           gridTemplateColumns: {
             xs: "1fr",
             md: "7.2fr 4.8fr",
           },
+
           gap: 2,
           mb: 2.5,
         }}
       >
-        {/* Displays the live Monthly Production Trend section. */}
+
+        {/* Monthly production trend */}
+
         <SectionCard
           title="Monthly production trend"
+
           action={
             <Button
               size="small"
               onClick={() =>
-                onNavigate(
-                  "analytics-kpis"
-                )
+                onNavigate("analytics-kpis")
               }
               sx={{
-                textTransform:
-                  "none",
+                textTransform: "none",
                 fontWeight: 600,
               }}
             >
@@ -1021,13 +1200,11 @@ export default function Dashboard({ onNavigate }) {
             </Button>
           }
         >
-          {/* Passes live monthly production data into the existing chart UI. */}
-          <TrendChart
-            data={monthlyTrend}
-          />
+          <TrendChart data={monthlyTrend} />
         </SectionCard>
 
-        {/* Displays the live Backlog by project section. */}
+        {/* Backlog by project */}
+
         <SectionCard title="Backlog by project">
           <Box
             sx={{
@@ -1035,58 +1212,64 @@ export default function Dashboard({ onNavigate }) {
               pb: 0.5,
             }}
           >
-            {/* Converts backend project data into the same existing BacklogRow UI. */}
-            {backlogProjects.map(
-              (project) => (
-                <BacklogRow
-                  key={project.id}
-                  name={
-                    project.project_name
-                  }
-                  total={
-                    project.backlog
-                  }
-                  pct={
-                    project.received >
-                      0
-                      ? Math.round(
+            {backlogProjects.map((project) => (
+              <BacklogRow
+                key={project.id}
+                name={project.project_name}
+                total={project.backlog}
+
+                pct={
+                  project.received > 0
+                    ? Math.round(
                         (project.backlog /
                           project.received) *
-                        100
+                          100
                       )
-                      : 0
-                  }
-                />
-              )
-            )}
+                    : 0
+                }
+              />
+            ))}
           </Box>
         </SectionCard>
       </Box>
 
-      {/* ───────────────── PROJECT DAILY SUMMARY ───────────────── */}
+      {/* ==============================================
+          UPDATED PROJECT DAILY SUMMARY
+
+          Includes:
+          Documents Completed
+          Extracted Documents
+          Batches Processed
+      ============================================== */}
 
       <Box sx={{ mb: 2.5 }}>
         <ProjectDailySummaryTable
           rows={projectDailySummary}
           page={projectSummaryPage}
           setPage={setProjectSummaryPage}
-          rowsPerPage={PROJECT_SUMMARY_ROWS_PER_PAGE}
+
+          rowsPerPage={
+            PROJECT_SUMMARY_ROWS_PER_PAGE
+          }
         />
       </Box>
 
-      {/* ───────────────── KPI SUMMARY ───────────────── */}
+      {/* ==============================================
+          KPI SUMMARY
+      ============================================== */}
 
       <Box
         sx={{
           display: "grid",
+
           gridTemplateColumns: {
             xs: "1fr",
             sm: "repeat(3, 1fr)",
           },
+
           gap: 2,
         }}
       >
-        {/* Displays KPI cards with available live backend values. */}
         {liveKpiCards.map(
           ({
             label,
@@ -1098,6 +1281,7 @@ export default function Dashboard({ onNavigate }) {
           }) => (
             <SectionCard
               key={label}
+
               title={
                 <Typography
                   sx={{
@@ -1109,6 +1293,7 @@ export default function Dashboard({ onNavigate }) {
                   {label}
                 </Typography>
               }
+
               action={
                 <Button
                   size="small"
@@ -1116,8 +1301,7 @@ export default function Dashboard({ onNavigate }) {
                     onNavigate(nav)
                   }
                   sx={{
-                    textTransform:
-                      "none",
+                    textTransform: "none",
                     fontWeight: 600,
                   }}
                 >
@@ -1125,11 +1309,13 @@ export default function Dashboard({ onNavigate }) {
                 </Button>
               }
             >
-              {/* Displays the KPI value and its descriptive note. */}
+
+              {/* KPI value and description */}
+
               <Box
                 sx={{
-                  textAlign:
-                    "center",
+                  textAlign: "center",
+
                   py: {
                     xs: 2.25,
                     sm: 3,
@@ -1143,11 +1329,11 @@ export default function Dashboard({ onNavigate }) {
                       sm: 26,
                       md: 30,
                     },
+
                     fontWeight: 800,
                     color,
                     lineHeight: 1,
-                    letterSpacing:
-                      "-1px",
+                    letterSpacing: "-1px",
                   }}
                 >
                   {value}

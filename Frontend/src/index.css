@@ -50,11 +50,15 @@ a {
 
 /* Hide all scrollbars globally while keeping scroll functionality intact */
 * {
-  scrollbar-width: none;        /* Firefox */
-  -ms-overflow-style: none;     /* IE / Edge */
+  scrollbar-width: none;
+  /* Firefox */
+  -ms-overflow-style: none;
+  /* IE / Edge */
 }
+
 *::-webkit-scrollbar {
-  display: none;                /* Chrome / Safari / WebKit */
+  display: none;
+  /* Chrome / Safari / WebKit */
 }
 
 button,
@@ -63,5 +67,106 @@ textarea,
 select {
   font: inherit;
 }
-html, body, #root { width: 100%; min-width: 0; }
-img, svg { max-width: 100%; }
+
+html,
+body,
+#root {
+  width: 100%;
+  min-width: 0;
+}
+
+img,
+svg {
+  max-width: 100%;
+}
+
+
+/* ==========================================
+   PRODTRACK OPTIMIZED GLASS UI
+========================================== */
+
+/* Main workspace background */
+
+.pt-glass-workspace {
+  background:
+    radial-gradient(ellipse at top right,
+      #c7dcfb 0%,
+      transparent 55%),
+    linear-gradient(135deg,
+      #e7effc 0%,
+      #e0e5fa 50%,
+      #d4e5fc 100%) !important;
+}
+
+
+/* Lightweight glass cards */
+
+.pt-glass-workspace .MuiPaper-root:not(.MuiAlert-root):not(.MuiDialog-paper):not(.MuiPopover-paper):not(.MuiAutocomplete-paper) {
+
+  background: rgba(255, 255, 255, 0.48) !important;
+
+  border: 1px solid rgba(255, 255, 255, 0.85) !important;
+
+  border-radius: 16px !important;
+
+  box-shadow:
+    0 4px 12px rgba(31, 38, 135, 0.06);
+
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+
+/* Input fields and dropdowns */
+
+.pt-glass-workspace .MuiOutlinedInput-root:not(.Mui-disabled) {
+
+  background-color:
+    rgba(255, 255, 255, 0.85) !important;
+
+  border-radius: 12px;
+}
+
+
+/* Input focus */
+
+.pt-glass-workspace .MuiOutlinedInput-root.Mui-focused {
+
+  background-color: #ffffff !important;
+}
+
+
+/* Table headers */
+
+.pt-glass-workspace .MuiTableHead-root .MuiTableRow-root {
+
+  background-color:
+    rgba(219, 230, 249, 0.50) !important;
+}
+
+
+/* Table separators */
+
+.pt-glass-workspace .MuiTableCell-root {
+
+  border-bottom:
+    1px solid rgba(255, 255, 255, 0.65) !important;
+}
+
+
+/* Lightweight row hover */
+
+.pt-glass-workspace .MuiTableBody-root .MuiTableRow-root:hover {
+
+  background-color:
+    rgba(255, 255, 255, 0.35);
+}
+
+
+/* Card separators */
+
+.pt-glass-workspace .MuiDivider-root {
+
+  border-color:
+    rgba(255, 255, 255, 0.65);
+}

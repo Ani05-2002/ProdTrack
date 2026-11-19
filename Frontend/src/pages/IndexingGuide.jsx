@@ -1,7 +1,10 @@
+
 import { useEffect, useState } from "react";
-import apiRequest, { apiDownload } from "../lib/api.js";
+
+import apiRequest from "../lib/api.js";
 import { useConfirm } from "../components/ConfirmDialog.jsx";
 import GuideViewer from "../components/GuideViewer.jsx";
+
 import {
   Box,
   Typography,
@@ -20,15 +23,16 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  CircularProgress,
 } from "@mui/material";
 
-import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
 import FileDownloadRoundedIcon from "@mui/icons-material/FileDownloadRounded";
-
+import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
+import CheckCircleOutlineRoundedIcon from "@mui/icons-material/CheckCircleOutlineRounded";
+import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
 
 const FONT =
   '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
-
 
 const defaultGuide = {
   name: "ABC Medical Imaging Indexing Guide v2.3",
@@ -36,38 +40,77 @@ const defaultGuide = {
   updatedDate: "16 May 2025",
 };
 
-// =========================================================
-// IndexingGuide
-// variant="card" -> compact dashboard summary (Image 1)
-// variant="page" (default) -> full guide detail page (Image 2)
-// =========================================================
+// Common View Guide button styling.
+const primaryButtonStyle = {
+  height: 36,
+  borderRadius: "8px",
+  textTransform: "none",
+  fontWeight: 700,
+  fontSize: 12.5,
+  whiteSpace: "nowrap",
+  boxShadow: "none",
+  backgroundColor: "#2f6df6",
+
+  "&:hover": {
+    backgroundColor: "#2458cf",
+    boxShadow: "none",
+  },
+};
+
+// Common Version History button styling.
+const secondaryButtonStyle = {
+  height: 36,
+  borderRadius: "8px",
+  textTransform: "none",
+  fontWeight: 600,
+  fontSize: 12.5,
+  whiteSpace: "nowrap",
+  color: "#1A2434",
+  borderColor: "#d6dee9",
+  backgroundColor: "#ffffff",
+
+  "&:hover": {
+    backgroundColor: "#f5f8fc",
+    borderColor: "#aebed3",
+  },
+};
+
 export default function IndexingGuide({
   variant = "page",
   guide: providedGuide = defaultGuide,
   onViewGuide,
   roleLabel = "Indexer",
 }) {
-  const [selected, setSelected] = useState(0);
+  // Stores all available indexing guides.
   const [guides, setGuides] = useState([]);
-  const [selectedVersionId, setSelectedVersionId] = useState("");
+
+  // Main page loading and error states.
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [downloading, setDownloading] = useState(false);
+
+  // Stores the guide currently being acknowledged.
+  const [savingId, setSavingId] = useState(null);
+
+  // Full-screen guide viewer states.
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewGuide, setPreviewGuide] = useState(null);
+
+  // Version history states.
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [history, setHistory] = useState([]);
   const [historyError, setHistoryError] = useState("");
-  const [historyProject, setHistoryProject] = useState("");
-  const { confirm, ConfirmElement } = useConfirm();
-  const [sectionsError, setSectionsError] = useState("");
-  const [sectionsLoading, setSectionsLoading] = useState(false);
-  const [guideSections, setGuideSections] = useState([]);
+  const [historyTitle, setHistoryTitle] = useState("");
 
+  // Existing confirmation dialog.
+  const { confirm, ConfirmElement } = useConfirm();
+
+  // =========================================================
+  // LOAD ALL INDEXING GUIDES
+  // =========================================================
 
   useEffect(() => {
-    // Keep the compact dashboard card using its existing prop.
+    // Preserve the existing dashboard card functionality.
     if (variant === "card") return;
 
     let active = true;
@@ -80,19 +123,29 @@ export default function IndexingGuide({
         const data = await apiRequest("/guides/latest");
 
         if (!data.success) {
-          throw new Error(data.message || "Failed to load guides");
+          throw new Error(
+            data.message || "Failed to load guides"
+          );
         }
 
+        // Convert backend guide data into frontend format.
         const items = (data.guides || []).map((item) => ({
           ...item,
-          name: item.title,
+
+          name: item.title || "Indexing Guide",
+
           version: item.version,
+
           updatedDate: item.updated_date
-            ? new Date(item.updated_date).toLocaleDateString("en-IN")
+            ? new Date(
+                item.updated_date
+              ).toLocaleDateString("en-IN")
             : "—",
+
           acknowledged:
             item.acknowledged === true ||
             Number(item.acknowledged) === 1,
+
           requiresAck:
             item.requires_ack === true ||
             Number(item.requires_ack) === 1,
@@ -101,15 +154,16 @@ export default function IndexingGuide({
         if (!active) return;
 
         setGuides(items);
-        setSelectedVersionId(
-          items.length ? String(items[0].version_id) : ""
-        );
       } catch (err) {
         if (active) {
-          setError(err.message || "Failed to load guides");
+          setError(
+            err.message || "Failed to load guides"
+          );
         }
       } finally {
-        if (active) setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
     };
 
@@ -119,234 +173,158 @@ export default function IndexingGuide({
       active = false;
     };
   }, [variant]);
+
   // =========================================================
-  // LOAD GUIDE SECTIONS
+  // ACKNOWLEDGE INDIVIDUAL GUIDE
   // =========================================================
 
-  // Loads the preview sections whenever the selected guide version changes.
-  useEffect(() => {
-    // Does not load sections for the compact dashboard card.
-    if (variant === "card") return;
-
-    // Clears section data when no guide version is selected.
-    if (!selectedVersionId) {
-      setGuideSections([]);
+  const handleAcknowledge = async (guide) => {
+    if (
+      !guide ||
+      guide.acknowledged ||
+      savingId !== null
+    ) {
       return;
     }
 
-    let active = true;
-
-    // Loads all sections configured for the selected guide version.
-    const loadGuideSections = async () => {
-      try {
-        // Shows the loading state inside the guide preview.
-        setSectionsLoading(true);
-
-        // Clears any previous section-loading error.
-        setSectionsError("");
-
-        // Gets the sections for the currently selected guide version.
-        const data = await apiRequest(
-          `/guides/${selectedVersionId}/sections`
-        );
-
-        // Stops if the backend reports an unsuccessful request.
-        if (!data.success) {
-          throw new Error(
-            data.message || "Failed to load guide sections"
-          );
-        }
-
-        // Stops state updates if the component has already changed/unmounted.
-        if (!active) return;
-
-        // Stores all backend-driven guide sections.
-        setGuideSections(data.sections || []);
-
-        // Automatically selects Overview/the first available section.
-        setSelected(0);
-      } catch (err) {
-        // Stops state updates if this request is no longer active.
-        if (!active) return;
-
-        // Clears old sections when loading fails.
-        setGuideSections([]);
-
-        // Stores the error for the preview area.
-        setSectionsError(
-          err.message || "Failed to load guide sections"
-        );
-      } finally {
-        // Ends loading only while this request is still active.
-        if (active) {
-          setSectionsLoading(false);
-        }
-      }
-    };
-
-    // Starts loading the selected guide's sections.
-    loadGuideSections();
-
-    // Prevents an old request from updating the page after selection changes.
-    return () => {
-      active = false;
-    };
-  }, [selectedVersionId, variant]);
-
-  const guide =
-    variant === "card"
-      ? providedGuide
-      : guides.find(
-        (item) => String(item.version_id) === selectedVersionId
-      );
-
-
-  const handleAcknowledge = async () => {
-    if (!guide || guide.acknowledged || saving) return;
-
-    const confirmed = await confirm({
-      title: "Acknowledge guide?",
-      message: `Confirm that you have read "${guide.name}" (${guide.version}).`,
-      confirmLabel: "Acknowledge",
-    });
-
-    if (!confirmed) return;
-
     const versionId = guide.version_id;
 
+    // Prevent multiple acknowledgement actions.
+    setSavingId(versionId);
+
     try {
-      setSaving(true);
+      const confirmed = await confirm({
+        title: "Acknowledge guide?",
+
+        message: `Confirm that you have read "${guide.name}" (${guide.version}).`,
+
+        confirmLabel: "Acknowledge",
+      });
+
+      if (!confirmed) return;
+
       setError("");
 
+      // Acknowledge only the selected guide.
       const data = await apiRequest(
         `/guides/${versionId}/acknowledge`,
-        { method: "POST" }
+        {
+          method: "POST",
+        }
       );
 
       if (!data.success) {
         throw new Error(
-          data.message || "Failed to acknowledge guide"
+          data.message ||
+            "Failed to acknowledge guide"
         );
       }
 
-      // Update the screen only after the backend confirms success.
+      // Update only the acknowledged guide.
       setGuides((currentGuides) =>
         currentGuides.map((item) =>
-          String(item.version_id) === String(versionId)
-            ? { ...item, acknowledged: true }
+          String(item.version_id) ===
+          String(versionId)
+            ? {
+                ...item,
+                acknowledged: true,
+              }
             : item
         )
       );
     } catch (err) {
-      setError(err.message || "Failed to acknowledge guide");
-    } finally {
-      setSaving(false);
-    }
-  };
-  // Downloads the selected guide file.
-  // Downloads the selected guide file.
-  const handleDownload = async () => {
-    // Stops when no guide is selected or a download is already running.
-    if (!guide || downloading) return;
-
-    try {
-      // Starts the download loading state.
-      setDownloading(true);
-
-      // Clears any previous error.
-      setError("");
-
-      // Gets the guide file from the authenticated backend API.
-      const blob = await apiDownload(
-        `/guides/${guide.version_id}/download`
+      setError(
+        err.message ||
+          "Failed to acknowledge guide"
       );
-
-      // Gets the original file extension.
-      // Gets the original file extension from the uploaded guide path.
-      const extension =
-        guide.file_path
-          ?.split(/[\\/]/)
-          .pop()
-          ?.match(/\.(pdf|doc|docx|xls|xlsx)$/i)?.[0]
-          ?.toLowerCase() || "";
-
-      // Creates a safe filename for the downloaded guide.
-      const fileName = `${guide.name}-${guide.version}`
-        .replace(/[^a-zA-Z0-9._-]+/g, "-");
-
-      // Creates a temporary URL containing the downloaded file.
-      const downloadUrl = window.URL.createObjectURL(blob);
-
-      // Creates a temporary HTML download link.
-      const link = document.createElement("a");
-
-      // Assigns the file URL.
-      link.href = downloadUrl;
-
-      // Assigns the filename.
-      link.download = `${fileName}${extension}`;
-
-      // Adds the link to the current page.
-      document.body.appendChild(link);
-
-      // Triggers the browser download.
-      link.click();
-
-      // Removes the temporary link.
-      document.body.removeChild(link);
-
-      // Cleans up the temporary file URL.
-      window.setTimeout(() => {
-        window.URL.revokeObjectURL(downloadUrl);
-      }, 1000);
-    } catch (err) {
-      // Logs the actual error for debugging.
-      console.error("Guide Download Error:", err);
-
-      // Shows the download error on the page.
-      setError(err.message || "Failed to download guide");
     } finally {
-      // Restores the Download button.
-      setDownloading(false);
+      setSavingId(null);
     }
   };
-  const handleViewHistory = async () => {
+
+  // =========================================================
+  // OPEN FULL-SCREEN GUIDE VIEWER
+  // =========================================================
+
+  const handleViewGuide = (guide) => {
+    if (!guide?.version_id) return;
+
+    // Store the exact guide clicked by the employee.
+    setPreviewGuide(guide);
+
+    // Open the searchable document viewer.
+    setPreviewOpen(true);
+  };
+
+  const handleCloseGuide = () => {
+    setPreviewOpen(false);
+    setPreviewGuide(null);
+  };
+
+  // =========================================================
+  // VIEW INDIVIDUAL GUIDE VERSION HISTORY
+  // =========================================================
+
+  const handleViewHistory = async (guide) => {
     if (!guide || historyLoading) return;
 
     setHistoryOpen(true);
-    setHistoryProject(guide.project_name);
+    setHistoryTitle(guide.name);
     setHistory([]);
     setHistoryError("");
     setHistoryLoading(true);
 
     try {
+      // Existing backend project history API.
       const data = await apiRequest(
         `/guides/${guide.project_id}/history`
       );
 
       if (!data.success) {
-        throw new Error(data.message || "Failed to load guide history");
+        throw new Error(
+          data.message ||
+            "Failed to load guide history"
+        );
       }
 
-      setHistory(data.history || []);
+      // The backend returns all guide versions for a project.
+      // Filter them to show only the selected guide's versions.
+      const selectedGuideHistory = (
+        data.history || []
+      ).filter(
+        (item) =>
+          String(item.guide_id) ===
+          String(guide.guide_id)
+      );
+
+      setHistory(selectedGuideHistory);
     } catch (err) {
-      setHistoryError(err.message || "Failed to load guide history");
+      setHistoryError(
+        err.message ||
+          "Failed to load guide history"
+      );
     } finally {
       setHistoryLoading(false);
     }
   };
 
-  // -------------------------------------------------------
-  // COMPACT CARD MODE ....Dashboard
-  // -------------------------------------------------------
+  // =========================================================
+  // EXISTING COMPACT DASHBOARD CARD
+  // =========================================================
+
   if (variant === "card") {
+    const guide = providedGuide;
+
     return (
       <Card
         elevation={0}
         sx={{
           border: "1px solid #dfe4ec",
           borderRadius: "12px",
-          boxShadow: "0 1px 2px rgba(16,30,54,.06), 0 4px 16px rgba(16,30,54,.05)",
+
+          boxShadow:
+            "0 1px 2px rgba(16,30,54,.06), 0 4px 16px rgba(16,30,54,.05)",
+
           backgroundColor: "#ffffff",
           height: "100%",
           overflow: "hidden",
@@ -363,7 +341,12 @@ export default function IndexingGuide({
           }}
         >
           <Typography
-            sx={{ fontFamily: FONT, fontWeight: 800, fontSize: 14, color: "#341a1a" }}
+            sx={{
+              fontFamily: FONT,
+              fontWeight: 800,
+              fontSize: 14,
+              color: "#341a1a",
+            }}
           >
             Indexing guide (latest)
           </Typography>
@@ -382,7 +365,10 @@ export default function IndexingGuide({
               bgcolor: "transparent",
               cursor: "pointer",
               p: 0,
-              "&:hover": { color: "#1f57c9" },
+
+              "&:hover": {
+                color: "#1f57c9",
+              },
             }}
           >
             View all
@@ -401,32 +387,42 @@ export default function IndexingGuide({
         >
           <Box sx={{ minWidth: 0 }}>
             <Typography
-              sx={{ fontFamily: FONT, fontWeight: 700, fontSize: 13.5, color: "#1a2434", mb: "3px" }}
+              sx={{
+                fontFamily: FONT,
+                fontWeight: 700,
+                fontSize: 13.5,
+                color: "#1a2434",
+                mb: "3px",
+              }}
             >
               {guide.name}
             </Typography>
 
-            <Typography sx={{ fontFamily: FONT, color: "#6a7585", fontSize: 12.5 }}>
-              Version {guide.version} · Updated {guide.updatedDate}
+            <Typography
+              sx={{
+                fontFamily: FONT,
+                color: "#6a7585",
+                fontSize: 12.5,
+              }}
+            >
+              Version {guide.version} · Updated{" "}
+              {guide.updatedDate}
             </Typography>
           </Box>
 
           <Button
             variant="contained"
-            startIcon={<FileDownloadRoundedIcon sx={{ fontSize: 16 }} />}
+            startIcon={
+              <FileDownloadRoundedIcon
+                sx={{ fontSize: 16 }}
+              />
+            }
             onClick={onViewGuide}
             sx={{
+              ...primaryButtonStyle,
               fontFamily: FONT,
-              fontSize: 13,
-              fontWeight: 700,
-              textTransform: "none",
-              whiteSpace: "nowrap",
-              borderRadius: "8px",
               px: 2,
               py: 1,
-              backgroundColor: "#2f6df0",
-              boxShadow: "none",
-              "&:hover": { backgroundColor: "#1f57c9", boxShadow: "none" },
             }}
           >
             View / Download
@@ -436,437 +432,556 @@ export default function IndexingGuide({
     );
   }
 
-  // -------------------------------------------------------
-  // FULL PAGE MODE (default)
-  // -------------------------------------------------------
-  if (loading) {
-    return <Typography>Loading indexing guides...</Typography>;
-  }
-
-  if (!guide) {
-    return (
-      <Alert severity={error ? "error" : "info"}>
-        {error || "No guides are available for your assigned projects."}
-      </Alert>
-    );
-  }
+  // =========================================================
+  // MAIN INDEXING GUIDE PAGE
+  // =========================================================
 
   return (
-    <Box sx={{ width: "100%" }}>
+    <Box
+      sx={{
+        width: "100%",
+        fontFamily: FONT,
+      }}
+    >
+      {/* PAGE HEADER */}
+
+      <Box sx={{ mb: 2.3 }}>
+        <Typography
+          sx={{
+            color: "#6A7585",
+            fontSize: 12.5,
+            mb: 0.7,
+          }}
+        >
+          ProdTrack · {roleLabel}
+        </Typography>
+
+        <Typography
+          sx={{
+            fontSize: 22,
+            fontWeight: 800,
+            color: "#1A2434",
+          }}
+        >
+          Indexing guide
+        </Typography>
+
+        <Typography
+          sx={{
+            mt: 0.7,
+            color: "#6A7585",
+            fontSize: 13.5,
+          }}
+        >
+          View the latest approved guides for your
+          assigned projects.
+        </Typography>
+      </Box>
+
+      {/* ERROR MESSAGE */}
+
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
+        <Alert
+          severity="error"
+          sx={{
+            mb: 2,
+            borderRadius: "9px",
+          }}
+        >
           {error}
         </Alert>
       )}
 
-      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 2 }}>
-        {guides.map((item) => (
-          <Button
-            key={item.version_id}
-            disabled={saving}
-            variant={
-              String(item.version_id) === selectedVersionId
-                ? "contained"
-                : "outlined"
-            }
-            onClick={() => {
-              setSelectedVersionId(String(item.version_id));
-              setError("");
-            }}
-            sx={{ textTransform: "none", borderRadius: "8px" }}
-          >
-            {item.project_name} · {item.acknowledged ? "Read" : "Unread"}
-          </Button>
-        ))}
-      </Box>
+      {/* LOADING STATE */}
 
-      {/* HEADER */}
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-end",
-          mb: 2.3,
-          gap: 2,
-        }}
-      >
-        <Box>
-          <Typography sx={{ color: "#6A7585", fontSize: 12.5, mb: 0.7 }}>
-            ProdTrack · {roleLabel}
-          </Typography>
-
-          <Typography sx={{ fontSize: 22, fontWeight: 800, color: "#1A2434" }}>
-            Indexing guide
-          </Typography>
-
-          <Typography sx={{ mt: 0.7, color: "#6A7585", fontSize: 13.5 }}>
-            {guide.name.replace(/\sv[\d.]+$/, "")} — the latest approved version.
-          </Typography>
-        </Box>
-
-        <Box sx={{ display: "flex", gap: 1, flexShrink: 0 }}>
-          <Button
-            variant="outlined"
-            onClick={handleViewHistory}
-            disabled={historyLoading}
-            sx={{
-              height: 36,
-              borderRadius: "8px",
-              textTransform: "none",
-              color: "#1A2434",
-              borderColor: "#d6dee9",
-              backgroundColor: "#fff",
-            }}
-          >
-            Version history
-          </Button>
-
-          {/* Opens the uploaded guide in the full-screen document viewer. */}
-          <Button
-            variant="contained"
-            onClick={() => setPreviewOpen(true)}
-            disabled={!guide?.version_id}
-            sx={{
-              height: 36,
-              borderRadius: "8px",
-              textTransform: "none",
-              fontWeight: 700,
-              boxShadow: "none",
-              backgroundColor: "#2f6df6",
-              "&:hover": { backgroundColor: "#2458cf", boxShadow: "none" },
-            }}
-          >
-            View Guide
-          </Button>
-        </Box>
-      </Box>
-
-      {/* ACKNOWLEDGEMENT */}
-      <Alert
-        severity={guide.acknowledged ? "success" : "warning"}
-        sx={{ mb: 2, borderRadius: "9px" }}
-      >
-        {guide.acknowledged ? (
-          <Typography component="span" sx={{ fontSize: 13.5 }}>
-            You have acknowledged {guide.version} for {guide.project_name}.
-          </Typography>
-        ) : (
-          <Box>
-            <Typography sx={{ fontSize: 13.5 }}>
-              <strong>Acknowledgement pending.</strong>{" "}
-              {guide.requiresAck
-                ? `Read and acknowledge ${guide.version} before submitting entries for ${guide.project_name}.`
-                : `You have not acknowledged ${guide.version} for ${guide.project_name}.`}
-            </Typography>
-
-            <Button
-              type="button"
-              disabled={saving}
-              onClick={handleAcknowledge}
-              sx={{
-                mt: 0.5,
-                p: 0,
-                textTransform: "none",
-                fontWeight: 700,
-                textDecoration: "underline",
-              }}
-            >
-              {saving ? "Saving..." : "Acknowledge now"}
-            </Button>
-          </Box>
-        )}
-      </Alert>
-
-      {/* GUIDE CARD */}
-      <Card
-        elevation={0}
-        sx={{
-          border: "1px solid #dce3ec",
-          borderRadius: "12px",
-          boxShadow: "0 4px 14px rgba(15,23,42,.05)",
-          overflow: "hidden",
-          backgroundColor: "#fff",
-        }}
-      >
-        <Box
+      {loading ? (
+        <Card
+          elevation={0}
           sx={{
-            minHeight: 46,
+            p: 5,
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between",
-            px: 1.75,
+            justifyContent: "center",
             gap: 2,
+            border: "1px solid #dce3ec",
+            borderRadius: "12px",
           }}
         >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
-            <Typography sx={{ fontSize: 14, fontWeight: 800, color: "#1A2434" }}>
-              {guide.name}
+          <CircularProgress size={24} />
+
+          <Typography
+            sx={{
+              fontSize: 13.5,
+              color: "#6A7585",
+            }}
+          >
+            Loading indexing guides...
+          </Typography>
+        </Card>
+      ) : guides.length === 0 ? (
+        /* EMPTY STATE */
+
+        !error && (
+          <Alert
+            severity="info"
+            sx={{
+              borderRadius: "9px",
+            }}
+          >
+            No guides are available for your assigned
+            projects.
+          </Alert>
+        )
+      ) : (
+        /* INDEXING GUIDES LIST */
+
+        <Card
+          elevation={0}
+          sx={{
+            border: "1px solid #dce3ec",
+            borderRadius: "12px",
+
+            boxShadow:
+              "0 4px 14px rgba(15,23,42,.05)",
+
+            overflow: "hidden",
+            backgroundColor: "#ffffff",
+          }}
+        >
+          {/* LIST HEADER */}
+
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              px: 2,
+              py: 1.75,
+              gap: 2,
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize: 15,
+                fontWeight: 800,
+                color: "#1A2434",
+              }}
+            >
+              Indexing guides
             </Typography>
 
-            <Chip
-              label="LATEST"
-              size="small"
+            <Typography
               sx={{
-                height: 23,
-                backgroundColor: "#e3f7ed",
-                color: "#177A53",
-                border: "1px solid #b9e5d0",
-                fontSize: 10.5,
-                fontWeight: 800,
+                fontSize: 12.5,
+                color: "#6A7585",
               }}
-            />
+            >
+              {guides.length}{" "}
+              {guides.length === 1
+                ? "guide"
+                : "guides"}{" "}
+              available
+            </Typography>
           </Box>
 
-          <Typography sx={{ color: "#6A7585", fontSize: 12.5, whiteSpace: "nowrap" }}>
-            Document preview
-          </Typography>
-        </Box>
+          <Divider />
 
-        <Divider />
+          {/* DISPLAY ALL GUIDES ONE BY ONE */}
 
-        <Box sx={{ display: "flex", minHeight: 460 }}>
-          {/* LEFT MENU */}
-          <Box
-            sx={{
-              width: 205,
-              borderRight: "1px solid #e2e7ee",
-              p: 1.5,
-              flexShrink: 0,
-            }}
-          >
-            {/* Shows loading text while guide sections are coming from the backend. */}
-            {sectionsLoading ? (
-              <Typography
+          {guides.map((guide, index) => (
+            <Box key={guide.version_id}>
+              {/* INDIVIDUAL GUIDE ROW */}
+
+              <Box
                 sx={{
-                  px: 1.25,
-                  py: 1,
-                  color: "#6A7585",
-                  fontSize: 13,
+                  display: "flex",
+
+                  flexDirection: {
+                    xs: "column",
+                    md: "row",
+                  },
+
+                  alignItems: {
+                    xs: "stretch",
+                    md: "center",
+                  },
+
+                  justifyContent: "space-between",
+                  px: 2,
+                  py: 2,
+                  gap: 2,
+
+                  transition:
+                    "background-color 0.15s ease",
+
+                  "&:hover": {
+                    backgroundColor: "#fafcff",
+                  },
                 }}
               >
-                Loading sections...
-              </Typography>
-            ) : sectionsError ? (
-              // Shows the section API error without changing the existing page layout.
-              <Typography
-                sx={{
-                  px: 1.25,
-                  py: 1,
-                  color: "#d32f2f",
-                  fontSize: 13,
-                }}
-              >
-                {sectionsError}
-              </Typography>
-            ) : guideSections.length === 0 ? (
-              // Shows a message when this guide version has no configured sections.
-              <Typography
-                sx={{
-                  px: 1.25,
-                  py: 1,
-                  color: "#6A7585",
-                  fontSize: 13,
-                }}
-              >
-                No sections available.
-              </Typography>
-            ) : (
-              // Renders all guide sections returned by the backend.
-              guideSections.map((section, index) => (
+                {/* LEFT SIDE: GUIDE INFORMATION */}
+
                 <Box
-                  key={section.section_id}
-                  onClick={() => setSelected(index)}
                   sx={{
-                    px: 1.25,
-                    py: 1,
-                    mb: 0.5,
-                    borderRadius: "7px",
-                    cursor: "pointer",
-
-                    // Keeps the original selected-section background.
-                    backgroundColor:
-                      selected === index
-                        ? "#e6efff"
-                        : "transparent",
-
-                    // Keeps the original selected-section text color.
-                    color:
-                      selected === index
-                        ? "#2563eb"
-                        : "#48566D",
-
-                    // Keeps the original selected-section font weight.
-                    fontWeight:
-                      selected === index
-                        ? 700
-                        : 500,
-
-                    fontSize: 13,
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: 1.75,
+                    flex: 1,
+                    minWidth: 0,
                   }}
                 >
-                  {/* Displays the section title stored in guide_section.title. */}
-                  {section.title}
+                  {/* DOCUMENT ICON */}
+
+                  <Box
+                    sx={{
+                      width: 44,
+                      height: 48,
+                      borderRadius: "9px",
+                      backgroundColor: "#eaf1ff",
+                      color: "#2f6df6",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <DescriptionOutlinedIcon
+                      sx={{
+                        fontSize: 25,
+                      }}
+                    />
+                  </Box>
+
+                  {/* GUIDE NAME AND DETAILS */}
+
+                  <Box
+                    sx={{
+                      flex: 1,
+                      minWidth: 0,
+                    }}
+                  >
+                    {/* GUIDE TITLE AND LATEST CHIP */}
+
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1,
+                        flexWrap: "wrap",
+                        mb: 0.5,
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          fontSize: 14,
+                          fontWeight: 800,
+                          color: "#1A2434",
+                          overflowWrap: "anywhere",
+                        }}
+                      >
+                        {guide.name}
+                      </Typography>
+
+                      <Chip
+                        label="LATEST"
+                        size="small"
+                        sx={{
+                          height: 22,
+                          borderRadius: "12px",
+                          backgroundColor: "#e3f7ed",
+                          color: "#177A53",
+                          border: "1px solid #b9e5d0",
+                          fontSize: 10.5,
+                          fontWeight: 800,
+                        }}
+                      />
+                    </Box>
+
+                    {/* PROJECT NAME AND VERSION */}
+
+                    <Typography
+                      sx={{
+                        color: "#6A7585",
+                        fontSize: 12.5,
+                        lineHeight: 1.8,
+                      }}
+                    >
+                      {guide.project_name} · Version{" "}
+                      {guide.version} · Updated{" "}
+                      {guide.updatedDate}
+                    </Typography>
+
+                    {/* ACKNOWLEDGEMENT STATUS */}
+
+                    {guide.acknowledged ? (
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 0.7,
+                          mt: 0.8,
+                          color: "#177A53",
+                        }}
+                      >
+                        <CheckCircleOutlineRoundedIcon
+                          sx={{ fontSize: 17 }}
+                        />
+
+                        <Typography
+                          sx={{
+                            fontSize: 12.5,
+                            fontWeight: 600,
+                          }}
+                        >
+                          Acknowledged
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <Box sx={{ mt: 0.8 }}>
+                        <Box
+                          sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 0.7,
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <WarningAmberRoundedIcon
+                            sx={{
+                              fontSize: 18,
+                              color: "#ed8b16",
+                            }}
+                          />
+
+                          <Typography
+                            sx={{
+                              color: "#a66a12",
+                              fontSize: 12.5,
+                              fontWeight: 600,
+                            }}
+                          >
+                            Acknowledgement pending
+                          </Typography>
+
+                          <Button
+                            type="button"
+                            disabled={
+                              savingId !== null
+                            }
+                            onClick={() =>
+                              handleAcknowledge(guide)
+                            }
+                            sx={{
+                              p: 0,
+                              ml: 0.5,
+                              minWidth: 0,
+                              textTransform: "none",
+                              fontWeight: 700,
+                              fontSize: 12.5,
+                              textDecoration:
+                                "underline",
+                              color: "#2f6df6",
+                            }}
+                          >
+                            {String(savingId) ===
+                            String(guide.version_id)
+                              ? "Saving..."
+                              : "Acknowledge now"}
+                          </Button>
+                        </Box>
+
+                        {guide.requiresAck && (
+                          <Typography
+                            sx={{
+                              mt: 0.5,
+                              fontSize: 11.5,
+                              color: "#6A7585",
+                            }}
+                          >
+                            Read and acknowledge this
+                            guide before submitting
+                            daily entries.
+                          </Typography>
+                        )}
+                      </Box>
+                    )}
+                  </Box>
                 </Box>
-              ))
-            )}
-          </Box>
 
-          {/* CONTENT */}
-          <Box
-            sx={{
-              flex: 1,
-              px: 2.75,
-              py: 2.5,
-              minWidth: 0,
+                {/* RIGHT SIDE: GUIDE ACTION BUTTONS */}
 
-              // Styles backend HTML tables inside the existing preview block.
-              "& table": {
-                width: "100%",
-                borderCollapse: "collapse",
-                marginTop: "16px",
-                marginBottom: "16px",
-              },
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: {
+                      xs: "flex-end",
+                      md: "flex-start",
+                    },
+                    flexWrap: "wrap",
+                    gap: 1,
+                    flexShrink: 0,
+                  }}
+                >
+                  {/* VERSION HISTORY BUTTON */}
 
-              // Styles table headings like the original UI.
-              "& th": {
-                border: "1px solid #e2e8f0",
-                backgroundColor: "#f8fafc",
-                padding: "10px 12px",
-                textAlign: "left",
-                fontSize: 11,
-                fontWeight: 700,
-                color: "#6A7585",
-                textTransform: "uppercase",
-              },
+                  <Button
+                    variant="outlined"
+                    disabled={historyLoading}
+                    onClick={() =>
+                      handleViewHistory(guide)
+                    }
+                    sx={secondaryButtonStyle}
+                  >
+                    Version history
+                  </Button>
 
-              // Styles table values like the original UI.
-              "& td": {
-                border: "1px solid #e6ebf1",
-                padding: "10px 12px",
-                fontSize: 12,
-                color: "#1A2434",
-              },
+                  {/* VIEW GUIDE BUTTON */}
 
-              // Styles main section headings.
-              "& h2": {
-                marginTop: 0,
-                marginBottom: "16px",
-                fontSize: 18,
-                fontWeight: 800,
-                color: "#1A2434",
-              },
+                  <Button
+                    variant="contained"
+                    disabled={!guide.version_id}
+                    onClick={() =>
+                      handleViewGuide(guide)
+                    }
+                    sx={primaryButtonStyle}
+                  >
+                    View Guide
+                  </Button>
+                </Box>
+              </Box>
 
-              // Styles subsection headings.
-              "& h3": {
-                marginTop: "18px",
-                marginBottom: "6px",
-                fontSize: 14,
-                fontWeight: 800,
-                color: "#1A2434",
-              },
+              {/* SEPARATOR BETWEEN GUIDES */}
 
-              // Styles paragraph content.
-              "& p": {
-                fontSize: 13.5,
-                lineHeight: 1.8,
-                color: "#3A4648",
-              },
+              {index < guides.length - 1 && (
+                <Divider
+                  sx={{
+                    borderColor: "#e8ecf3",
+                  }}
+                />
+              )}
+            </Box>
+          ))}
+        </Card>
+      )}
 
-              // Styles bullet-list content.
-              "& ul": {
-                paddingLeft: "22px",
-                fontSize: 13.5,
-                lineHeight: 1.9,
-                color: "#3A4648",
-              },
-            }}
-          >
-            {/* Shows loading state while guide sections are loading. */}
-            {sectionsLoading ? (
-              <Typography
-                sx={{
-                  color: "#6A7585",
-                  fontSize: 13.5,
-                }}
-              >
-                Loading preview...
-              </Typography>
-            ) : sectionsError ? (
-              // Shows an API error inside the existing preview block.
-              <Alert severity="error">
-                {sectionsError}
-              </Alert>
-            ) : guideSections.length === 0 ? (
-              // Shows when this guide version has no configured sections.
-              <Alert severity="info">
-                No preview content is available for this guide version.
-              </Alert>
-            ) : guideSections[selected] ? (
-              // Displays the selected backend section in this same block.
-              <Box
-                dangerouslySetInnerHTML={{
-                  __html: guideSections[selected].content,
-                }}
-              />
-            ) : (
-              // Safe fallback when no section is selected.
-              <Alert severity="info">
-                Select a section to preview its content.
-              </Alert>
-            )}
-          </Box>
-        </Box>
-      </Card>
+      {/* ===================================================
+          VERSION HISTORY DIALOG
+      =================================================== */}
+
       <Dialog
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
         fullWidth
         maxWidth="md"
         aria-labelledby="guide-history-title"
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: "12px",
+            },
+          },
+        }}
       >
         <DialogTitle id="guide-history-title">
-          Version history — {historyProject}
+          Version history — {historyTitle}
         </DialogTitle>
 
         <DialogContent dividers>
           {historyLoading ? (
-            <Typography>Loading version history...</Typography>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 1.5,
+                py: 4,
+              }}
+            >
+              <CircularProgress size={22} />
+
+              <Typography sx={{ fontSize: 13 }}>
+                Loading version history...
+              </Typography>
+            </Box>
           ) : historyError ? (
-            <Alert severity="error">{historyError}</Alert>
+            <Alert severity="error">
+              {historyError}
+            </Alert>
           ) : history.length === 0 ? (
-            <Alert severity="info">No guide versions found.</Alert>
+            <Alert severity="info">
+              No guide versions found.
+            </Alert>
           ) : (
             <Box sx={{ overflowX: "auto" }}>
               <Table size="small">
                 <TableHead>
-                  <TableRow>
-                    <TableCell>Guide / version</TableCell>
-                    <TableCell>Uploaded</TableCell>
-                    <TableCell>Changes</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Acknowledgement</TableCell>
+                  <TableRow
+                    sx={{
+                      backgroundColor: "#f5f7fa",
+                    }}
+                  >
+                    <TableCell>
+                      Guide / version
+                    </TableCell>
+
+                    <TableCell>
+                      Uploaded
+                    </TableCell>
+
+                    <TableCell>
+                      Changes
+                    </TableCell>
+
+                    <TableCell>
+                      Status
+                    </TableCell>
+
+                    <TableCell>
+                      Acknowledgement
+                    </TableCell>
                   </TableRow>
                 </TableHead>
 
                 <TableBody>
                   {history.map((item) => (
-                    <TableRow key={item.version_id}>
+                    <TableRow
+                      key={item.version_id}
+                      hover
+                    >
                       <TableCell>
-                        <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
+                        <Typography
+                          sx={{
+                            fontSize: 13,
+                            fontWeight: 600,
+                          }}
+                        >
                           {item.title}
                         </Typography>
-                        {item.version}
+
+                        <Typography
+                          sx={{
+                            fontSize: 12,
+                            color: "#6A7585",
+                          }}
+                        >
+                          Version {item.version}
+                        </Typography>
                       </TableCell>
 
                       <TableCell>
                         {item.updated_date
-                          ? new Date(item.updated_date).toLocaleDateString(
-                            "en-IN"
-                          )
+                          ? new Date(
+                              item.updated_date
+                            ).toLocaleDateString(
+                              "en-IN"
+                            )
                           : "—"}
                       </TableCell>
 
-                      <TableCell>{item.description || "—"}</TableCell>
+                      <TableCell>
+                        {item.description || "—"}
+                      </TableCell>
 
                       <TableCell>
                         <Chip
@@ -885,7 +1000,22 @@ export default function IndexingGuide({
                       </TableCell>
 
                       <TableCell>
-                        {Number(item.acknowledged) === 1 ? "Read" : "Unread"}
+                        <Chip
+                          size="small"
+                          label={
+                            Number(item.acknowledged) ===
+                            1
+                              ? "Read"
+                              : "Unread"
+                          }
+                          color={
+                            Number(item.acknowledged) ===
+                            1
+                              ? "success"
+                              : "warning"
+                          }
+                          variant="outlined"
+                        />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -896,18 +1026,38 @@ export default function IndexingGuide({
         </DialogContent>
 
         <DialogActions>
-          <Button onClick={() => setHistoryOpen(false)}>
+          <Button
+            onClick={() =>
+              setHistoryOpen(false)
+            }
+            sx={{
+              textTransform: "none",
+              fontWeight: 600,
+            }}
+          >
             Close
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* ===================================================
+          FULL-SCREEN SEARCHABLE GUIDE VIEWER
+      =================================================== */}
+
       <GuideViewer
         open={previewOpen}
-        onClose={() => setPreviewOpen(false)}
-        versionId={guide?.version_id}
-        title={guide?.name || "Indexing Guide"}
-        filePath={guide?.file_path || ""}
+        onClose={handleCloseGuide}
+        versionId={previewGuide?.version_id}
+        title={
+          previewGuide?.name || "Indexing Guide"
+        }
+        filePath={
+          previewGuide?.file_path || ""
+        }
       />
+
+      {/* EXISTING CONFIRMATION DIALOG */}
+
       {ConfirmElement}
     </Box>
   );

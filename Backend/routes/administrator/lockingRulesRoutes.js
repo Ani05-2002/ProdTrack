@@ -1,37 +1,51 @@
-// Imports Express to create the Administrator Locking Rules router.
+
 const express = require("express");
 
-// Imports authentication middleware to verify the logged-in user.
-const authenticate = require("../../middleware/authMiddleware");
+const authenticate = require(
+  "../../middleware/authMiddleware"
+);
 
-// Imports role middleware to restrict these APIs to Administrator users.
-const allowRoles = require("../../middleware/roleMiddleware");
+const allowRoles = require(
+  "../../middleware/roleMiddleware"
+);
 
-// Imports the Administrator Locking Rules controller.
+// Existing locking rule controllers.
 const {
-    getLockingRules,
-    updateLockingRules
+  getLockingRules,
+  updateLockingRules,
+} = require(
+  "../../controllers/administrator/lockingRulesController"
+);
 
-} = require("../../controllers/administrator/lockingRulesController");
+// NEW: Individual Indexer restriction controllers.
+const {
+  listRestrictions,
+  saveRestriction,
+  removeRestriction,
+} = require(
+  "../../controllers/entryRestrictionController"
+);
 
-// Creates the Administrator Locking Rules router.
 const router = express.Router();
 
-// Gets the global rules and project-specific auto-lock settings.
+// =====================================================
+// EXISTING GLOBAL AND PROJECT LOCKING RULES
+// =====================================================
+
 router.get(
   "/locking-rules",
   authenticate,
   allowRoles("administrator"),
   getLockingRules
-
 );
-// Updates global locking rules and project-specific auto-lock configuration.
+
 router.put(
   "/locking-rules",
   authenticate,
   allowRoles("administrator"),
   updateLockingRules
 );
+
 router.post(
   "/locking-rules",
   authenticate,
@@ -39,5 +53,32 @@ router.post(
   updateLockingRules
 );
 
-// Exports the router for use by the main backend application.
+// =====================================================
+// NEW: USER-SPECIFIC ENTRY RESTRICTIONS
+// =====================================================
+
+// Get Indexers and saved restrictions.
+router.get(
+  "/locking-rules/user-restrictions",
+  authenticate,
+  allowRoles("administrator"),
+  listRestrictions
+);
+
+// Create or update a restriction.
+router.post(
+  "/locking-rules/user-restrictions",
+  authenticate,
+  allowRoles("administrator"),
+  saveRestriction
+);
+
+// Remove a restriction.
+router.delete(
+  "/locking-rules/user-restrictions/:id",
+  authenticate,
+  allowRoles("administrator"),
+  removeRestriction
+);
+
 module.exports = router;

@@ -1,3 +1,4 @@
+
 const path = require("path");
 const express = require("express");
 const cors = require("cors");
@@ -93,14 +94,11 @@ const adminLockingRulesRoutes = require("./routes/administrator/lockingRulesRout
 const settingsRoutes = require("./routes/settingsRoutes");
 const adminDashboardRoutes = require("./routes/administrator/dashboardRoutes");
 const searchRoutes = require("./routes/searchRoutes");
-// Import the HR API router.
 const hrRoutes = require("./routes/HR/hrRoutes");
 
 app.set("trust proxy", 1);
 
-// ── CORS ──────────────────────────────────────────────────────
-// In production allow only the known frontend origin.
-// In development also allow localhost on any port.
+// CORS configuration
 const ALLOWED_ORIGINS = [
   "https://prod.kavyaconsultancy.com",
   "https://prod.kavyaconsultancy.com/",
@@ -115,11 +113,10 @@ const isLocalOrigin = (origin) =>
 
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no Origin header (same-origin, Postman, health checks).
     if (!origin) return callback(null, true);
-    // Always allow local Vite/dev origins, even if NODE_ENV=production in .env.
     if (isLocalOrigin(origin)) return callback(null, true);
     if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+
     callback(new Error(`CORS: origin '${origin}' is not allowed`));
   },
   credentials: true,
@@ -139,12 +136,19 @@ app.options(/.*/, cors(corsOptions));
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// CWP Apache often drops PUT/PATCH/DELETE. The frontend sends POST with this header.
+// HTTP method override for CWP Apache
 app.use((req, _res, next) => {
-  const override = String(req.headers["x-http-method-override"] || "").toUpperCase();
-  if (req.method === "POST" && ["PUT", "PATCH", "DELETE"].includes(override)) {
+  const override = String(
+    req.headers["x-http-method-override"] || ""
+  ).toUpperCase();
+
+  if (
+    req.method === "POST" &&
+    ["PUT", "PATCH", "DELETE"].includes(override)
+  ) {
     req.method = override;
   }
+
   next();
 });
 
@@ -153,7 +157,6 @@ app.use(
 );
 
 app.get("/", (req, res) => {
-  // In production keep the root response minimal — don't leak env/passenger info.
   res.json({
     success: true,
     message: "ProdTrack Backend API is running",
@@ -171,6 +174,7 @@ app.get("/api/health/live", (req, res) => {
 app.get("/api/health", async (req, res) => {
   try {
     const [rows] = await db.query("SELECT 1 AS ok");
+
     res.json({
       success: true,
       api: "up",
@@ -190,11 +194,11 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
-// /api/test-db is only available outside production to avoid leaking DB info.
 if (process.env.NODE_ENV !== "production") {
   app.get("/api/test-db", async (req, res) => {
     try {
       const [rows] = await db.query("SELECT 1 + 1 AS result");
+
       res.json({
         success: true,
         message: "MySQL connected successfully",
@@ -209,6 +213,8 @@ if (process.env.NODE_ENV !== "production") {
     }
   });
 }
+
+// API route registrations
 
 app.use("/api/auth", authRoutes);
 app.use("/api/projects", projectRoutes);
@@ -238,8 +244,10 @@ app.use("/api/admin", adminLockingRulesRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/admin", adminDashboardRoutes);
 app.use("/api/search", searchRoutes);
-// Register protected HR endpoints.
 app.use("/api/hr", hrRoutes);
+
+// UPDATED: Automatic locking scheduler
+// Indexer entries must be reviewed before they can be locked.
 
 const runAutoLock = async () => {
   try {
@@ -251,6 +259,12 @@ const runAutoLock = async () => {
 
       JOIN entry_status current_status
         ON current_status.status_id = de.status_id
+
+      JOIN users entry_user
+        ON entry_user.user_id = de.user_id
+
+      JOIN role entry_role
+        ON entry_role.role_id = entry_user.role_id
 
       SET
         de.status_id = (
@@ -268,6 +282,18 @@ const runAutoLock = async () => {
           'reviewed'
         )
 
+        -- Indexer submissions must remain available for Team Lead review.
+        -- Preserve automatic locking behavior for other roles.
+
+        AND (
+          entry_role.code <> 'indexer'
+          OR (
+            current_status.code = 'reviewed'
+            AND de.reviewed_at IS NOT NULL
+            AND de.reviewed_by IS NOT NULL
+          )
+        )
+
         AND p.auto_lock_time IS NOT NULL
 
         AND CURTIME() >= ADDTIME(
@@ -282,7 +308,8 @@ const runAutoLock = async () => {
       writeLog(
         "app.log",
         "INFO",
-        `Auto-lock: ${result.affectedRows} entr${result.affectedRows === 1 ? "y" : "ies"
+        `Auto-lock: ${result.affectedRows} entr${
+          result.affectedRows === 1 ? "y" : "ies"
         } locked`,
       );
     }
@@ -300,7 +327,10 @@ const runAutoLock = async () => {
 };
 
 runAutoLock();
+
 setInterval(runAutoLock, 60 * 1000);
+
+// Route not found handler
 
 app.use((req, res) => {
   res.status(404).json({
@@ -309,12 +339,20 @@ app.use((req, res) => {
   });
 });
 
+// Global error handler
+
 app.use((err, req, res, next) => {
   let status = Number(err.status || err.statusCode || 500);
-  let message =
-    status >= 500 ? "Internal server error" : err.message || "Request failed";
 
-  if (err.type === "entity.parse.failed" || err instanceof SyntaxError) {
+  let message =
+    status >= 500
+      ? "Internal server error"
+      : err.message || "Request failed";
+
+  if (
+    err.type === "entity.parse.failed" ||
+    err instanceof SyntaxError
+  ) {
     status = 400;
     message = "Invalid JSON in request body";
   }
@@ -334,6 +372,7 @@ app.use((err, req, res, next) => {
         message: err.message,
       },
     );
+
     return next(err);
   }
 
@@ -355,14 +394,27 @@ process.on("uncaughtException", (error) => {
       stack: error.stack,
     },
   );
+
   process.exit(1);
 });
 
 process.on("unhandledRejection", (reason) => {
-  const message = reason instanceof Error ? reason.message : String(reason);
-  writeLog("app-error.log", "FATAL", `[FATAL] unhandledRejection: ${message}`, {
-    reason: reason instanceof Error ? reason.stack : reason,
-  });
+  const message =
+    reason instanceof Error
+      ? reason.message
+      : String(reason);
+
+  writeLog(
+    "app-error.log",
+    "FATAL",
+    `[FATAL] unhandledRejection: ${message}`,
+    {
+      reason:
+        reason instanceof Error
+          ? reason.stack
+          : reason,
+    },
+  );
 });
 
 const PORT = Number(process.env.PORT) || 4400;
@@ -376,6 +428,7 @@ const onListening = () => {
       passenger,
     )} cwd=${process.cwd()} logs=${logsDir}`,
   );
+
   writeLog(
     "app.log",
     "INFO",
@@ -383,6 +436,7 @@ const onListening = () => {
       ? "[BOOT] Listening via Phusion Passenger (CWP Node.js Selector)"
       : `[BOOT] Listening on http://${HOST}:${PORT}`,
   );
+
   writeLog(
     "app.log",
     "INFO",
@@ -420,9 +474,13 @@ const startServer = async () => {
         "app-error.log",
         "FATAL",
         `[BOOT] Server failed to start: ${error.message}`,
-        { code: error.code, stack: error.stack },
+        {
+          code: error.code,
+          stack: error.stack,
+        },
       );
     }
+
     process.exit(1);
   });
 };

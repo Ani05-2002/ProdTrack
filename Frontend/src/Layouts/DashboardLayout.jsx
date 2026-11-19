@@ -69,21 +69,39 @@ export default function DashboardLayout({
             overflow: "hidden",
           }}
         >
+
           <Box
             component="main"
+            className="pt-glass-workspace"
             sx={{
               position: "absolute",
-              top: 0, left: 0, right: 0, bottom: 0,
-              p: { xs: 1.5, sm: 2, md: 3 },
+
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+
+              p: {
+                xs: 1.5,
+                sm: 2,
+                md: 3,
+              },
+
               overflowY: "auto",
               overflowX: "auto",
+
               bgcolor: "#eef2f7",
-              scrollbarGutter: { md: "stable" },
+
+              scrollbarGutter: {
+                md: "stable",
+              },
             }}
           >
             {children}
+
             <Box sx={{ height: 24 }} />
           </Box>
+
         </Box>
       </Box>
     </Box>

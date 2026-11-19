@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import apiRequest from "../../lib/api.js";
 
@@ -49,7 +50,7 @@ function StatCard({ icon, iconBg, iconColor, label, value, trend, trendColor, lo
           </Typography>
         )}
         {trend && !loading && (
-          <Typography sx={{ fontFamily: FONT, color: trendColor, fontSize: 11.5, fontWeight: 600, mt: "2px" }}>
+          <Typography sx={{ fontFamily: FONT, fontSize: 11.5, fontWeight: 600, color: trendColor, mt: "2px" }}>
             {trend}
           </Typography>
         )}
@@ -293,10 +294,11 @@ function MemberRow({ initials, name, avatarColor, project, completedToday, pendi
     </Box>
   );
 }
+
 // ─── Project Daily Summary Table ──────────────────────────────────────────────
 // Use the same column widths as Admin and Core Team.
 const DAILY_SUMMARY_COL =
-  "130px 210px 420px 110px 120px 100px 100px 170px 190px 170px";
+  "130px 210px 420px 110px 120px 180px 100px 100px 170px 190px 170px";
 
 function ProjectDailySummaryTable({
   rows,
@@ -321,7 +323,7 @@ function ProjectDailySummaryTable({
           sx={{
             display: "grid",
             gridTemplateColumns: DAILY_SUMMARY_COL,
-            minWidth: 1850,
+            minWidth: 2030,
             px: 2,
             py: 1.2,
             bgcolor: "#f8fafc",
@@ -334,6 +336,7 @@ function ProjectDailySummaryTable({
             "REPORTING CATEGORY",
             "RECEIVED",
             "COMPLETED",
+            "EXTRACTED DOCUMENTS",
             "BACKLOG",
             "PENDING",
             "BATCHES RECEIVED",
@@ -393,7 +396,7 @@ function ProjectDailySummaryTable({
               sx={{
                 display: "grid",
                 gridTemplateColumns: DAILY_SUMMARY_COL,
-                minWidth: 1850,
+                minWidth: 2030,
                 alignItems: "center",
                 px: 2,
                 py: 1.3,
@@ -419,6 +422,7 @@ function ProjectDailySummaryTable({
               >
                 {row.projectName}
               </Typography>
+
               {/* Display Reporting Category with the same layout as Admin. */}
               <Typography
                 sx={{
@@ -448,6 +452,11 @@ function ProjectDailySummaryTable({
                 {row.completed?.toLocaleString()}
               </Typography>
 
+              {/* Extracted documents reported by Team Lead. */}
+              <Typography sx={{ fontFamily: FONT, fontSize: 13, color: HEAD }}>
+                {Number(row.extractedDocuments || 0).toLocaleString()}
+              </Typography>
+
               {/* Previous backlog remaining */}
               <Typography sx={{ fontFamily: FONT, fontSize: 13, color: HEAD }}>
                 {row.backlog?.toLocaleString()}
@@ -464,6 +473,7 @@ function ProjectDailySummaryTable({
               >
                 {row.pending?.toLocaleString()}
               </Typography>
+
               {/* Batches received */}
               <Typography sx={{ fontFamily: FONT, fontSize: 13, color: HEAD }}>
                 {Number(row.batchesReceived ?? 0).toLocaleString()}
@@ -548,6 +558,7 @@ function ProjectDailySummaryTable({
     </PanelCard>
   );
 }
+
 function TeamMembersTable({ members, loading, onNavigate }) {
   return (
     <PanelCard
@@ -586,6 +597,7 @@ export default function Dashboard({ onNavigate }) {
   const [prodBars, setProdBars] = useState([]);
   const [split, setSplit] = useState(null);
   const [members, setMembers] = useState([]);
+
   // Stores date-wise and project-wise production summary.
   const [projectDailySummary, setProjectDailySummary] = useState([]);
   const [projectSummaryPage, setProjectSummaryPage] = useState(0);
@@ -706,6 +718,7 @@ export default function Dashboard({ onNavigate }) {
           </PanelCard>
         </Grid>
       </Grid>
+
       {/* PROJECT DAILY SUMMARY */}
       <Box sx={{ mb: 2.5 }}>
         <ProjectDailySummaryTable

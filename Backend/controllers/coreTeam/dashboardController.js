@@ -1,44 +1,37 @@
-// Imports the MySQL database connection.
+
 const db = require("../../config/db");
 
-
-// ============================================================
 // 1. CORE TEAM DASHBOARD SUMMARY
-// ============================================================
 
-// Gets the main Core Team dashboard summary cards.
 const getCoreTeamDashboard = async (req, res) => {
   try {
-
-    // --------------------------------------------------------
-    // Total Received + Total Completed
-    // --------------------------------------------------------
     const [productionRows] = await db.query(`
-  SELECT
-    COALESCE(SUM(de.docs_received), 0) AS totalReceived,
+      SELECT
+        COALESCE(SUM(de.docs_received), 0) AS totalReceived,
 
-    COALESCE(
-      SUM(
-        CASE
-          WHEN r.code = 'indexer'
-            AND es.code IN ('reviewed', 'locked')
-          THEN de.docs_completed
-          ELSE 0
-        END
-      ), 0
-    ) AS totalCompleted
+        COALESCE(
+          SUM(
+            CASE
+              WHEN r.code = 'indexer'
+                AND es.code IN ('reviewed', 'locked')
+              THEN de.docs_completed
+              ELSE 0
+            END
+          ),
+          0
+        ) AS totalCompleted
 
-  FROM daily_entry de
+      FROM daily_entry de
 
-  INNER JOIN users u
-    ON u.user_id = de.user_id
+      INNER JOIN users u
+        ON u.user_id = de.user_id
 
-  INNER JOIN role r
-    ON r.role_id = u.role_id
+      INNER JOIN role r
+        ON r.role_id = u.role_id
 
-  INNER JOIN entry_status es
-    ON es.status_id = de.status_id
-`);
+      INNER JOIN entry_status es
+        ON es.status_id = de.status_id
+    `);
 
     const totalReceived = Number(
       productionRows[0].totalReceived || 0
@@ -48,27 +41,19 @@ const getCoreTeamDashboard = async (req, res) => {
       productionRows[0].totalCompleted || 0
     );
 
-
-    // --------------------------------------------------------
-    // Project Backlog
-    // --------------------------------------------------------
     const projectBacklog = Math.max(
       totalReceived - totalCompleted,
       0
     );
 
-
-    // --------------------------------------------------------
-    // Active Employees
-    //
-    // Counts all active users except Administrator.
-    // --------------------------------------------------------
     const [employeeRows] = await db.query(`
       SELECT
         COUNT(*) AS activeEmployees
       FROM users u
+
       INNER JOIN role r
         ON r.role_id = u.role_id
+
       WHERE u.status = 'active'
         AND r.code <> 'admin'
     `);
@@ -77,21 +62,13 @@ const getCoreTeamDashboard = async (req, res) => {
       employeeRows[0].activeEmployees || 0
     );
 
-
-    // --------------------------------------------------------
-    // Completion Rate
-    // --------------------------------------------------------
     const completionRate =
       totalReceived > 0
         ? Math.round(
-          (totalCompleted / totalReceived) * 100
-        )
+            (totalCompleted / totalReceived) * 100
+          )
         : 0;
 
-
-    // --------------------------------------------------------
-    // Response
-    // --------------------------------------------------------
     return res.status(200).json({
       success: true,
 
@@ -103,9 +80,7 @@ const getCoreTeamDashboard = async (req, res) => {
         completionRate,
       },
     });
-
   } catch (error) {
-
     console.error(
       "Core Team Dashboard Error:",
       error
@@ -119,74 +94,86 @@ const getCoreTeamDashboard = async (req, res) => {
   }
 };
 
-
-// ============================================================
 // 2. MONTHLY PRODUCTION TREND
-// ============================================================
 
-// Gets received and completed production for the last 6 months.
 const getMonthlyProductionTrend = async (req, res) => {
   try {
-    // Confirms that this exact monthly-trend controller is being executed.
-    console.log("NEW MONTHLY TREND CONTROLLER RUNNING");
+    console.log(
+      "NEW MONTHLY TREND CONTROLLER RUNNING"
+    );
 
-    // Confirms which MySQL database the backend connection is actually using.
-    const [dbInfo] = await db.query("SELECT DATABASE() AS database_name");
+    const [dbInfo] = await db.query(
+      "SELECT DATABASE() AS database_name"
+    );
 
-    // Prints the backend's active database name in the terminal.
-    console.log("BACKEND DATABASE:", dbInfo[0].database_name);
+    console.log(
+      "BACKEND DATABASE:",
+      dbInfo[0].database_name
+    );
 
-    // Checks how many daily-entry rows the backend can currently see.
     const [entryCount] = await db.query(
       "SELECT COUNT(*) AS total FROM daily_entry"
     );
 
-    // Prints the number of daily-entry rows visible to the backend.
-    console.log("DAILY ENTRY COUNT:", entryCount[0].total);
+    console.log(
+      "DAILY ENTRY COUNT:",
+      entryCount[0].total
+    );
 
     const [trend] = await db.query(`
-  SELECT
-    DATE_FORMAT(de.production_date, '%Y-%m') AS month_key,
-    DATE_FORMAT(de.production_date, '%b %Y') AS month_name,
+      SELECT
+        DATE_FORMAT(
+          de.production_date,
+          '%Y-%m'
+        ) AS month_key,
 
-    COALESCE(SUM(de.docs_received), 0) AS received,
+        DATE_FORMAT(
+          de.production_date,
+          '%b %Y'
+        ) AS month_name,
 
-    COALESCE(
-      SUM(
-        CASE
-          WHEN r.code = 'indexer'
-            AND es.code IN ('reviewed', 'locked')
-          THEN de.docs_completed
-          ELSE 0
-        END
-      ), 0
-    ) AS completed
+        COALESCE(
+          SUM(de.docs_received),
+          0
+        ) AS received,
 
-  FROM daily_entry de
+        COALESCE(
+          SUM(
+            CASE
+              WHEN r.code = 'indexer'
+                AND es.code IN ('reviewed', 'locked')
+              THEN de.docs_completed
+              ELSE 0
+            END
+          ),
+          0
+        ) AS completed
 
-  INNER JOIN users u
-    ON u.user_id = de.user_id
+      FROM daily_entry de
 
-  INNER JOIN role r
-    ON r.role_id = u.role_id
+      INNER JOIN users u
+        ON u.user_id = de.user_id
 
-  INNER JOIN entry_status es
-    ON es.status_id = de.status_id
+      INNER JOIN role r
+        ON r.role_id = u.role_id
 
-  WHERE de.production_date IS NOT NULL
+      INNER JOIN entry_status es
+        ON es.status_id = de.status_id
 
-  GROUP BY
-    DATE_FORMAT(de.production_date, '%Y-%m'),
-    DATE_FORMAT(de.production_date, '%b %Y')
+      WHERE de.production_date IS NOT NULL
 
-  ORDER BY month_key ASC
-`);
-    // Shows exactly what MySQL returned for the monthly trend query.
-    console.log("MONTHLY TREND DB RESULT:", trend);
+      GROUP BY
+        DATE_FORMAT(de.production_date, '%Y-%m'),
+        DATE_FORMAT(de.production_date, '%b %Y')
 
+      ORDER BY month_key ASC
+    `);
 
+    console.log(
+      "MONTHLY TREND DB RESULT:",
+      trend
+    );
 
-    // Convert MySQL values to JavaScript numbers.
     const formattedTrend = trend.map((item) => ({
       month_key: item.month_key,
       month_name: item.month_name,
@@ -194,15 +181,12 @@ const getMonthlyProductionTrend = async (req, res) => {
       completed: Number(item.completed || 0),
     }));
 
-
     return res.status(200).json({
       success: true,
       count: formattedTrend.length,
       trend: formattedTrend,
     });
-
   } catch (error) {
-
     console.error(
       "Monthly Production Trend Error:",
       error
@@ -216,79 +200,73 @@ const getMonthlyProductionTrend = async (req, res) => {
   }
 };
 
-
-// ============================================================
 // 3. BACKLOG BY PROJECT
-// ============================================================
 
-// Gets received, completed and backlog totals for every project.
 const getBacklogByProject = async (req, res) => {
   try {
-
     const [projects] = await db.query(`
-  SELECT
-    p.project_id AS id,
-    p.project_code,
-    p.project_name,
+      SELECT
+        p.project_id AS id,
+        p.project_code,
+        p.project_name,
 
-    COALESCE(
-      SUM(de.docs_received),
-      0
-    ) AS received,
+        COALESCE(
+          SUM(de.docs_received),
+          0
+        ) AS received,
 
-    COALESCE(
-      SUM(
-        CASE
-          WHEN r.code = 'indexer'
-            AND es.code IN ('reviewed', 'locked')
-          THEN de.docs_completed
-          ELSE 0
-        END
-      ),
-      0
-    ) AS completed,
+        COALESCE(
+          SUM(
+            CASE
+              WHEN r.code = 'indexer'
+                AND es.code IN ('reviewed', 'locked')
+              THEN de.docs_completed
+              ELSE 0
+            END
+          ),
+          0
+        ) AS completed,
 
-    GREATEST(
-      COALESCE(SUM(de.docs_received), 0)
-      -
-      COALESCE(
-        SUM(
-          CASE
-            WHEN r.code = 'indexer'
-              AND es.code IN ('reviewed', 'locked')
-            THEN de.docs_completed
-            ELSE 0
-          END
-        ),
-        0
-      ),
-      0
-    ) AS backlog
+        GREATEST(
+          COALESCE(SUM(de.docs_received), 0)
+          -
+          COALESCE(
+            SUM(
+              CASE
+                WHEN r.code = 'indexer'
+                  AND es.code IN ('reviewed', 'locked')
+                THEN de.docs_completed
+                ELSE 0
+              END
+            ),
+            0
+          ),
+          0
+        ) AS backlog
 
-  FROM project p
+      FROM project p
 
-  LEFT JOIN daily_entry de
-    ON de.project_id = p.project_id
+      LEFT JOIN daily_entry de
+        ON de.project_id = p.project_id
 
-  LEFT JOIN users u
-    ON u.user_id = de.user_id
+      LEFT JOIN users u
+        ON u.user_id = de.user_id
 
-  LEFT JOIN role r
-    ON r.role_id = u.role_id
+      LEFT JOIN role r
+        ON r.role_id = u.role_id
 
-  LEFT JOIN entry_status es
-    ON es.status_id = de.status_id
+      LEFT JOIN entry_status es
+        ON es.status_id = de.status_id
 
-  GROUP BY
-    p.project_id,
-    p.project_code,
-    p.project_name
+      GROUP BY
+        p.project_id,
+        p.project_code,
+        p.project_name
 
-  ORDER BY
-    backlog DESC,
-    p.project_name ASC
-`);
-
+      ORDER BY
+        backlog DESC,
+        p.project_name ASC
+    `);
 
     const formattedProjects = projects.map(
       (project) => ({
@@ -310,15 +288,12 @@ const getBacklogByProject = async (req, res) => {
       })
     );
 
-
     return res.status(200).json({
       success: true,
       count: formattedProjects.length,
       projects: formattedProjects,
     });
-
   } catch (error) {
-
     console.error(
       "Backlog By Project Error:",
       error
@@ -332,15 +307,10 @@ const getBacklogByProject = async (req, res) => {
   }
 };
 
-
-// ============================================================
 // 4. PENDING CORRECTIONS
-// ============================================================
 
-// Gets total correction requests currently waiting for review.
 const getPendingCorrections = async (req, res) => {
   try {
-
     const [rows] = await db.query(`
       SELECT
         COUNT(*) AS pendingCorrections
@@ -353,19 +323,15 @@ const getPendingCorrections = async (req, res) => {
       WHERE cs.code = 'pending'
     `);
 
-
     const pendingCorrections = Number(
       rows[0].pendingCorrections || 0
     );
-
 
     return res.status(200).json({
       success: true,
       pendingCorrections,
     });
-
   } catch (error) {
-
     console.error(
       "Pending Corrections Error:",
       error
@@ -379,28 +345,10 @@ const getPendingCorrections = async (req, res) => {
   }
 };
 
-
-// ============================================================
 // 5. GUIDE COMPLIANCE
-// ============================================================
 
-// Gets organisation-wide guide acknowledgement compliance.
 const getGuideCompliance = async (req, res) => {
   try {
-
-    /*
-      Required acknowledgement means:
-
-      1. User is an active Indexer.
-      2. User is assigned to the project.
-      3. Project has a guide.
-      4. Guide has a latest version.
-      5. Latest version requires acknowledgement.
-
-      Acknowledged means the acknowledgement record
-      exists and its status is 'read'.
-    */
-
     const [rows] = await db.query(`
       SELECT
 
@@ -442,7 +390,6 @@ const getGuideCompliance = async (req, res) => {
       WHERE u.status = 'active'
     `);
 
-
     const totalRequired = Number(
       rows[0].totalRequired || 0
     );
@@ -451,20 +398,17 @@ const getGuideCompliance = async (req, res) => {
       rows[0].acknowledged || 0
     );
 
-
     const pending = Math.max(
       totalRequired - acknowledged,
       0
     );
 
-
     const complianceRate =
       totalRequired > 0
         ? Math.round(
-          (acknowledged / totalRequired) * 100
-        )
+            (acknowledged / totalRequired) * 100
+          )
         : 100;
-
 
     return res.status(200).json({
       success: true,
@@ -476,9 +420,7 @@ const getGuideCompliance = async (req, res) => {
         complianceRate,
       },
     });
-
   } catch (error) {
-
     console.error(
       "Guide Compliance Error:",
       error
@@ -492,27 +434,10 @@ const getGuideCompliance = async (req, res) => {
   }
 };
 
-
-// ============================================================
 // 6. MISSING DAILY ENTRIES
-// ============================================================
 
-// Gets active Indexers who have not submitted/created
-// any production entry today.
 const getMissingEntries = async (req, res) => {
   try {
-
-    /*
-      Excludes:
-
-      - inactive users
-      - non-Indexers
-      - Indexers who already have a daily entry today
-      - users whose attendance status says the day
-        does not count as a production day
-        (for example approved/planned leave)
-    */
-
     const [employees] = await db.query(`
       SELECT
         u.user_id AS id,
@@ -526,7 +451,6 @@ const getMissingEntries = async (req, res) => {
         ON r.role_id = u.role_id
 
       WHERE r.code = 'indexer'
-
         AND u.status = 'active'
 
         AND NOT EXISTS (
@@ -535,7 +459,6 @@ const getMissingEntries = async (req, res) => {
           FROM daily_entry de
 
           WHERE de.user_id = u.user_id
-
             AND de.production_date = CURDATE()
         )
 
@@ -548,9 +471,7 @@ const getMissingEntries = async (req, res) => {
             ON ats.status_id = a.status_id
 
           WHERE a.user_id = u.user_id
-
             AND a.att_date = CURDATE()
-
             AND ats.counts_as_production_day = 0
         )
 
@@ -558,15 +479,12 @@ const getMissingEntries = async (req, res) => {
         u.full_name ASC
     `);
 
-
     return res.status(200).json({
       success: true,
       count: employees.length,
       employees,
     });
-
   } catch (error) {
-
     console.error(
       "Missing Entries Error:",
       error
@@ -580,32 +498,34 @@ const getMissingEntries = async (req, res) => {
   }
 };
 
-// ============================================================
 // 7. PROJECT DAILY SUMMARY
-// ============================================================
 
-// Gets date-wise and project-wise Received, Completed, Backlog and Pending.
-// Gets project-wise and category-wise Daily Summary for Core Team.
+// Historical Indexer production includes reviewed entries only.
+// From MANUAL_COUNTS_FROM, Documents Completed and
+// Batches Processed come from submitted Team Lead entries.
+// Extracted Documents is an independent Team Lead count.
+
 const getProjectDailySummary = async (req, res) => {
   try {
-    // Start date for the new Daily Entry workflow.
     const backlogWorkflowStartDate = "2026-10-05";
+    const MANUAL_COUNTS_FROM = "2026-11-18";
 
-    // Core Team can view all active projects.
     const [projects] = await db.query(`
       SELECT project_id, project_name
+
       FROM project
+
       WHERE status = 'active'
+
       ORDER BY project_name ASC
     `);
 
-    // Store the final summary.
     const summary = [];
 
-    // Process every active project separately.
     for (const project of projects) {
+      // Only reviewed or reviewed-and-locked Indexer entries
+      // are displayed in category-level completed totals.
 
-      // Get Indexer reporting categories and completed counts.
       const [indexerCategoryRows] = await db.query(
         `
         SELECT
@@ -613,23 +533,38 @@ const getProjectDailySummary = async (req, res) => {
           totals.team_lead_category_id,
 
           GROUP_CONCAT(
-            CONCAT(totals.category_name, ' - ', totals.completed)
+            CONCAT(
+              totals.category_name,
+              ' - ',
+              totals.completed
+            )
             ORDER BY totals.category_name
             SEPARATOR ', '
           ) AS indexer_category_names
 
         FROM (
           SELECT
-            DATE_FORMAT(de.production_date, '%Y-%m-%d') AS production_date,
+            DATE_FORMAT(
+              de.production_date,
+              '%Y-%m-%d'
+            ) AS production_date,
+
             de.team_lead_category_id,
             rc.category_id,
             rc.name AS category_name,
-            COALESCE(SUM(de.docs_completed), 0) AS completed
+
+            COALESCE(
+              SUM(de.docs_completed),
+              0
+            ) AS completed
 
           FROM daily_entry de
 
-          JOIN users u ON u.user_id = de.user_id
-          JOIN role r ON r.role_id = u.role_id
+          JOIN users u
+            ON u.user_id = de.user_id
+
+          JOIN role r
+            ON r.role_id = u.role_id
             AND r.code = 'indexer'
 
           JOIN reporting_category rc
@@ -638,7 +573,9 @@ const getProjectDailySummary = async (req, res) => {
 
           JOIN entry_status es
             ON es.status_id = de.status_id
-            AND es.code IN ('submitted', 'reviewed', 'locked')
+            AND es.code IN ('reviewed', 'locked')
+            AND de.reviewed_at IS NOT NULL
+            AND de.reviewed_by IS NOT NULL
 
           WHERE de.project_id = ?
             AND de.production_date >= ?
@@ -649,33 +586,55 @@ const getProjectDailySummary = async (req, res) => {
             de.team_lead_category_id,
             rc.category_id,
             rc.name
+
         ) totals
 
         GROUP BY
           totals.production_date,
           totals.team_lead_category_id
         `,
-        [project.project_id, backlogWorkflowStartDate]
+        [
+          project.project_id,
+          backlogWorkflowStartDate,
+        ]
       );
 
-      // Get Indexer totals using the directly selected Team Lead category.
+      // Only include approved Indexer production.
+
       const [directIndexerRows] = await db.query(
         `
         SELECT
-          DATE_FORMAT(de.production_date, '%Y-%m-%d') AS production_date,
+          DATE_FORMAT(
+            de.production_date,
+            '%Y-%m-%d'
+          ) AS production_date,
+
           de.team_lead_category_id AS category_id,
-          COALESCE(SUM(de.docs_completed), 0) AS completed,
-          COALESCE(SUM(de.batches_processed), 0) AS batchesProcessed
+
+          COALESCE(
+            SUM(de.docs_completed),
+            0
+          ) AS completed,
+
+          COALESCE(
+            SUM(de.batches_processed),
+            0
+          ) AS batchesProcessed
 
         FROM daily_entry de
 
-        JOIN users u ON u.user_id = de.user_id
-        JOIN role r ON r.role_id = u.role_id
+        JOIN users u
+          ON u.user_id = de.user_id
+
+        JOIN role r
+          ON r.role_id = u.role_id
           AND r.code = 'indexer'
 
         JOIN entry_status es
           ON es.status_id = de.status_id
-          AND es.code IN ('submitted', 'reviewed', 'locked')
+          AND es.code IN ('reviewed', 'locked')
+          AND de.reviewed_at IS NOT NULL
+          AND de.reviewed_by IS NOT NULL
 
         WHERE de.project_id = ?
           AND de.production_date >= ?
@@ -685,24 +644,87 @@ const getProjectDailySummary = async (req, res) => {
           de.production_date,
           de.team_lead_category_id
         `,
-        [project.project_id, backlogWorkflowStartDate]
+        [
+          project.project_id,
+          backlogWorkflowStartDate,
+        ]
       );
 
-      // Get Team Lead entries and historical Indexer mapping totals.
+      // Team Lead entries and historical category mappings.
+
       const [dailyRows] = await db.query(
         `
         SELECT
-          DATE_FORMAT(tl.production_date, '%Y-%m-%d') AS production_date,
+          DATE_FORMAT(
+            tl.production_date,
+            '%Y-%m-%d'
+          ) AS production_date,
+
           tl.category_id,
           rc.name AS category_name,
 
-          COALESCE(SUM(tl.docs_received), 0) AS received,
-          COALESCE(SUM(tl.batches_received), 0) AS batchesReceived,
-          COALESCE(SUM(tl.docs_pending), 0) AS documentsPending,
-          COALESCE(SUM(tl.batches_pending), 0) AS batchesPending,
+          COALESCE(
+            SUM(tl.docs_received),
+            0
+          ) AS received,
 
-          COALESCE(SUM(idxTotals.completed), 0) AS completed,
-          COALESCE(SUM(idxTotals.batchesProcessed), 0) AS batchesProcessed
+          COALESCE(
+            SUM(tl.batches_received),
+            0
+          ) AS batchesReceived,
+
+          COALESCE(
+            SUM(tl.docs_pending),
+            0
+          ) AS documentsPending,
+
+          COALESCE(
+            SUM(tl.batches_pending),
+            0
+          ) AS batchesPending,
+
+          COALESCE(
+            SUM(
+              CASE
+                WHEN tl.submitted_at IS NOT NULL
+                THEN tl.team_lead_docs_completed
+                ELSE 0
+              END
+            ),
+            0
+          ) AS manualCompleted,
+
+          COALESCE(
+            SUM(
+              CASE
+                WHEN tl.submitted_at IS NOT NULL
+                THEN tl.extracted_documents
+                ELSE 0
+              END
+            ),
+            0
+          ) AS extractedDocuments,
+
+          COALESCE(
+            SUM(
+              CASE
+                WHEN tl.submitted_at IS NOT NULL
+                THEN tl.team_lead_batches_processed
+                ELSE 0
+              END
+            ),
+            0
+          ) AS manualBatchesProcessed,
+
+          COALESCE(
+            SUM(idxTotals.completed),
+            0
+          ) AS completed,
+
+          COALESCE(
+            SUM(idxTotals.batchesProcessed),
+            0
+          ) AS batchesProcessed
 
         FROM daily_entry tl
 
@@ -711,11 +733,19 @@ const getProjectDailySummary = async (req, res) => {
 
         JOIN role tlRole
           ON tlRole.role_id = tlUser.role_id
-          AND tlRole.code IN ('teamLead', 'team_lead', 'lead')
+          AND tlRole.code IN (
+            'teamLead',
+            'team_lead',
+            'lead'
+          )
 
         JOIN entry_status tlStatus
           ON tlStatus.status_id = tl.status_id
-          AND tlStatus.code IN ('submitted', 'reviewed', 'locked')
+          AND tlStatus.code IN (
+            'submitted',
+            'reviewed',
+            'locked'
+          )
 
         JOIN reporting_category rc
           ON rc.category_id = tl.category_id
@@ -724,8 +754,16 @@ const getProjectDailySummary = async (req, res) => {
         LEFT JOIN (
           SELECT
             mapping.entry_id AS teamLeadEntryId,
-            COALESCE(SUM(idx.docs_completed), 0) AS completed,
-            COALESCE(SUM(idx.batches_processed), 0) AS batchesProcessed
+
+            COALESCE(
+              SUM(idx.docs_completed),
+              0
+            ) AS completed,
+
+            COALESCE(
+              SUM(idx.batches_processed),
+              0
+            ) AS batchesProcessed
 
           FROM daily_entry_indexer_category mapping
 
@@ -734,8 +772,11 @@ const getProjectDailySummary = async (req, res) => {
 
           JOIN daily_entry idx
             ON idx.project_id = tlEntry.project_id
-            AND idx.production_date = tlEntry.production_date
+            AND idx.production_date =
+              tlEntry.production_date
+
             AND idx.category_id = mapping.category_id
+
             AND idx.team_lead_category_id IS NULL
 
           JOIN users idxUser
@@ -747,12 +788,15 @@ const getProjectDailySummary = async (req, res) => {
 
           JOIN entry_status idxStatus
             ON idxStatus.status_id = idx.status_id
-            AND idxStatus.code IN ('submitted', 'reviewed', 'locked')
+            AND idxStatus.code IN ('reviewed', 'locked')
+            AND idx.reviewed_at IS NOT NULL
+            AND idx.reviewed_by IS NOT NULL
 
           WHERE tlEntry.project_id = ?
             AND tlEntry.production_date >= ?
 
           GROUP BY mapping.entry_id
+
         ) idxTotals
           ON idxTotals.teamLeadEntryId = tl.entry_id
 
@@ -776,78 +820,98 @@ const getProjectDailySummary = async (req, res) => {
         ]
       );
 
-      // Track document backlog for each Team Lead reporting category.
       const categoryBacklogs = new Map();
-
-      // Track pending batches for each Team Lead reporting category.
       const categoryPendingBatches = new Map();
 
-      // Build the summary rows.
       for (const row of dailyRows) {
         const categoryId = row.category_id;
-        const categoryKey = String(categoryId ?? "uncategorized");
+
+        const categoryKey = String(
+          categoryId ?? "uncategorized"
+        );
+
         const productionDate = row.production_date;
 
-        // Match Indexer category breakdown for the same date and category.
-        const matchedIndexerCategories = indexerCategoryRows.find(
-          (item) =>
-            String(item.team_lead_category_id) === String(categoryId) &&
-            item.production_date === productionDate
-        );
+        const matchedIndexerCategories =
+          indexerCategoryRows.find(
+            (item) =>
+              String(item.team_lead_category_id) ===
+                String(categoryId) &&
+              item.production_date === productionDate
+          );
 
-        // Get Indexer category names and completed totals.
         const indexerCategoryNames =
-          matchedIndexerCategories?.indexer_category_names || "";
+          matchedIndexerCategories
+            ?.indexer_category_names || "";
 
-        // Combine Team Lead and Indexer reporting categories.
-        const combinedCategoryName = indexerCategoryNames
-          ? `${row.category_name} / ${indexerCategoryNames}`
-          : row.category_name || "Uncategorized";
+        const combinedCategoryName =
+          indexerCategoryNames
+            ? `${row.category_name} / ${indexerCategoryNames}`
+            : row.category_name || "Uncategorized";
 
-        // Find direct Indexer totals.
-        const directIndexer = directIndexerRows.find(
-          (item) =>
-            String(item.category_id) === String(categoryId) &&
-            item.production_date === productionDate
+        const directIndexer =
+          directIndexerRows.find(
+            (item) =>
+              String(item.category_id) ===
+                String(categoryId) &&
+              item.production_date === productionDate
+          );
+
+        const received = Number(
+          row.received || 0
         );
 
-        // Get received documents.
-        const received = Number(row.received || 0);
+        // NEW: Use manual Team Lead counts for new dates.
+        // Preserve historical Indexer-based calculations.
 
-        // Combine direct Indexer totals with historical mapped totals.
-        const completed =
-          Number(row.completed || 0) +
-          Number(directIndexer?.completed || 0);
+        const useManualCounts =
+          productionDate >= MANUAL_COUNTS_FROM;
 
-        // Get batch totals.
-        const batchesReceived = Number(row.batchesReceived || 0);
+        // Documents Completed
 
-        const batchesProcessed =
-          Number(row.batchesProcessed || 0) +
-          Number(directIndexer?.batchesProcessed || 0);
+        const completed = useManualCounts
+          ? Number(row.manualCompleted || 0)
+          : Number(row.completed || 0) +
+            Number(directIndexer?.completed || 0);
 
-        // Get previously carried document backlog.
-        const carriedBacklog = categoryBacklogs.get(categoryKey) || 0;
+        // Extracted Documents
 
-        // Calculate completed work applied to old backlog.
+        const extractedDocuments = useManualCounts
+          ? Number(row.extractedDocuments || 0)
+          : 0;
+
+        const batchesReceived = Number(
+          row.batchesReceived || 0
+        );
+
+        // Batches Processed
+
+        const batchesProcessed = useManualCounts
+          ? Number(row.manualBatchesProcessed || 0)
+          : Number(row.batchesProcessed || 0) +
+            Number(directIndexer?.batchesProcessed || 0);
+
+        const carriedBacklog =
+          categoryBacklogs.get(categoryKey) || 0;
+
         const backlogCompleted = Math.min(
           completed,
           carriedBacklog
         );
 
-        // Calculate remaining old backlog.
         const backlog = Math.max(
           carriedBacklog - backlogCompleted,
           0
         );
 
-        // Use the same manual pending values as Team Lead Dashboard.
-        const pending = Number(row.documentsPending ?? 0);
+        const pending = Number(
+          row.documentsPending ?? 0
+        );
 
-        // Get manual pending batches.
-        const pendingBatches = Number(row.batchesPending ?? 0);
+        const pendingBatches = Number(
+          row.batchesPending ?? 0
+        );
 
-        // Add this project and category to the Core Team summary.
         summary.push({
           productionDate,
           projectId: project.project_id,
@@ -858,6 +922,7 @@ const getProjectDailySummary = async (req, res) => {
 
           received,
           completed,
+          extractedDocuments,
           backlog,
           pending,
 
@@ -866,31 +931,34 @@ const getProjectDailySummary = async (req, res) => {
           pendingBatches,
         });
 
-        // Carry today's pending documents into the next production date.
-        categoryBacklogs.set(categoryKey, pending);
+        categoryBacklogs.set(
+          categoryKey,
+          pending
+        );
 
-        // Carry pending batches into the next production date.
-        categoryPendingBatches.set(categoryKey, pendingBatches);
+        categoryPendingBatches.set(
+          categoryKey,
+          pendingBatches
+        );
       }
     }
 
-    // Show newest production dates first.
     summary.sort(
       (a, b) =>
-        new Date(b.productionDate) - new Date(a.productionDate)
+        new Date(b.productionDate) -
+        new Date(a.productionDate)
     );
 
-    // Return Core Team Project Daily Summary.
     return res.status(200).json({
       success: true,
       summary,
     });
-
   } catch (error) {
-    // Log backend errors.
-    console.error("Core Team Project Daily Summary Error:", error);
+    console.error(
+      "Core Team Project Daily Summary Error:",
+      error
+    );
 
-    // Return an error response.
     return res.status(500).json({
       success: false,
       message: "Failed to load project daily summary",
@@ -899,9 +967,7 @@ const getProjectDailySummary = async (req, res) => {
   }
 };
 
-// ============================================================
 // EXPORTS
-// ============================================================
 
 module.exports = {
   getCoreTeamDashboard,

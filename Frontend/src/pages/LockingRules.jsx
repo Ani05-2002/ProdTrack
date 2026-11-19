@@ -21,6 +21,7 @@ import {
 
 // Imports the shared Administrator/Core page shell layout.
 import CorePageShell from "../components/CorePageShell.jsx";
+import UserEntryRestrictions from "../components/UserEntryRestrictions.jsx";
 
 // Imports the shared API helper used for authenticated backend requests.
 import { apiRequest } from "../lib/api.js";
@@ -475,9 +476,9 @@ export default function LockingRules() {
       previousProjects.map((project) =>
         project.projectId === projectId
           ? {
-              ...project,
-              [field]: value,
-            }
+            ...project,
+            [field]: value,
+          }
           : project
       )
     );
@@ -545,7 +546,7 @@ export default function LockingRules() {
         )}
 
         <Workflow />
-
+        <UserEntryRestrictions />
         {/* Shows a loading message while the locking rules are being fetched. */}
         {loading ? (
           <Paper
