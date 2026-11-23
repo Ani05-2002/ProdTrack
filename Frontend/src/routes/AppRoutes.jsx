@@ -3,6 +3,7 @@ import TeamLeadDashboard from "../pages/TeamLead/Dashboard.jsx";
 import CoreTeamDashboard from "../pages/CoreTeam/Dashboard.jsx";
 import AdministratorDashboard from "../pages/Administrator/Dashboard.jsx";
 import DailyEntry from "../pages/DailyEntry.jsx";
+import DailyWorkStatement from "../pages/DailyWorkStatement.jsx";
 import Projects from "../pages/Projects.jsx";
 import IndexingGuide from "../pages/IndexingGuide.jsx";
 import Attendance from "../pages/Attendance.jsx";
@@ -36,6 +37,7 @@ const dashboards = {
 const rolePages = {
   indexer: {
     "daily-entry": DailyEntry,
+    "daily-work-statement": DailyWorkStatement,
     "indexing-guide": IndexingGuide,
     // Temporarily disabled for Indexer.
     // Uncomment if the client wants the Projects page again.

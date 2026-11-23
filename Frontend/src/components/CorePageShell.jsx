@@ -599,10 +599,20 @@ export function CoreFormDialog({
     }
   }, [open, initialValues]);
 
+  // Display fields according to the current form values.
+
+  const visibleFields = (fields || []).filter(
+    (field) =>
+      !field.visibleWhen ||
+      field.visibleWhen(values)
+  );
+
+
   // Validates required fields and submits.
   const submit = async () => {
+
     const newErrors = {};
-    (fields || []).forEach((field) => {
+    visibleFields.forEach((field) => {
       if (field.required) {
         const val = values[field.name];
         if (
@@ -657,7 +667,7 @@ export function CoreFormDialog({
           "@media (max-width: 560px)": { gridTemplateColumns: "1fr" },
         }}
       >
-        {(fields || []).map((field, index) => (
+        {visibleFields.map((field, index) => (
           // Wraps each field in a Box so the label sits above the input like the reference design.
           <Box
             key={field.name}

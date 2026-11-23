@@ -49,6 +49,7 @@ export default function DashboardLayout({
           <Header
             userName={user.name}
             role={user.role}
+            roleKey={user.roleKey}
             onLogout={onLogout}
             onNotifications={() => onNavigate("notifications")}
             onMenuClick={() => setMobileOpen(true)}

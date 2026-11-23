@@ -22,6 +22,11 @@ export const sidebarConfig = {
   indexer: [
     { label: "Dashboard", icon: "🏠", page: "dashboard" },
     { label: "Daily Entry", icon: "📝", page: "daily-entry" },
+
+    {
+      label: "Daily Work Statement",icon: "📋",page: "daily-work-statement",
+    },
+
     // Uncomment if the client wants the Projects page again.
     // { label: "Projects", icon: "📁", page: "projects" },
 

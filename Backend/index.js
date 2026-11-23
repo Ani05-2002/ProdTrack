@@ -70,6 +70,7 @@ const app = express();
 const dashboardRoutes = require("./routes/indexer/dashboardRoutes");
 const projectRoutes = require("./routes/projectRoutes");
 const dailyEntryRoutes = require("./routes/dailyEntryRoutes");
+const dailyWorkStatementRoutes = require("./routes/dailyWorkStatementRoutes");
 const guideRoutes = require("./routes/guideRoutes");
 const correctionRoutes = require("./routes/indexer/correctionRoutes");
 const attendanceRoutes = require("./routes/attendanceRoutes");
@@ -219,6 +220,7 @@ if (process.env.NODE_ENV !== "production") {
 app.use("/api/auth", authRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/daily-entries", dailyEntryRoutes);
+app.use("/api/daily-work-statements", dailyWorkStatementRoutes);
 app.use("/api/guides", guideRoutes);
 app.use("/api/corrections", correctionRoutes);
 app.use("/api/attendance", attendanceRoutes);

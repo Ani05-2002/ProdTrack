@@ -246,6 +246,111 @@ function IndexerDailyEntryIndexer({
     editingEntryId
   );
 
+
+  // ==========================================================
+  // SHIFT-WISE SUBMISSION AVAILABILITY
+  // ==========================================================
+
+  const [shiftCheck, setShiftCheck] = useState(null);
+
+  // Ensure the shift response belongs to the selected date.
+
+  const shiftStatus =
+    shiftCheck?.productionDate === formData.productionDate
+      ? shiftCheck
+      : null;
+
+  // Submission is allowed only when confirmed by the backend.
+
+  const canSubmitShift =
+    shiftStatus?.canSubmit === true;
+
+  // Automatically check shift submission availability.
+
+  useEffect(() => {
+    const productionDate = formData.productionDate;
+
+    let active = true;
+    let timer;
+
+    setShiftCheck(null);
+
+    if (!productionDate) return;
+
+    const checkShift = async () => {
+      let delay = 15000;
+
+      try {
+        const data = await apiRequest(
+          `/daily-entries/shift-submission-status?date=${encodeURIComponent(productionDate)}`,
+          {
+            cache: "no-store",
+          }
+        );
+
+        if (!active) return;
+
+        if (
+          data.success !== true ||
+          data.productionDate !== productionDate ||
+          typeof data.canSubmit !== "boolean"
+        ) {
+          throw new Error(
+            "Invalid shift status response."
+          );
+        }
+
+        setShiftCheck(data);
+
+        // Automatically check again when the shift
+        // submission opening time arrives.
+
+        if (!data.canSubmit && data.opensAt) {
+          const remaining =
+            Date.parse(data.opensAt) -
+            Date.parse(data.serverNow);
+
+          if (Number.isFinite(remaining)) {
+            delay = Math.max(
+              250,
+              Math.min(15000, remaining)
+            );
+          }
+        }
+
+      } catch (error) {
+        if (!active) return;
+
+        setShiftCheck({
+          productionDate,
+          canSubmit: false,
+          error: true,
+
+          message:
+            error.message ||
+            "Could not verify shift timing.",
+        });
+
+      } finally {
+        if (active) {
+          timer = setTimeout(checkShift, delay);
+        }
+      }
+    };
+
+    checkShift();
+
+    // Stop background checks when leaving the page
+    // or selecting another production date.
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+
+  }, [formData.productionDate]);
+
+
   useEffect(() => {
     const loadTeamLeadCategories = async () => {
       setTeamLeadCategories([]);
@@ -341,14 +446,13 @@ function IndexerDailyEntryIndexer({
     }));
   };
 
+
   const handleEditEntry = (entry) => {
     if (saving || !entry.canEdit) return;
 
     const original = entry.raw;
 
     setEditingEntryId(entry.id);
-
-    // Remembers whether the current entry was Draft or Submitted before editing started.
     setEditingEntryStatus(entry.status);
 
     setFormData({
@@ -356,14 +460,12 @@ function IndexerDailyEntryIndexer({
       projectId: original.project_id,
       teamLeadCategoryId: original.teamLeadCategoryId ?? "",
       reportingCategory: original.reporting_category || "",
-      indexerCategoryIds: Array.isArray(original.indexerCategoryIds)
-        ? original.indexerCategoryIds.map(Number)
-        : [],
       documentsCompleted: original.documents_completed ?? "",
       batchesProcessed: original.batches_processed ?? "",
       notes: original.notes || "",
     });
   };
+
 
   const handleSaveEntry = async (status) => {
     if (saving) return;
@@ -395,12 +497,29 @@ function IndexerDailyEntryIndexer({
     }
 
     // Keeps an already Submitted entry in Submitted state while updating its values.
+
     const statusToSend =
-      editingEntryId !== null && editingEntryStatus === "SUBMITTED"
+      editingEntryId !== null &&
+        editingEntryStatus === "SUBMITTED"
         ? "submitted"
         : status;
 
+    // Prevent submission before the assigned shift time.
+
+    if (
+      statusToSend === "submitted" &&
+      !canSubmitShift
+    ) {
+      toast.warning(
+        shiftStatus?.message ||
+        "Checking shift submission time. Please try again."
+      );
+
+      return;
+    }
+
     setSaving(true);
+
 
     try {
       const data = await apiRequest(
@@ -410,14 +529,18 @@ function IndexerDailyEntryIndexer({
         {
           method: editingEntryId !== null ? "PATCH" : "POST",
 
-          body: JSON.stringify({
-            ...formData,
-            ...numbers,
-            projectId: Number(formData.projectId),
 
-            // Sends the preserved workflow status when editing an already Submitted entry.
+          body: JSON.stringify({
+            productionDate: formData.productionDate,
+            projectId: Number(formData.projectId),
+            teamLeadCategoryId: Number(formData.teamLeadCategoryId),
+            reportingCategory: formData.reportingCategory,
+            documentsCompleted: numbers.documentsCompleted,
+            batchesProcessed: numbers.batchesProcessed,
+            notes: formData.notes,
             status: statusToSend,
           }),
+
         }
       );
 
@@ -612,11 +735,19 @@ function IndexerDailyEntryIndexer({
             flexWrap: "wrap",
           }}
         >
+
           <Button
             variant="outlined"
             type="button"
             onClick={() => handleSaveEntry("draft")}
-            disabled={saving || entryRestriction.blocked}
+            disabled={
+              saving ||
+              entryRestriction.blocked ||
+              (
+                editingEntryStatus === "SUBMITTED" &&
+                !canSubmitShift
+              )
+            }
             sx={{
               bgcolor: "#fff",
               color: "#173b66",
@@ -637,41 +768,83 @@ function IndexerDailyEntryIndexer({
               },
             }}
           >
-            {saving ? "Saving..." : "Save draft"}
+            {saving
+              ? "Saving..."
+              : editingEntryStatus === "SUBMITTED"
+                ? "Save changes"
+                : "Save draft"}
           </Button>
 
-          <Button
-            variant="contained"
-            type="button"
-            onClick={() => handleSaveEntry("submitted")}
-            disabled={saving || entryRestriction.blocked}
-            sx={{
-              bgcolor: "#3169e8",
-              textTransform: "none",
-              fontSize: 14,
-              fontWeight: 600,
-              borderRadius: "10px",
-              px: 2.25,
-              height: 46,
-              minWidth: {
-                xs: 0,
-                sm: 140,
-              },
-              flex: {
-                xs: 1,
-                sm: "unset",
-              },
-              boxShadow: "none",
-              "&:hover": {
-                bgcolor: "#2458cf",
+
+          {/* Show Submit Entry only after the assigned shift time. */}
+
+          {canSubmitShift && (
+            <Button
+              variant="contained"
+              type="button"
+              onClick={() => handleSaveEntry("submitted")}
+              disabled={saving || entryRestriction.blocked}
+              sx={{
+                bgcolor: "#3169e8",
+                textTransform: "none",
+                fontSize: 14,
+                fontWeight: 600,
+                borderRadius: "10px",
+                px: 2.25,
+                height: 46,
+                minWidth: {
+                  xs: 0,
+                  sm: 140,
+                },
+                flex: {
+                  xs: 1,
+                  sm: "unset",
+                },
                 boxShadow: "none",
-              },
-            }}
-          >
-            Submit Entry
-          </Button>
+
+                "&:hover": {
+                  bgcolor: "#2458cf",
+                  boxShadow: "none",
+                },
+              }}
+            >
+              Submit Entry
+            </Button>
+          )}
+
         </Box>
       </Box>
+
+      {/* ======================================================
+    SHIFT SUBMISSION AVAILABILITY MESSAGE
+====================================================== */}
+
+      <Alert
+        severity={
+          shiftStatus?.error
+            ? "error"
+            : canSubmitShift
+              ? "success"
+              : shiftStatus
+                ? "warning"
+                : "info"
+        }
+        sx={{
+          mb: 2,
+          borderRadius: "10px",
+        }}
+      >
+        {shiftStatus?.shiftName && (
+          <strong>
+            {shiftStatus.shiftName} —{" "}
+          </strong>
+        )}
+
+        {!formData.productionDate
+          ? "Select a production date."
+          : shiftStatus?.message ||
+          "Checking shift submission time..."}
+      </Alert>
 
 
       {/* User-specific entry restriction message */}
@@ -2111,12 +2284,25 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
         // Otherwise, select the first assigned project.
 
         if (assignedProjects.length > 0) {
+
+          const requestedProjectId = navigationData?.projectId;
+
           const selectedProject =
-            assignedProjects.find(
-              (project) =>
-                String(project.project_id || project.id) ===
-                String(navigationData?.projectId)
-            ) || assignedProjects[0];
+            requestedProjectId != null
+              ? assignedProjects.find(
+                (project) =>
+                  String(project.project_id ?? project.id) ===
+                  String(requestedProjectId)
+              )
+              : assignedProjects[0];
+
+          if (!selectedProject) {
+            toast.error(
+              "The selected project is not assigned to you."
+            );
+            return;
+          }
+
 
           setFormData((current) => ({
             ...current,
@@ -2136,7 +2322,9 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
     };
 
     loadProjects();
-  }, [toast]);
+
+  }, [toast, navigationData?.projectId]);
+
 
   // ===================================================
   // FORM INPUT HANDLERS

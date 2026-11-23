@@ -170,3 +170,32 @@ svg {
   border-color:
     rgba(255, 255, 255, 0.65);
 }
+
+
+/* =========================================
+   GLOBAL CALENDAR AND TIME PICKER ICON FIX
+========================================= */
+
+input[type="date"],
+input[type="datetime-local"],
+input[type="month"],
+input[type="week"],
+input[type="time"] {
+  color-scheme: light !important;
+}
+
+/* Make calendar and time icons visible */
+
+input::-webkit-calendar-picker-indicator {
+  opacity: 1 !important;
+  visibility: visible !important;
+  filter: brightness(0) !important;
+  cursor: pointer;
+}
+
+/* Disabled input icon */
+
+input:disabled::-webkit-calendar-picker-indicator {
+  opacity: 0.4 !important;
+  cursor: default;
+}

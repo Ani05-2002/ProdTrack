@@ -1,5 +1,5 @@
 // Imports React hooks used for loading API data and managing page/dialog state.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 // Imports the existing MUI components used by the original UI.
 import { Chip, Box } from "@mui/material";
@@ -110,6 +110,7 @@ const getInitials = (name = "") =>
 
 function UserMasterPage({
   administrator = false,
+  navigationData = null,
 }) {
   const toast = useToast();
   // Stores whether the Add/Edit User dialog is open.
@@ -127,8 +128,12 @@ function UserMasterPage({
   // Stores departments loaded from the database for the Department dropdown.
   const [departments, setDepartments] = useState([]);
 
+  const [shifts, setShifts] = useState([]);
+
   // Stores the user currently being edited; null means Add User mode.
   const [selectedUser, setSelectedUser] = useState(null);
+
+  const handledSearchTargetRef = useRef(null);
 
   // Controls whether New Password fields are shown in Edit User mode.
   const [changePassword, setChangePassword] = useState(false);
@@ -232,6 +237,28 @@ function UserMasterPage({
     }
   };
 
+
+  // ==========================================================
+  // LOAD SHIFTS
+  // ==========================================================
+
+  const loadShifts = async () => {
+    try {
+      const response = await apiRequest(
+        "/core-team/users/shifts"
+      );
+
+      setShifts(response.shifts || []);
+
+    } catch (error) {
+      console.error("Load shifts error:", error);
+
+      toast.error(
+        error.message || "Failed to load shifts"
+      );
+    }
+  };
+
   // ==========================================================
   // INITIAL API LOAD
   // ==========================================================
@@ -246,6 +273,7 @@ function UserMasterPage({
         loadTeamLeads(),
         loadProjects(),
         loadDepartments(),
+        loadShifts(),
       ]);
 
       setLoading(false);
@@ -253,6 +281,49 @@ function UserMasterPage({
 
     loadPageData();
   }, []);
+
+
+  // ==========================================================
+  // OPEN EMPLOYEE SELECTED FROM GLOBAL SEARCH
+  // ==========================================================
+
+  useEffect(() => {
+    if (
+      navigationData?.source !== "global-search" ||
+      navigationData?.resultType !== "user" ||
+      navigationData?.resultId == null
+    ) {
+      return;
+    }
+
+    // Do not reopen the same selection when users reload.
+    if (
+      handledSearchTargetRef.current === navigationData
+    ) {
+      return;
+    }
+
+    // Find the exact employee using the user ID.
+    const targetUser = users.find(
+      (user) =>
+        String(user.id) ===
+        String(navigationData.resultId)
+    );
+
+    // Wait until employee data has been loaded.
+    if (!targetUser) {
+      return;
+    }
+
+    // Mark this search navigation as handled.
+    handledSearchTargetRef.current = navigationData;
+
+    // Open the existing employee details dialog.
+    setSelectedUser(targetUser);
+    setChangePassword(false);
+    setOpen(true);
+
+  }, [navigationData, users]);
 
 
   // ==========================================================
@@ -282,7 +353,13 @@ function UserMasterPage({
           color="primary"
         />,
 
+
+        String(user.role || "").trim().toLowerCase() === "indexer"
+          ? user.shift_name || "Not assigned"
+          : "—",
+
         user.team_lead_name || "—",
+
 
         user.projects?.length
           ? user.projects.length
@@ -418,6 +495,25 @@ function UserMasterPage({
         ),
         required: true,
       },
+
+
+      // Shift selection is applicable only to Indexers.
+
+      {
+        name: "shift",
+        label: "Assign Shift",
+        placeholder: "Select shift",
+
+        options: shifts.map(
+          (shift) => shift.shift_name
+        ),
+
+        required: true,
+
+        visibleWhen: (values) =>
+          values.role === "Indexer",
+      },
+
       // Shows Team Lead only while adding a new user.
       // Shows Team Lead in both Add User and Edit User.
       {
@@ -452,7 +548,7 @@ function UserMasterPage({
         ],
       },
     ],
-    [teamLeads, projects, departments, administrator, selectedUser, changePassword]
+    [teamLeads, projects, departments, shifts, administrator, selectedUser, changePassword]
   );
 
 
@@ -514,6 +610,7 @@ function UserMasterPage({
         department: "",
         designation: "",
         role: "Indexer",
+        shift: "",
         lead: "None",
         status: "",
         projects: "",
@@ -565,10 +662,15 @@ function UserMasterPage({
         selectedUser.department || "",
       designation:
         selectedUser.designation || "",
+
       role: getRoleLabelFromId(
         selectedUser.role_id
       ),
+
+      shift: selectedUser.shift_name || "",
+
       lead: leadName,
+
       status:
         selectedUser.status === "inactive"
           ? "Inactive"
@@ -650,6 +752,26 @@ function UserMasterPage({
           values.role
         );
 
+      // Get the selected shift from Shift Master.
+
+      const selectedShift = shifts.find(
+        (shift) => shift.shift_name === values.shift
+      );
+
+      // Shift selection is mandatory for Indexers.
+
+      if (values.role === "Indexer" && !selectedShift) {
+        toast.error("Please select a valid Indexer shift.");
+        return;
+      }
+
+      // Non-Indexer employees do not require shifts.
+
+      const shiftId =
+        values.role === "Indexer"
+          ? Number(selectedShift.id)
+          : null;
+
       // Finds the database department selected by its visible name.
       const selectedDepartment =
         departments.find(
@@ -727,6 +849,7 @@ function UserMasterPage({
           designation: values.designation,
           roleId,
           teamLeadId,
+          shiftId,
           status,
         };
 
@@ -850,6 +973,7 @@ function UserMasterPage({
         designation:
           values.designation,
         teamLeadId,
+        shiftId,
         status,
         projectIds:
           getSelectedProjectIds(
@@ -927,15 +1051,18 @@ function UserMasterPage({
         >
           <CoreTable
             // Keeps the original table columns exactly the same.
+
             columns={[
               "EMPLOYEE",
               "EMP ID",
               "DEPT",
               "ROLE",
+              "SHIFT",
               "TEAM LEAD",
               "PROJECTS",
               "STATUS",
             ]}
+
             // Uses live rows instead of the original hardcoded rows.
             rows={tableRows}
             // Opens the selected table user in Edit mode.
@@ -987,22 +1114,25 @@ function UserMasterPage({
 // ============================================================
 
 // Renders the shared live Users module for Core Team.
-function UserMasterCoreTeam() {
+
+function UserMasterCoreTeam(props) {
   return (
     <UserMasterPage
+      {...props}
       administrator={false}
     />
   );
 }
 
-// Renders the same shared live Users module for Administrator.
-function UserMasterAdministrator() {
+function UserMasterAdministrator(props) {
   return (
     <UserMasterPage
+      {...props}
       administrator
     />
   );
 }
+
 
 
 // ============================================================

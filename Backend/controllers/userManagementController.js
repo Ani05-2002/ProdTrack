@@ -6,6 +6,90 @@ const {
 } = require("../utils/mailer");
 
 // ============================================================
+// SHIFT MANAGEMENT
+// ============================================================
+
+const isIndexerRole = (roleCode) =>
+  String(roleCode || "").trim().toLowerCase() === "indexer";
+
+const validateIndexerShift = async (
+  roleCode,
+  shiftId,
+  required = false
+) => {
+  if (!isIndexerRole(roleCode)) {
+    return { shiftId: null };
+  }
+
+  // Allow omitted shifts during rollout when not required.
+  if (shiftId === undefined && !required) {
+    return { shiftId: undefined };
+  }
+
+  if (
+    !["number", "string"].includes(typeof shiftId) ||
+    !/^[1-9]\d*$/.test(String(shiftId)) ||
+    !Number.isSafeInteger(Number(shiftId))
+  ) {
+    return {
+      error: "Please select a valid Indexer shift",
+    };
+  }
+
+  const [rows] = await db.query(
+    `
+    SELECT shift_id
+    FROM shift_master
+    WHERE shift_id = ?
+    LIMIT 1
+    `,
+    [Number(shiftId)]
+  );
+
+  return rows.length
+    ? { shiftId: Number(rows[0].shift_id) }
+    : { error: "Selected shift does not exist" };
+};
+
+
+// ============================================================
+// GET ALL SHIFTS FOR DROPDOWN
+// ============================================================
+
+const getUserShifts = async (req, res) => {
+  try {
+    const [shifts] = await db.query(`
+      SELECT
+        shift_id AS id,
+        shift_name,
+        TIME_FORMAT(
+          submission_time,
+          '%H:%i:%s'
+        ) AS submission_time,
+        submission_day_offset
+
+      FROM shift_master
+
+      ORDER BY shift_id ASC
+    `);
+
+    return res.status(200).json({
+      success: true,
+      shifts,
+    });
+
+  } catch (error) {
+    console.error("Get User Shifts Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load shifts",
+    });
+  }
+};
+
+
+// ============================================================
 // HELPER - GENERATE NEXT EMPLOYEE CODE
 // ============================================================
 
@@ -36,6 +120,7 @@ const generateEmployeeCode = async (connection) => {
 // 1. GET ALL USERS
 // ============================================================
 
+
 const getAllUsers = async (req, res) => {
   try {
     const [users] = await db.query(`
@@ -56,6 +141,16 @@ const getAllUsers = async (req, res) => {
 
         u.team_lead_id,
         tl.full_name AS team_lead_name,
+
+        u.shift_id,
+        sm.shift_name,
+
+        TIME_FORMAT(
+          sm.submission_time,
+          '%H:%i:%s'
+        ) AS submission_time,
+
+        sm.submission_day_offset,
 
         u.status,
         u.last_login_at,
@@ -84,6 +179,9 @@ const getAllUsers = async (req, res) => {
       LEFT JOIN users tl
         ON tl.user_id = u.team_lead_id
 
+      LEFT JOIN shift_master sm
+        ON sm.shift_id = u.shift_id
+
       LEFT JOIN project_assignment pa
         ON pa.user_id = u.user_id
 
@@ -103,6 +201,12 @@ const getAllUsers = async (req, res) => {
         r.code,
         u.team_lead_id,
         tl.full_name,
+
+        u.shift_id,
+        sm.shift_name,
+        sm.submission_time,
+        sm.submission_day_offset,
+
         u.status,
         u.last_login_at,
         u.created_at
@@ -127,6 +231,11 @@ const getAllUsers = async (req, res) => {
 
       team_lead_id: user.team_lead_id,
       team_lead_name: user.team_lead_name,
+
+      shift_id: user.shift_id,
+      shift_name: user.shift_name,
+      submission_time: user.submission_time,
+      submission_day_offset: user.submission_day_offset,
 
       status: user.status,
       last_login_at: user.last_login_at,
@@ -159,6 +268,7 @@ const getAllUsers = async (req, res) => {
     });
   }
 };
+
 
 
 // ============================================================
@@ -295,6 +405,7 @@ const createUser = async (req, res) => {
 
   try {
     const createStartedAt = Date.now();
+
     const {
       name,
       username,
@@ -304,9 +415,11 @@ const createUser = async (req, res) => {
       departmentId,
       designation,
       teamLeadId,
+      shiftId,
       projectIds = [],
       status = "active",
     } = req.body;
+
 
 
     // --------------------------------------------------------
@@ -389,6 +502,25 @@ const createUser = async (req, res) => {
     // Check whether the new user is an Indexer.
     const isIndexer =
       String(roleRows[0].code).toLowerCase() === "indexer";
+
+
+    // Validate the selected Indexer shift.
+
+    const shiftResult = await validateIndexerShift(
+      roleRows[0].code,
+      shiftId
+    );
+
+    if (shiftResult.error) {
+      return res.status(400).json({
+        success: false,
+        message: shiftResult.error,
+      });
+    }
+
+    const selectedShiftId =
+      shiftResult.shiftId ?? null;
+
 
     // Check whether the logged-in user is an Administrator.
     const isAdministrator =
@@ -566,40 +698,43 @@ const createUser = async (req, res) => {
     // Insert user
     // --------------------------------------------------------
 
-    const [result] =
-      await connection.query(
-        `
-        INSERT INTO users
-        (
-          emp_code,
-          full_name,
-          username,
-          email,
-          password_hash,
-          auth_method,
-          department_id,
-          designation,
-          role_id,
-          team_lead_id,
-          status
-        )
 
-        VALUES
-        (?, ?, ?, ?, ?, 'password', ?, ?, ?, ?, ?)
-        `,
-        [
-          employeeCode,
-          name,
-          username,
-          normalizedEmail,
-          passwordHash,
-          departmentId || null,
-          designation || null,
-          roleId,
-          teamLeadId || null,
-          status,
-        ]
-      );
+    const [result] = await connection.query(
+      `
+      INSERT INTO users
+      (
+        emp_code,
+        full_name,
+        username,
+        email,
+        password_hash,
+        auth_method,
+        department_id,
+        designation,
+        role_id,
+        team_lead_id,
+        shift_id,
+        status
+      )
+
+      VALUES
+      (?, ?, ?, ?, ?, 'password', ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        employeeCode,
+        name,
+        username,
+        normalizedEmail,
+        passwordHash,
+        departmentId || null,
+        designation || null,
+        roleId,
+        teamLeadId || null,
+        selectedShiftId,
+        status,
+      ]
+    );
+
 
 
     const userId = result.insertId;
@@ -724,13 +859,16 @@ const createUser = async (req, res) => {
       emailStatus: normalizedEmail ? "sending" : "not_required",
 
       // Return the new user's basic details.
+
       user: {
         id: userId,
         employee_id: employeeCode,
         name,
         username,
         email: normalizedEmail,
+        shift_id: selectedShiftId,
       },
+
     });
 
   } catch (error) {
@@ -774,6 +912,7 @@ const updateUser = async (req, res) => {
       departmentId,
       designation,
       teamLeadId,
+      shiftId,
       projectIds,
       status,
     } = req.body;
@@ -826,15 +965,25 @@ const updateUser = async (req, res) => {
     // Check user exists
     // --------------------------------------------------------
 
+
     const [existingUser] = await db.query(
       `
-      SELECT user_id
-      FROM users
-      WHERE user_id = ?
-      LIMIT 1
-      `,
+  SELECT
+    u.user_id,
+    r.code AS role_code
+
+  FROM users u
+
+  INNER JOIN role r
+    ON r.role_id = u.role_id
+
+  WHERE u.user_id = ?
+
+  LIMIT 1
+  `,
       [userId]
     );
+
 
     if (existingUser.length === 0) {
       return res.status(404).json({
@@ -922,14 +1071,18 @@ const updateUser = async (req, res) => {
 
     // Debug the data type of the received role ID.
     console.log("UPDATE USER - Role ID type:", typeof roleId);
+
+    let effectiveRoleCode =
+      existingUser[0].role_code;
+
     if (roleId !== undefined) {
       const [roleRows] = await db.query(
         `
-        SELECT role_id
-        FROM role
-        WHERE role_id = ?
-        LIMIT 1
-        `,
+    SELECT role_id, code
+    FROM role
+    WHERE role_id = ?
+    LIMIT 1
+    `,
         [roleId]
       );
 
@@ -939,7 +1092,29 @@ const updateUser = async (req, res) => {
           message: "Invalid role",
         });
       }
+
+      effectiveRoleCode = roleRows[0].code;
     }
+
+
+    // Validate the selected shift for Indexers.
+
+    const shiftResult = await validateIndexerShift(
+      effectiveRoleCode,
+      shiftId,
+
+      // Require a shift when changing another role to Indexer.
+      isIndexerRole(effectiveRoleCode) &&
+      !isIndexerRole(existingUser[0].role_code)
+    );
+
+    if (shiftResult.error) {
+      return res.status(400).json({
+        success: false,
+        message: shiftResult.error,
+      });
+    }
+
 
 
     // --------------------------------------------------------
@@ -1085,6 +1260,18 @@ const updateUser = async (req, res) => {
     }
 
 
+    // Save or update the assigned Indexer shift.
+
+    if (
+      (shiftId !== undefined || roleId !== undefined) &&
+      shiftResult.shiftId !== undefined
+    ) {
+      fields.push("shift_id = ?");
+      values.push(shiftResult.shiftId);
+    }
+
+
+
     if (teamLeadId !== undefined) {
       fields.push("team_lead_id = ?");
       values.push(teamLeadId || null);
@@ -1212,11 +1399,13 @@ const updateUser = async (req, res) => {
 // EXPORTS
 // ============================================================
 
+
 module.exports = {
   getAllUsers,
   getUserTeamLeads,
   getUserProjects,
   getUserDepartments,
+  getUserShifts,
   createUser,
   updateUser,
 };

@@ -1,18 +1,20 @@
+
 // Imports Express so Core Team user-management routes can be created.
 const express = require("express");
 
 // Imports JWT authentication middleware to verify the logged-in user.
 const authenticate = require("../middleware/authMiddleware");
 
-// Imports role middleware to restrict management APIs to Core Team.
+// Imports role middleware to restrict management APIs.
 const allowRoles = require("../middleware/roleMiddleware");
 
-// Imports all Core Team user-management controller functions.
+// Imports all user-management controller functions.
 const {
   getAllUsers,
   getUserTeamLeads,
   getUserProjects,
   getUserDepartments,
+  getUserShifts,
   createUser,
   updateUser,
 } = require("../controllers/userManagementController");
@@ -47,12 +49,25 @@ router.get(
   getUserProjects
 );
 
+
 // Gets departments from the database for the Department dropdown.
 router.get(
   "/users/departments",
   authenticate,
   allowRoles("coreTeam", "administrator"),
   getUserDepartments
+);
+
+
+// ============================================================
+// NEW: GET ALL SHIFTS FOR INDEXER SHIFT DROPDOWN
+// ============================================================
+
+router.get(
+  "/users/shifts",
+  authenticate,
+  allowRoles("coreTeam", "administrator"),
+  getUserShifts
 );
 
 
@@ -72,6 +87,8 @@ router.patch(
   allowRoles("coreTeam", "administrator"),
   updateUser
 );
+
+
 router.post(
   "/users/:id",
   authenticate,

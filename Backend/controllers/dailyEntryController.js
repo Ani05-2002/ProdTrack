@@ -2,6 +2,222 @@
 const db = require("../config/db");
 
 // ============================================================
+// INDEXER SHIFT SUBMISSION (IST)
+// ============================================================
+
+const getIndexerShiftSubmissionStatus = async (
+  userId,
+  productionDate
+) => {
+  const invalidDate = () => Object.assign(
+    new Error("Invalid production date."),
+    { httpStatus: 400 }
+  );
+
+  if (
+    typeof productionDate !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(productionDate) ||
+    Number(productionDate.slice(0, 4)) < 1000
+  ) {
+    throw invalidDate();
+  }
+
+  const day = new Date(
+    `${productionDate}T00:00:00Z`
+  );
+
+  if (
+    !Number.isFinite(day.getTime()) ||
+    day.toISOString().slice(0, 10) !== productionDate
+  ) {
+    throw invalidDate();
+  }
+
+  // Retrieve assigned shift directly from the database.
+
+  const [rows] = await db.query(
+    `
+    SELECT
+      sm.shift_id,
+      sm.shift_name,
+
+      TIME_FORMAT(
+        sm.submission_time,
+        '%H:%i:%s'
+      ) AS submission_time,
+
+      sm.submission_day_offset
+
+    FROM users u
+
+    LEFT JOIN shift_master sm
+      ON sm.shift_id = u.shift_id
+
+    WHERE u.user_id = ?
+
+    LIMIT 1
+    `,
+    [userId]
+  );
+
+  const shift = rows[0];
+  const now = new Date();
+
+  // An Indexer must have an assigned shift to submit.
+
+  if (!shift?.shift_id) {
+    return {
+      productionDate,
+      shiftId: null,
+      shiftName: null,
+      canSubmit: false,
+      opensAt: null,
+      serverNow: now.toISOString(),
+
+      message:
+        "No shift assigned. Contact your Administrator.",
+    };
+  }
+
+  const time = String(
+    shift.submission_time || ""
+  );
+
+  const offset = Number(
+    shift.submission_day_offset
+  );
+
+  // Validate Shift Master configuration.
+
+  if (
+    !/^([01]\d|2[0-3]):[0-5]\d:[0-5]\d$/.test(time) ||
+    shift.submission_day_offset == null ||
+    ![0, 1].includes(offset)
+  ) {
+    throw new Error("Invalid shift configuration.");
+  }
+
+  // Third Shift opens on the following calendar day.
+  // Production date remains unchanged.
+
+  day.setUTCDate(
+    day.getUTCDate() + offset
+  );
+
+  const opensOn = day
+    .toISOString()
+    .slice(0, 10);
+
+  // Explicit Indian Standard Time offset.
+  // Independent of server timezone.
+
+  const opens = new Date(
+    `${opensOn}T${time}+05:30`
+  );
+
+  const canSubmit =
+    now.getTime() >= opens.getTime();
+
+  return {
+    productionDate,
+
+    shiftId: Number(shift.shift_id),
+    shiftName: shift.shift_name,
+
+    submissionTime: time,
+    submissionDayOffset: offset,
+
+    canSubmit,
+
+    opensAt: opens.toISOString(),
+    serverNow: now.toISOString(),
+
+    message: canSubmit
+      ? "Your shift submission is available."
+      : `You can submit from ${opensOn} ${time.slice(0, 5)} IST (${shift.shift_name}).`,
+  };
+};
+
+
+// ============================================================
+// ENFORCE SHIFT SUBMISSION RESTRICTION
+// ============================================================
+
+const enforceShiftSubmission = async (
+  req,
+  productionDate,
+  statusCode
+) => {
+
+  // Team Leads are unaffected.
+  // Saving drafts is unaffected by shift timing.
+
+  if (
+    req.user.role !== "indexer" ||
+    statusCode !== "submitted"
+  ) {
+    return;
+  }
+
+  const result =
+    await getIndexerShiftSubmissionStatus(
+      req.user.id,
+      productionDate
+    );
+
+  // Reject early submission.
+
+  if (!result.canSubmit) {
+    throw Object.assign(
+      new Error(result.message),
+      {
+        httpStatus: 403,
+      }
+    );
+  }
+};
+
+
+// ============================================================
+// GET SHIFT SUBMISSION STATUS FOR FRONTEND
+// ============================================================
+
+const getShiftSubmissionStatus = async (req, res) => {
+  res.set("Cache-Control", "no-store");
+
+  try {
+    const result =
+      await getIndexerShiftSubmissionStatus(
+        req.user.id,
+        req.query.date
+      );
+
+    return res.status(200).json({
+      success: true,
+      ...result,
+    });
+
+  } catch (error) {
+    console.error(
+      "Shift Submission Status Error:",
+      error
+    );
+
+    return res.status(
+      error.httpStatus || 503
+    ).json({
+      success: false,
+      canSubmit: false,
+
+      message: error.httpStatus
+        ? error.message
+        : "Could not verify shift submission time. Please try again.",
+    });
+  }
+};
+
+
+// ============================================================
 // MANUAL TEAM LEAD PRODUCTION COUNTS
 // ============================================================
 
@@ -46,7 +262,7 @@ function readManualTeamLeadCounts(req, productionDate, statusCode) {
 
     const value =
       typeof raw === "number" ||
-      (typeof raw === "string" && /^\d+$/.test(raw.trim()))
+        (typeof raw === "string" && /^\d+$/.test(raw.trim()))
         ? Number(raw)
         : NaN;
 
@@ -357,8 +573,7 @@ const applyAutomaticLocks = async () => {
 
     if (entriesToLock.length > 0) {
       console.log(
-        `Automatic Lock: ${entriesToLock.length} daily entr${
-          entriesToLock.length === 1 ? "y" : "ies"
+        `Automatic Lock: ${entriesToLock.length} daily entr${entriesToLock.length === 1 ? "y" : "ies"
         } locked`
       );
     }
@@ -667,15 +882,25 @@ const createEntry = async (req, res) => {
       }
     }
 
+
     const statusCode = String(
       status || "draft"
     ).toLowerCase();
+
+    // Check Indexer's shift submission time.
+
+    await enforceShiftSubmission(
+      req,
+      productionDate,
+      statusCode
+    );
 
     const manualCounts = readManualTeamLeadCounts(
       req,
       productionDate,
       statusCode
     );
+
 
     if (manualCounts.error) {
       return res.status(400).json({
@@ -1342,11 +1567,21 @@ const updateEntry = async (req, res) => {
       });
     }
 
+
+    // Check shift timing before submitting a saved draft.
+
+    await enforceShiftSubmission(
+      req,
+      productionDate,
+      statusCode
+    );
+
     const manualCounts = readManualTeamLeadCounts(
       req,
       productionDate,
       statusCode
     );
+
 
     if (manualCounts.error) {
       return res.status(400).json({
@@ -3176,10 +3411,10 @@ const getProjectDailySummary = async (req, res) => {
 
     const completed = useManualCounts
       ? categorySummaries.reduce(
-          (total, category) =>
-            total + category.completed,
-          0
-        )
+        (total, category) =>
+          total + category.completed,
+        0
+      )
       : Number(rows[0]?.completed || 0);
 
     const backlogCompleted = Math.min(
@@ -3305,7 +3540,9 @@ const getProjectIndexerCategories = async (req, res) => {
 // EXPORT ALL DAILY ENTRY CONTROLLERS
 // ============================================================
 
+
 module.exports = {
+  getShiftSubmissionStatus,
   createEntry,
   getMyEntries,
   updateEntry,
@@ -3316,3 +3553,4 @@ module.exports = {
   getProjectIndexerCategories,
   getProjectTeamLeadCategories,
 };
+

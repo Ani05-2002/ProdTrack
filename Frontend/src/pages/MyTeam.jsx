@@ -1,10 +1,16 @@
+
 import {
   Box,
   Button,
   Paper,
   Typography,
   Avatar,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from "@mui/material";
+
 import { useEffect, useState } from "react";
 import apiRequest from "../lib/api.js";
 import { useToast } from "../components/ToastProvider.jsx";
@@ -153,10 +159,14 @@ function MemberRow({
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-export default function MyTeam({ onNavigate }) {
+export default function MyTeam({
+  onNavigate,
+  navigationData = null,
+}) {
   const toast = useToast();
   const [team, setTeam] = useState([]);
   const [teamPage, setTeamPage] = useState(0);
+  const [selectedMember, setSelectedMember] = useState(null);
   const TEAM_ROWS_PER_PAGE = 10;
 
   useEffect(() => {
@@ -218,6 +228,49 @@ export default function MyTeam({ onNavigate }) {
 
     loadMyTeam();
   }, [toast]);
+
+
+  // ==========================================================
+  // OPEN TEAM MEMBER SELECTED FROM GLOBAL SEARCH
+  // ==========================================================
+
+  useEffect(() => {
+    if (
+      navigationData?.source !== "global-search" ||
+      navigationData?.resultType !== "user" ||
+      navigationData?.resultId == null
+    ) {
+      return;
+    }
+
+    // Find the exact assigned employee by database user ID.
+
+    const memberIndex = team.findIndex(
+      (member) =>
+        String(member.id) ===
+        String(navigationData.resultId)
+    );
+
+    // Do not open employees outside the Team Lead's team.
+
+    if (memberIndex === -1) {
+      return;
+    }
+
+    const member = team[memberIndex];
+
+    // Navigate to the page containing this employee.
+
+    setTeamPage(
+      Math.floor(memberIndex / TEAM_ROWS_PER_PAGE)
+    );
+
+    // Open the selected employee's details.
+
+    setSelectedMember(member);
+
+  }, [navigationData, team]);
+
 
   return (
     <Box sx={{ width: "100%", boxSizing: "border-box" }}>
@@ -319,7 +372,130 @@ export default function MyTeam({ onNavigate }) {
             <Button size="small" disabled={teamPage >= Math.ceil(team.length / TEAM_ROWS_PER_PAGE) - 1} onClick={() => setTeamPage((p) => p + 1)} sx={{ minWidth: 28, height: 28, p: 0, fontSize: 16, color: MUTED }}>›</Button>
           </Box>
         )}
+
       </Paper>
+
+      {/* ================================================
+          SELECTED TEAM MEMBER DETAILS
+      ================================================ */}
+
+      <Dialog
+        open={Boolean(selectedMember)}
+        onClose={() => setSelectedMember(null)}
+        fullWidth
+        maxWidth="sm"
+        PaperProps={{
+          sx: {
+            borderRadius: "16px",
+            background:
+              "rgba(255, 255, 255, 0.97)",
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            fontWeight: 800,
+            color: "#10243e",
+          }}
+        >
+          Team Member Details
+        </DialogTitle>
+
+        <DialogContent dividers>
+          <Typography
+            sx={{
+              fontSize: 19,
+              fontWeight: 700,
+              mb: 3,
+              color: "#10243e",
+            }}
+          >
+            {selectedMember?.name}
+          </Typography>
+
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr",
+                sm: "1fr 1fr",
+              },
+              gap: 2.5,
+            }}
+          >
+            <Box>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+              >
+                Assigned Projects
+              </Typography>
+
+              <Typography
+                sx={{
+                  fontWeight: 600,
+                  overflowWrap: "anywhere",
+                }}
+              >
+                {selectedMember?.projects || "—"}
+              </Typography>
+            </Box>
+
+            <Box>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+              >
+                Today's Completed
+              </Typography>
+
+              <Typography sx={{ fontWeight: 600 }}>
+                {selectedMember?.today ?? 0}
+              </Typography>
+            </Box>
+
+            <Box>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+              >
+                Guide Acknowledgement
+              </Typography>
+
+              <Typography sx={{ fontWeight: 600 }}>
+                {selectedMember?.guide || "—"}
+              </Typography>
+            </Box>
+
+            <Box>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+              >
+                Attendance Status
+              </Typography>
+
+              <Typography sx={{ fontWeight: 600 }}>
+                {selectedMember?.status || "—"}
+              </Typography>
+            </Box>
+          </Box>
+        </DialogContent>
+
+        <DialogActions sx={{ p: 2 }}>
+          <Button
+            variant="contained"
+            onClick={() => setSelectedMember(null)}
+            sx={{
+              textTransform: "none",
+              borderRadius: "9px",
+              bgcolor: "#3169e8",
+            }}
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

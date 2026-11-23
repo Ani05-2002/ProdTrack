@@ -14,9 +14,26 @@ import SearchIcon from "@mui/icons-material/Search";
 import NotificationsRoundedIcon from "@mui/icons-material/NotificationsRounded";
 import HelpOutlineRoundedIcon from "@mui/icons-material/HelpOutlineRounded";
 
+
+const GLOBAL_SEARCH_GROUPS = [
+  {
+    type: "user",
+    label: "Employees",
+  },
+  {
+    type: "project",
+    label: "Projects",
+  },
+  {
+    type: "statement",
+    label: "Daily Work Statements",
+  },
+];
+
 export default function Header({
   userName = "Priya Sharma",
   role = "Indexer",
+  roleKey,
   notificationCount = 0,
   onLogout,
   onNotifications,
@@ -49,6 +66,35 @@ export default function Header({
 
   // Controls whether the search result dropdown is visible.
   const [searchOpen, setSearchOpen] = useState(false);
+
+  const [searchError, setSearchError] = useState("");
+
+
+  const searchRole = String(roleKey || role || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, "");
+
+  const isIndexer = searchRole === "indexer";
+
+  const isTeamLead = [
+    "lead",
+    "teamlead",
+    "teamleader",
+  ].includes(searchRole);
+
+  const isManagement = [
+    "core",
+    "coreteam",
+    "manager",
+    "assistantmanager",
+    "operationsmanager",
+    "admin",
+    "administrator",
+  ].includes(searchRole);
+
+  const canSearch = isTeamLead || isManagement;
+
 
   // Close global search when another page opens a form.
   // Close global search when another form opens.
@@ -140,67 +186,74 @@ export default function Header({
   // GLOBAL BASIC SEARCH
   // =========================================================
 
-  // Search for projects, users and entries.
+  // Search only for management roles, with a short debounce.
   useEffect(() => {
-    // Prevent outdated API requests from updating search.
-    let cancelled = false;
-
-    // Remove extra spaces from the query.
     const trimmedQuery = searchQuery.trim();
 
-    // Close the popup when search is empty.
-    if (!trimmedQuery) {
+    if (!canSearch || trimmedQuery.length < 2) {
       setSearchResults([]);
       setSearchOpen(false);
       setSearchLoading(false);
+      setSearchError("");
       return;
     }
 
-    // Wait briefly before searching.
+    let cancelled = false;
     const searchTimer = setTimeout(async () => {
-      try {
-        // Show loading state.
-        setSearchLoading(true);
+      setSearchLoading(true);
+      setSearchError("");
+      setSearchOpen(
+        document.activeElement ===
+        document.getElementById("global-search-input")
+      );
 
-        // Request matching results from the backend.
+      try {
+
         const data = await apiRequest(
           `/search?q=${encodeURIComponent(trimmedQuery)}`
         );
 
-        // Ignore outdated requests.
         if (cancelled) return;
 
-        // Store the latest search results.
-        setSearchResults(data.results || []);
+        // Show only Employees, Projects and Daily Work Statements.
+        setSearchResults(
+          Array.isArray(data?.results)
+            ? data.results.filter(
+              (result) =>
+                result.type === "user" ||
+                result.type === "project" ||
+                result.type === "statement"
+            )
+            : []
+        );
 
-        // Open the popup only if search currently has focus.
+        setSearchOpen(
+          document.activeElement ===
+          document.getElementById("global-search-input")
+        );
+
         setSearchOpen(
           document.activeElement ===
           document.getElementById("global-search-input")
         );
       } catch (error) {
-        // Ignore errors from cancelled requests.
         if (cancelled) return;
-
-        console.error("Header search error:", error);
-
-        // Clear search results after an error.
         setSearchResults([]);
-        setSearchOpen(false);
+        setSearchError(error?.message || "Search unavailable.");
+        setSearchOpen(
+          document.activeElement ===
+          document.getElementById("global-search-input")
+        );
       } finally {
-        // Stop loading for the active request.
-        if (!cancelled) {
-          setSearchLoading(false);
-        }
+        if (!cancelled) setSearchLoading(false);
       }
-    }, 350);
+    }, 300);
 
-    // Cancel the previous search when the query changes.
     return () => {
       cancelled = true;
       clearTimeout(searchTimer);
     };
-  }, [searchQuery]);
+  }, [searchQuery, canSearch]);
 
   // =========================================================
   // NOTIFICATION ICON CLICK
@@ -240,79 +293,60 @@ export default function Header({
       }
     };
 
-  // Handles search-result navigation according to the logged-in user role.
+  // Pass the exact selected record to the destination page.
   const handleSearchResultClick = (result) => {
-    // Closes the search dropdown after a result is selected.
     setSearchOpen(false);
-
-    // Clears the search box after selection.
     setSearchQuery("");
+    setSearchResults([]);
 
-    // Normalizes role names such as "Core Team" → "coreteam".
-    const normalizedRole = String(role || "")
-      .replace(/\s+/g, "")
-      .toLowerCase();
+    if (!canSearch || !result?.type) return;
 
-    // Core Team and Administrator use management pages.
-    if (
-      normalizedRole === "coreteam" ||
-      normalizedRole === "administrator"
-    ) {
-      // Project results open Project Master.
-      if (result.type === "project") {
-        onNavigate?.("project-master");
-        return;
-      }
+    const selection = {
+      source: "global-search",
+      resultType: result.type,
+      resultId: result.id,
+      productionDate: result.productionDate || null,
+    };
 
-      // User results open User Master.
-      if (result.type === "user") {
-        onNavigate?.("users");
-        return;
-      }
-
-      // Entry results currently open Analytics & KPIs.
-      if (result.type === "entry") {
-        onNavigate?.("analytics-kpis");
-        return;
-      }
-    }
-
-    // Team Lead uses operational project and entry pages.
-    if (normalizedRole === "teamlead") {
-      // Project results open Projects.
-      if (result.type === "project") {
-        onNavigate?.("projects");
-        return;
-      }
-
-      // Entry results open Daily Entry.
-      if (result.type === "entry") {
-        onNavigate?.("daily-entry");
-        return;
-      }
-
-      // User results open My Team.
-      if (result.type === "user") {
-        onNavigate?.("my-team");
-        return;
-      }
-    }
-
-    // Indexer project results open Projects.
-    if (result.type === "project") {
-      onNavigate?.("projects");
+    if (result.type === "statement") {
+      onNavigate?.("reports", {
+        ...selection,
+        reportTab: "statements",
+        statementId: result.id,
+      });
       return;
     }
 
-    // Indexer entry results open Daily Entry.
-    if (result.type === "entry") {
-      onNavigate?.("daily-entry");
-      return;
-    }
-
-    // Indexer user results currently open My Profile.
     if (result.type === "user") {
-      onNavigate?.("my-profile");
+      onNavigate?.(isTeamLead ? "my-team" : "users", selection);
+      return;
+    }
+
+
+    if (result.type === "project") {
+      if (isTeamLead) {
+        // Open Team Lead Daily Entry with the
+        // exact project selected from Global Search.
+        onNavigate?.("daily-entry", {
+          ...selection,
+          projectId: result.id,
+          projectName: result.title,
+        });
+      } else {
+        // Keep Manager and Admin navigation unchanged.
+        onNavigate?.("project-master", {
+          ...selection,
+          projectId: result.id,
+          projectName: result.title,
+        });
+      }
+
+      return;
+    }
+
+
+    if (result.type === "entry") {
+      onNavigate?.(isTeamLead ? "daily-entry" : "reports", selection);
     }
   };
 
@@ -425,7 +459,7 @@ export default function Header({
             sx={{
               display: {
                 xs: "none",
-                md: "flex",
+                md: isIndexer ? "none" : "flex",
               },
 
               width: {
@@ -464,7 +498,8 @@ export default function Header({
             />
 
             <InputBase
-              placeholder="Search projects, entries, users..."
+              id="global-search-input"
+              placeholder="Search employees, projects, entries, statements..."
 
               // Connects the existing input to the global search state.
               value={searchQuery}
@@ -480,7 +515,7 @@ export default function Header({
 
               // Open search results only when there is a search query.
               onFocus={() => {
-                if (searchQuery.trim() && searchResults.length > 0) {
+                if (searchQuery.trim().length >= 2) {
                   setSearchOpen(true);
                 }
               }}
@@ -547,8 +582,15 @@ export default function Header({
                   </Typography>
                 )}
 
+                {!searchLoading && searchError && (
+                  <Typography sx={{ px: 1.5, py: 1.2, fontSize: 13, color: "#b91c1c" }}>
+                    {searchError}
+                  </Typography>
+                )}
+
                 {/* Shows a message when no results match the search. */}
                 {!searchLoading &&
+                  !searchError &&
                   searchResults.length ===
                   0 && (
                     <Typography
@@ -563,79 +605,38 @@ export default function Header({
                     </Typography>
                   )}
 
-                {/* Renders every project, user, and entry returned by the backend. */}
-                {!searchLoading &&
-                  searchResults.map(
-                    (result) => (
-                      <Box
-                        key={`${result.type}-${result.id}`}
-                        // Navigates to the correct page when a search result is selected.
-                        // Uses role-based navigation for the selected search result.
-                        // Prevent search input from losing focus before result selection.
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                        }}
-                        onClick={() => {
-                          handleSearchResultClick(result);
-                        }}
-                        sx={{
-                          px: 1.5,
-                          py: 1,
+                {/* Group results by type while preserving the existing dropdown. */}
+                {!searchLoading && !searchError &&
+                  GLOBAL_SEARCH_GROUPS.map((group) => {
+                    const matches = searchResults.filter(
+                      (result) => result.type === group.type
+                    );
+                    if (!matches.length) return null;
 
-                          cursor: "pointer",
-
-                          borderBottom:
-                            "1px solid #eef2f7",
-
-                          "&:last-child": {
-                            borderBottom:
-                              "none",
-                          },
-
-                          "&:hover": {
-                            bgcolor:
-                              "#f8fafc",
-                          },
-                        }}
-                      >
-                        {/* Shows the result name/title. */}
-                        <Typography
-                          sx={{
-                            color:
-                              "#0f172a",
-
-                            fontSize: 13,
-
-                            fontWeight: 600,
-                          }}
-                        >
-                          {result.title ||
-                            `${result.type} #${result.id}`}
+                    return (
+                      <Box key={group.type}>
+                        <Typography sx={{ px: 1.5, py: 0.8, bgcolor: "#f1f5f9", color: "#475569", fontSize: 11, fontWeight: 700 }}>
+                          {group.label}
                         </Typography>
-
-                        {/* Shows result type and optional code. */}
-                        <Typography
-                          sx={{
-                            color:
-                              "#64748b",
-
-                            fontSize: 11,
-
-                            mt: 0.2,
-
-                            textTransform:
-                              "capitalize",
-                          }}
-                        >
-                          {result.type}
-
-                          {result.code
-                            ? ` · ${result.code}`
-                            : ""}
-                        </Typography>
+                        {matches.map((result) => (
+                          <Box
+                            key={`${result.type}-${result.id}`}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => handleSearchResultClick(result)}
+                            sx={{ px: 1.5, py: 1, cursor: "pointer", borderBottom: "1px solid #eef2f7", "&:hover": { bgcolor: "#f8fafc" } }}
+                          >
+                            <Typography sx={{ color: "#0f172a", fontSize: 13, fontWeight: 600 }}>
+                              {result.title || `${result.type} #${result.id}`}
+                            </Typography>
+                            <Typography sx={{ color: "#64748b", fontSize: 11, mt: 0.2 }}>
+                              {result.code || ""}
+                              {result.status ? ` · ${result.status}` : ""}
+                            </Typography>
+                          </Box>
+                        ))}
                       </Box>
-                    )
-                  )}
+                    );
+                  })}
               </Box>
             )}
           </Box>
@@ -645,7 +646,7 @@ export default function Header({
           <IconButton
             sx={{
               display: {
-                xs: "flex",
+                xs: isIndexer ? "none" : "flex",
                 md: "none",
               },
 

@@ -14,6 +14,8 @@ import {
   Chip,
 } from "@mui/material";
 import apiRequest from "../lib/api.js";
+import { Tabs, Tab } from "@mui/material";
+import DailyWorkStatementReports from "../components/DailyWorkStatementReports.jsx";
 import ExcelJS from "exceljs";
 import { useToast } from "../components/ToastProvider.jsx";
 import { jsPDF } from "jspdf";
@@ -343,9 +345,113 @@ const getLocalDateInputValue = () => {
   return `${year}-${month}-${day}`;
 };
 
-export default function Reports({
+
+// ============================================================
+// REPORTS TAB NAVIGATION
+// ============================================================
+
+export default function Reports(props) {
+
+  const [activeTab, setActiveTab] = useState(
+    props.navigationData?.reportTab === "statements"
+      ? "statements"
+      : "existing"
+  );
+
+
+  const canViewStatements = [
+    "teamLead",
+    "coreTeam",
+    "administrator",
+  ].includes(props.roleKey);
+
+  // Other roles retain their existing Reports page.
+
+
+  if (!canViewStatements) {
+
+    useEffect(() => {
+      const navigation = props.navigationData;
+
+      if (
+        navigation?.source === "global-search" &&
+        navigation?.reportTab === "statements" &&
+        navigation?.resultType === "statement"
+      ) {
+        setActiveTab("statements");
+      }
+    }, [props.navigationData]);
+
+    return <ExistingReports {...props} />;
+  }
+
+  return (
+    <Box
+      sx={{
+        width: "100%",
+        minWidth: 0,
+      }}
+    >
+      <Tabs
+        value={activeTab}
+
+        onChange={(_, value) =>
+          setActiveTab(value)
+        }
+
+        variant="scrollable"
+        scrollButtons="auto"
+
+        sx={{
+          mb: 2.5,
+
+          bgcolor:
+            "rgba(255,255,255,0.75)",
+
+          borderRadius: "12px",
+
+          "& .MuiTab-root": {
+            textTransform: "none",
+            fontWeight: 600,
+          },
+        }}
+      >
+        <Tab
+          label="Existing Reports"
+          value="existing"
+        />
+
+        <Tab
+          label="Daily Work Statements"
+          value="statements"
+        />
+      </Tabs>
+
+      {activeTab === "statements" ? (
+
+        <DailyWorkStatementReports
+          searchTarget={
+            props.navigationData?.reportTab === "statements"
+              ? props.navigationData
+              : null
+          }
+        />
+
+      ) : (
+        <ExistingReports {...props} />
+      )}
+    </Box>
+  );
+}
+
+// ============================================================
+// EXISTING REPORTS FUNCTIONALITY
+// ============================================================
+
+function ExistingReports({
   roleKey = "indexer",
 }) {
+
   const toast = useToast();
   const [summary, setSummary] = useState({
     totalReceived: 0,

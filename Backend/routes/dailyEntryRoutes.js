@@ -9,7 +9,8 @@ const allowRoles = require(
   "../middleware/roleMiddleware"
 );
 
-// Existing Daily Entry controllers.
+// Daily Entry controllers.
+
 const {
   createEntry,
   getMyEntries,
@@ -20,11 +21,13 @@ const {
   getProjectDailySummary,
   getProjectIndexerCategories,
   getProjectTeamLeadCategories,
+  getShiftSubmissionStatus,
 } = require(
   "../controllers/dailyEntryController"
 );
 
-// NEW: Entry restriction checking.
+// Existing entry restriction checking.
+
 const {
   getRestrictionStatus,
   enforceEntryRestriction,
@@ -34,7 +37,9 @@ const {
 
 const router = express.Router();
 
-// NEW: Check Indexer entry access.
+
+// Check Indexer entry access.
+
 router.get(
   "/restriction-status",
   authenticate,
@@ -42,7 +47,21 @@ router.get(
   getRestrictionStatus
 );
 
+
+// ============================================================
+// NEW: CHECK SHIFT SUBMISSION AVAILABILITY
+// ============================================================
+
+router.get(
+  "/shift-submission-status",
+  authenticate,
+  allowRoles("indexer"),
+  getShiftSubmissionStatus
+);
+
+
 // Get pending Team Lead reviews.
+
 router.get(
   "/team/pending",
   authenticate,
@@ -50,7 +69,9 @@ router.get(
   getPendingTeamEntries
 );
 
+
 // Get user's daily entries.
+
 router.get(
   "/my",
   authenticate,
@@ -58,8 +79,9 @@ router.get(
   getMyEntries
 );
 
+
 // Create Daily Entry.
-// NEW: Check restriction before saving.
+
 router.post(
   "/",
   authenticate,
@@ -68,7 +90,9 @@ router.post(
   createEntry
 );
 
+
 // Get dynamic project fields.
+
 router.get(
   "/projects/:projectId/fields",
   authenticate,
@@ -76,7 +100,9 @@ router.get(
   getProjectFields
 );
 
+
 // Get Project Daily Summary.
+
 router.get(
   "/projects/:projectId/summary",
   authenticate,
@@ -88,7 +114,9 @@ router.get(
   getProjectDailySummary
 );
 
+
 // Get Indexer categories.
+
 router.get(
   "/projects/:projectId/indexer-categories",
   authenticate,
@@ -96,7 +124,9 @@ router.get(
   getProjectIndexerCategories
 );
 
+
 // Get Team Lead categories.
+
 router.get(
   "/projects/:projectId/team-lead-categories",
   authenticate,
@@ -104,7 +134,9 @@ router.get(
   getProjectTeamLeadCategories
 );
 
+
 // POST method for existing frontend compatibility.
+
 router.post(
   "/projects/:projectId/team-lead-categories",
   authenticate,
@@ -112,8 +144,9 @@ router.post(
   getProjectTeamLeadCategories
 );
 
+
 // Update existing entry.
-// NEW: Check restriction before editing.
+
 router.patch(
   "/:id",
   authenticate,
@@ -121,8 +154,10 @@ router.patch(
   enforceEntryRestriction,
   updateEntry
 );
+
 
 // POST update compatibility.
+
 router.post(
   "/:id",
   authenticate,
@@ -131,7 +166,9 @@ router.post(
   updateEntry
 );
 
+
 // Team Lead review remains unchanged.
+
 router.patch(
   "/:id/review",
   authenticate,
@@ -145,5 +182,6 @@ router.post(
   allowRoles("teamLead"),
   reviewEntry
 );
+
 
 module.exports = router;
