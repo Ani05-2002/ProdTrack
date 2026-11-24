@@ -62,14 +62,25 @@ const getUserShifts = async (req, res) => {
       SELECT
         shift_id AS id,
         shift_name,
+
+        TIME_FORMAT(
+          shift_start_time,
+          '%H:%i:%s'
+        ) AS shift_start_time,
+
+        TIME_FORMAT(
+          shift_end_time,
+          '%H:%i:%s'
+        ) AS shift_end_time,
+
         TIME_FORMAT(
           submission_time,
           '%H:%i:%s'
         ) AS submission_time,
+
         submission_day_offset
 
       FROM shift_master
-
       ORDER BY shift_id ASC
     `);
 
@@ -77,7 +88,6 @@ const getUserShifts = async (req, res) => {
       success: true,
       shifts,
     });
-
   } catch (error) {
     console.error("Get User Shifts Error:", error);
 
@@ -87,6 +97,7 @@ const getUserShifts = async (req, res) => {
     });
   }
 };
+
 
 
 // ============================================================
@@ -187,6 +198,8 @@ const getAllUsers = async (req, res) => {
 
       LEFT JOIN project p
         ON p.project_id = pa.project_id
+       
+        WHERE u.deleted_at IS NULL
 
       GROUP BY
         u.user_id,
@@ -1395,6 +1408,336 @@ const updateUser = async (req, res) => {
 };
 
 
+const validateShiftData = (body = {}) => {
+  const shiftName = String(
+    body.shift_name ?? ""
+  ).trim();
+
+  const startTime = String(
+    body.shift_start_time ?? ""
+  ).trim();
+
+  const endTime = String(
+    body.shift_end_time ?? ""
+  ).trim();
+
+  const submissionTime = String(
+    body.submission_time ?? ""
+  ).trim();
+
+  const rawOffset = body.submission_day_offset;
+  const dayOffset = Number(rawOffset);
+
+  const timePattern =
+    /^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/;
+
+  const normalizeTime = (time) =>
+    time.length === 5 ? `${time}:00` : time;
+
+  if (
+    shiftName.length < 2 ||
+    shiftName.length > 50
+  ) {
+    return {
+      error: "Shift name must be 2 to 50 characters.",
+    };
+  }
+
+  // Working hours are optional for existing shifts
+  // until the Administrator configures them.
+  if (Boolean(startTime) !== Boolean(endTime)) {
+    return {
+      error: "Enter both shift start and end times.",
+    };
+  }
+
+  if (
+    startTime &&
+    !timePattern.test(startTime)
+  ) {
+    return {
+      error: "Invalid shift start time.",
+    };
+  }
+
+  if (
+    endTime &&
+    !timePattern.test(endTime)
+  ) {
+    return {
+      error: "Invalid shift end time.",
+    };
+  }
+
+  if (!timePattern.test(submissionTime)) {
+    return {
+      error: "Invalid submission opening time.",
+    };
+  }
+
+  if (
+    ![0, 1, "0", "1"].includes(rawOffset) ||
+    ![0, 1].includes(dayOffset)
+  ) {
+    return {
+      error: "Select Same Day or Next Day.",
+    };
+  }
+
+  return {
+    values: {
+      shift_name: shiftName,
+
+      shift_start_time: startTime
+        ? normalizeTime(startTime)
+        : null,
+
+      shift_end_time: endTime
+        ? normalizeTime(endTime)
+        : null,
+
+      submission_time: normalizeTime(
+        submissionTime
+      ),
+
+      submission_day_offset: dayOffset,
+    },
+  };
+};
+
+
+// ============================================================
+// ADMIN — CREATE SHIFT
+// ============================================================
+
+const createShift = async (req, res) => {
+  try {
+    const validation = validateShiftData(req.body);
+
+    if (validation.error) {
+      return res.status(400).json({
+        success: false,
+        message: validation.error,
+      });
+    }
+
+    const shift = validation.values;
+
+    const [existing] = await db.query(
+      `
+        SELECT shift_id
+        FROM shift_master
+        WHERE LOWER(TRIM(shift_name)) = LOWER(?)
+        LIMIT 1
+      `,
+      [shift.shift_name]
+    );
+
+    if (existing.length > 0) {
+      return res.status(409).json({
+        success: false,
+        message: "Shift name already exists.",
+      });
+    }
+
+    const [result] = await db.query(
+      `
+        INSERT INTO shift_master (
+          shift_name,
+          shift_start_time,
+          shift_end_time,
+          submission_time,
+          submission_day_offset
+        )
+        VALUES (?, ?, ?, ?, ?)
+      `,
+      [
+        shift.shift_name,
+        shift.shift_start_time,
+        shift.shift_end_time,
+        shift.submission_time,
+        shift.submission_day_offset,
+      ]
+    );
+
+    return res.status(201).json({
+      success: true,
+      message: "Shift added successfully.",
+      shift: {
+        id: result.insertId,
+        ...shift,
+      },
+    });
+  } catch (error) {
+    console.error("Create Shift Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to add shift.",
+    });
+  }
+};
+
+
+// ============================================================
+// ADMIN — UPDATE EXISTING SHIFT
+// ============================================================
+
+const updateShift = async (req, res) => {
+  try {
+    const shiftId = Number(req.params.shiftId);
+
+    if (
+      !Number.isSafeInteger(shiftId) ||
+      shiftId <= 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid shift ID.",
+      });
+    }
+
+    const validation = validateShiftData(req.body);
+
+    if (validation.error) {
+      return res.status(400).json({
+        success: false,
+        message: validation.error,
+      });
+    }
+
+    const shift = validation.values;
+
+    const [existingShift] = await db.query(
+      `
+        SELECT shift_id
+        FROM shift_master
+        WHERE shift_id = ?
+        LIMIT 1
+      `,
+      [shiftId]
+    );
+
+    if (existingShift.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Shift not found.",
+      });
+    }
+
+    const [duplicate] = await db.query(
+      `
+        SELECT shift_id
+        FROM shift_master
+        WHERE LOWER(TRIM(shift_name)) = LOWER(?)
+          AND shift_id <> ?
+        LIMIT 1
+      `,
+      [shift.shift_name, shiftId]
+    );
+
+    if (duplicate.length > 0) {
+      return res.status(409).json({
+        success: false,
+        message: "Shift name already exists.",
+      });
+    }
+
+    await db.query(
+      `
+        UPDATE shift_master
+        SET
+          shift_name = ?,
+          shift_start_time = ?,
+          shift_end_time = ?,
+          submission_time = ?,
+          submission_day_offset = ?
+        WHERE shift_id = ?
+      `,
+      [
+        shift.shift_name,
+        shift.shift_start_time,
+        shift.shift_end_time,
+        shift.submission_time,
+        shift.submission_day_offset,
+        shiftId,
+      ]
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Shift updated successfully.",
+      shift: {
+        id: shiftId,
+        ...shift,
+      },
+    });
+  } catch (error) {
+    console.error("Update Shift Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update shift.",
+    });
+  }
+};
+
+///// User Deletion 
+
+const deleteUser = async (req, res) => {
+  try {
+    const userId = Number(req.params.id);
+    const adminId = Number(req.user?.id);
+
+    if (!Number.isSafeInteger(userId) || userId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID.",
+      });
+    }
+
+    // Prevent Administrator from deleting their own account.
+    if (userId === adminId) {
+      return res.status(403).json({
+        success: false,
+        message: "You cannot delete your own account.",
+      });
+    }
+
+    const [result] = await db.query(
+      `
+        UPDATE users
+        SET
+          status = 'inactive',
+          deleted_at = NOW()
+        WHERE user_id = ?
+          AND deleted_at IS NULL
+      `,
+      [userId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found or already deleted.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "User deleted successfully.",
+    });
+  } catch (error) {
+    console.error("Delete User Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete user.",
+    });
+  }
+};
+
+
 // ============================================================
 // EXPORTS
 // ============================================================
@@ -1406,6 +1749,9 @@ module.exports = {
   getUserProjects,
   getUserDepartments,
   getUserShifts,
+  createShift,
+  updateShift,
   createUser,
   updateUser,
+  deleteUser,
 };

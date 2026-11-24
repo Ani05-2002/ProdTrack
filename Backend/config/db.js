@@ -163,13 +163,29 @@ if (missingEnv.length === 0) {
   }
 }
 
+
 const pool = mysql.createPool(dbConfig);
 
 pool.on("connection", (connection) => {
-  writeLog(
-    "db.log",
-    "INFO",
-    `[DB] New connection | threadId=${connection.threadId} | host=${dbConfig.host} | database=${dbConfig.database}`
+  // Initialize every new ProdTrack connection in IST.
+  connection.query(
+    "SET SESSION time_zone = '+05:30'",
+    (error) => {
+      if (error) {
+        logDbError(
+          "Failed to set MySQL timezone to IST",
+          error
+        );
+        connection.destroy();
+        return;
+      }
+
+      writeLog(
+        "db.log",
+        "INFO",
+        `[DB] IST connection ready | threadId=${connection.threadId}`
+      );
+    }
   );
 });
 

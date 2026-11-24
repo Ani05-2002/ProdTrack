@@ -15,8 +15,11 @@ const {
   getUserProjects,
   getUserDepartments,
   getUserShifts,
+  createShift,
+  updateShift,
   createUser,
   updateUser,
+  deleteUser,
 } = require("../controllers/userManagementController");
 
 // Creates an Express router for Core Team Users APIs.
@@ -71,6 +74,30 @@ router.get(
 );
 
 
+// ============================================================
+// ADMIN ONLY — CREATE NEW SHIFT
+// ============================================================
+
+router.post(
+  "/users/shifts",
+  authenticate,
+  allowRoles("administrator"),
+  createShift
+);
+
+
+// ============================================================
+// ADMIN ONLY — UPDATE EXISTING SHIFT
+// ============================================================
+
+router.patch(
+  "/users/shifts/:shiftId",
+  authenticate,
+  allowRoles("administrator"),
+  updateShift
+);
+
+
 // Creates a new user from the Add User popup.
 router.post(
   "/users",
@@ -94,6 +121,15 @@ router.post(
   authenticate,
   allowRoles("coreTeam", "administrator"),
   updateUser
+);
+
+
+// Administrator only — Delete User
+router.delete(
+  "/users/:id",
+  authenticate,
+  allowRoles("administrator"),
+  deleteUser
 );
 
 

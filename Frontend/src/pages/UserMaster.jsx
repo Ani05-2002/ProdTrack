@@ -2,7 +2,27 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 // Imports the existing MUI components used by the original UI.
-import { Chip, Box } from "@mui/material";
+
+
+import {
+  Chip,
+  Box,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+  Typography,
+  TextField,
+  MenuItem,
+} from "@mui/material";
+
+
 
 // Imports the existing shared Core Team page components.
 import CorePageShell, {
@@ -16,6 +36,7 @@ import { apiRequest } from "../lib/api.js";
 
 // Imports the global toast notification hook.
 import { useToast } from "../components/ToastProvider.jsx";
+import AddRoundedIcon from "@mui/icons-material/AddRounded";
 
 
 // ============================================================
@@ -107,6 +128,36 @@ const getInitials = (name = "") =>
 // ============================================================
 // SHARED USER MASTER
 // ============================================================
+const SHIFT_INITIAL_VALUES = {
+  shift_name: "",
+  shift_start_time: "",
+  shift_end_time: "",
+  submission_time: "",
+  submission_day_offset: "Same Day",
+};
+
+
+// Convert MySQL HH:mm:ss to a readable time.
+const formatShiftTime = (value) => {
+  if (!value) return "—";
+
+  const match = /^(\d{2}):(\d{2})/.exec(
+    String(value)
+  );
+
+  if (!match) return "—";
+
+  const hour = Number(match[1]);
+
+  if (hour > 23) return "—";
+
+  const displayHour = hour % 12 || 12;
+  const period = hour >= 12 ? "PM" : "AM";
+
+  return `${displayHour}:${match[2]} ${period}`;
+};
+
+
 
 function UserMasterPage({
   administrator = false,
@@ -130,6 +181,17 @@ function UserMasterPage({
 
   const [shifts, setShifts] = useState([]);
 
+  const [shiftDialogOpen, setShiftDialogOpen] = useState(false);
+  const [savingShift, setSavingShift] = useState(false);
+
+
+  // One Admin-only dialog: manage, add, or edit shifts.
+  const [editingShift, setEditingShift] = useState(null);
+  const [shiftAction, setShiftAction] = useState("manage");
+  const [shiftValues, setShiftValues] = useState({
+    ...SHIFT_INITIAL_VALUES,
+  });
+
   // Stores the user currently being edited; null means Add User mode.
   const [selectedUser, setSelectedUser] = useState(null);
 
@@ -141,6 +203,9 @@ function UserMasterPage({
   // Tracks whether API data is currently loading.
   const [loading, setLoading] = useState(false);
 
+
+  const [userToDelete, setUserToDelete] = useState(null);
+  const [deletingUser, setDeletingUser] = useState(false);
 
   // ==========================================================
   // LOAD USERS
@@ -258,6 +323,104 @@ function UserMasterPage({
       );
     }
   };
+
+  ///// create Shift plus handle shift 
+
+  const handleSaveShift = async (values) => {
+    if (!administrator || savingShift) return;
+
+    const shiftName = String(
+      values.shift_name || ""
+    ).trim();
+
+    const startTime = String(
+      values.shift_start_time || ""
+    ).trim();
+
+    const endTime = String(
+      values.shift_end_time || ""
+    ).trim();
+
+    const submissionTime = String(
+      values.submission_time || ""
+    ).trim();
+
+    if (!shiftName || !submissionTime) {
+      toast.error("Please enter shift details.");
+      return;
+    }
+
+    if (Boolean(startTime) !== Boolean(endTime)) {
+      toast.error(
+        "Please enter both shift start and end times."
+      );
+      return;
+    }
+
+    // New shifts must have working hours.
+    // Existing shifts may have NULL hours until configured.
+    if (!editingShift && (!startTime || !endTime)) {
+      toast.error(
+        "Please set the shift start and end times."
+      );
+      return;
+    }
+
+    const payload = {
+      shift_name: shiftName,
+      shift_start_time: startTime,
+      shift_end_time: endTime,
+      submission_time: submissionTime,
+      submission_day_offset:
+        values.submission_day_offset === "Next Day"
+          ? 1
+          : 0,
+    };
+
+    const isEditing = Boolean(editingShift);
+    const shiftId = Number(editingShift?.id);
+
+    if (isEditing && !Number.isSafeInteger(shiftId)) {
+      toast.error("Invalid shift ID.");
+      return;
+    }
+
+    try {
+      setSavingShift(true);
+
+      const endpoint = isEditing
+        ? `/core-team/users/shifts/${shiftId}`
+        : "/core-team/users/shifts";
+
+      await apiRequest(endpoint, {
+        method: isEditing ? "PATCH" : "POST",
+        body: JSON.stringify(payload),
+      });
+
+      await loadShifts();
+
+      // Stay in the same dialog and show the updated shifts list.
+      setEditingShift(null);
+      setShiftValues({ ...SHIFT_INITIAL_VALUES });
+      setShiftAction("manage");
+
+      toast.success(
+        isEditing
+          ? "Shift updated successfully."
+          : "Shift added successfully."
+      );
+    } catch (error) {
+      console.error("Save Shift Error:", error);
+
+      toast.error(
+        error.message || "Failed to save shift."
+      );
+    } finally {
+      setSavingShift(false);
+    }
+  };
+
+
 
   // ==========================================================
   // INITIAL API LOAD
@@ -591,6 +754,37 @@ function UserMasterPage({
     setSelectedUser(user);
     setChangePassword(false);
     setOpen(true);
+  };
+
+
+  /// delete user Fun 
+  const handleConfirmDelete = async () => {
+    if (!userToDelete || deletingUser) return;
+
+    try {
+      setDeletingUser(true);
+
+      await apiRequest(
+        `/core-team/users/${userToDelete.id}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      setUserToDelete(null);
+
+      await loadUsers();
+
+      toast.success("User deleted successfully.");
+    } catch (error) {
+      console.error("Delete User Error:", error);
+
+      toast.error(
+        error.message || "Failed to delete user."
+      );
+    } finally {
+      setDeletingUser(false);
+    }
   };
 
 
@@ -1043,15 +1237,56 @@ function UserMasterPage({
         // Opens the form in Add mode.
         actionHandler={handleAddUser}
       >
+
+
+
+
+        {/* Admin-only Shift Management entry point. */}
+        {administrator && (
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "flex-end",
+              mb: 2,
+            }}
+          >
+
+
+            <Button
+              variant="contained"
+              startIcon={<AddRoundedIcon />}
+              onClick={() => {
+                setEditingShift(null);
+                setShiftValues({ ...SHIFT_INITIAL_VALUES });
+                setShiftAction("manage");
+                setShiftDialogOpen(true);
+                loadShifts();
+              }}
+              sx={{
+                width: "110px",
+                height: "34px",
+                minWidth: "110px",
+                borderRadius: "10px",
+                textTransform: "none",
+                fontWeight: 600,
+                fontSize: "12px",
+              }}
+            >
+              Shifts
+            </Button>
+
+
+          </Box>
+        )}
+
         <Box
           sx={{
             width: "100%",
             overflowX: "auto",
           }}
         >
-          <CoreTable
-            // Keeps the original table columns exactly the same.
 
+          <CoreTable
             columns={[
               "EMPLOYEE",
               "EMP ID",
@@ -1062,12 +1297,21 @@ function UserMasterPage({
               "PROJECTS",
               "STATUS",
             ]}
-
-            // Uses live rows instead of the original hardcoded rows.
             rows={tableRows}
-            // Opens the selected table user in Edit mode.
             onAction={handleEditUser}
+            onDeleteAction={
+              administrator
+                ? (_row, rowIndex) => {
+                  const user = users[rowIndex];
+
+                  if (user) {
+                    setUserToDelete(user);
+                  }
+                }
+                : undefined
+            }
           />
+
         </Box>
 
         {/* Keeps loading behavior lightweight without changing the existing page design. */}
@@ -1104,6 +1348,437 @@ function UserMasterPage({
         // Keeps the original Save user button label.
         submitLabel="Save user"
       />
+
+
+      {/* One Shift Management dialog with a dropdown for Manage/Add/Edit. */}
+      {administrator && (
+        <Dialog
+          open={shiftDialogOpen}
+          onClose={() => {
+            if (!savingShift) setShiftDialogOpen(false);
+          }}
+          fullWidth
+          maxWidth="md"
+          PaperProps={{ sx: { borderRadius: 2 } }}
+        >
+          <DialogTitle sx={{ fontWeight: 800 }}>
+            Shift Management
+            <Typography sx={{ color: "#667085", fontSize: 12, mt: 0.5 }}>
+              View, add and edit shifts — all times in IST
+            </Typography>
+          </DialogTitle>
+
+          <DialogContent dividers>
+            <TextField
+              select
+              fullWidth
+              size="small"
+              label="Shift action"
+              value={shiftAction}
+              onChange={(event) => {
+                const nextAction = event.target.value;
+                setShiftAction(nextAction);
+
+                if (nextAction === "add") {
+                  setEditingShift(null);
+                  setShiftValues({ ...SHIFT_INITIAL_VALUES });
+                } else if (nextAction === "manage") {
+                  setEditingShift(null);
+                  setShiftValues({ ...SHIFT_INITIAL_VALUES });
+                  loadShifts();
+                }
+              }}
+              sx={{ mt: 1, mb: 2 }}
+            >
+              <MenuItem value="manage">Manage Shifts</MenuItem>
+              <MenuItem value="add">Add Shift</MenuItem>
+              {editingShift && (
+                <MenuItem value="edit">Edit Shift</MenuItem>
+              )}
+            </TextField>
+
+            {shiftAction === "manage" ? (
+              <Box sx={{ overflowX: "auto" }}>
+                <Table size="small" sx={{ minWidth: 680 }}>
+                  <TableHead>
+                    <TableRow>
+                      {[
+                        "SHIFT NAME",
+                        "WORKING HOURS",
+                        "SUBMISSION OPENS",
+                        "DAY",
+                        "ACTION",
+                      ].map((heading) => (
+                        <TableCell
+                          key={heading}
+                          sx={{
+                            fontSize: 11,
+                            fontWeight: 800,
+                            color: "#526581",
+                          }}
+                        >
+                          {heading}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  </TableHead>
+
+                  <TableBody>
+                    {shifts.map((shift) => (
+                      <TableRow key={shift.id} hover>
+                        <TableCell sx={{ fontWeight: 700 }}>
+                          {shift.shift_name}
+                        </TableCell>
+
+                        <TableCell>
+                          {shift.shift_start_time &&
+                            shift.shift_end_time ? (
+                            <>
+                              {formatShiftTime(shift.shift_start_time)}
+                              {" – "}
+                              {formatShiftTime(shift.shift_end_time)}
+                              {String(shift.shift_end_time) <=
+                                String(shift.shift_start_time)
+                                ? " (overnight)"
+                                : ""}
+                            </>
+                          ) : (
+                            "Not configured"
+                          )}
+                        </TableCell>
+
+                        <TableCell>
+                          {formatShiftTime(shift.submission_time)}
+                        </TableCell>
+
+                        <TableCell>
+                          {Number(shift.submission_day_offset) === 1
+                            ? "Next Day"
+                            : "Same Day"}
+                        </TableCell>
+
+                        <TableCell>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => {
+                              setEditingShift(shift);
+                              setShiftValues({
+                                shift_name: shift.shift_name || "",
+                                shift_start_time: String(
+                                  shift.shift_start_time || ""
+                                ).slice(0, 5),
+                                shift_end_time: String(
+                                  shift.shift_end_time || ""
+                                ).slice(0, 5),
+                                submission_time: String(
+                                  shift.submission_time || ""
+                                ).slice(0, 5),
+                                submission_day_offset:
+                                  Number(shift.submission_day_offset) === 1
+                                    ? "Next Day"
+                                    : "Same Day",
+                              });
+                              setShiftAction("edit");
+                            }}
+                            sx={{ textTransform: "none", fontWeight: 700 }}
+                          >
+                            Edit
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+
+                {shifts.length === 0 && (
+                  <Typography
+                    sx={{ py: 3, textAlign: "center", color: "#667085" }}
+                  >
+                    No shifts found.
+                  </Typography>
+                )}
+              </Box>
+            ) : (
+
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: {
+                    xs: "1fr",
+                    sm: "1fr 1fr",
+                  },
+                  columnGap: 2.5,
+                  rowGap: 2.5,
+                  pt: 0.5,
+                  "& .MuiOutlinedInput-root": {
+                    borderRadius: "10px",
+                    minHeight: 44,
+                  },
+                }}
+              >
+                {/* SHIFT NAME */}
+                <Box sx={{ gridColumn: "1 / -1" }}>
+                  <Typography
+                    sx={{
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      color: "#526581",
+                      mb: 0.8,
+                    }}
+                  >
+                    Shift Name *
+                  </Typography>
+
+                  <TextField
+                    fullWidth
+                    size="small"
+                    required
+                    placeholder="Enter shift name"
+                    value={shiftValues.shift_name || ""}
+                    onChange={(event) =>
+                      setShiftValues((current) => ({
+                        ...current,
+                        shift_name: event.target.value,
+                      }))
+                    }
+                  />
+                </Box>
+
+                {/* SHIFT START TIME */}
+                <Box>
+                  <Typography
+                    sx={{
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      color: "#526581",
+                      mb: 0.8,
+                    }}
+                  >
+                    Shift Start Time (IST)
+                  </Typography>
+
+                  <TextField
+                    fullWidth
+                    size="small"
+                    type="time"
+                    value={shiftValues.shift_start_time || ""}
+                    onChange={(event) =>
+                      setShiftValues((current) => ({
+                        ...current,
+                        shift_start_time: event.target.value,
+                      }))
+                    }
+                    inputProps={{
+                      "aria-label": "Shift Start Time IST",
+                    }}
+                  />
+                </Box>
+
+                {/* SHIFT END TIME */}
+                <Box>
+                  <Typography
+                    sx={{
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      color: "#526581",
+                      mb: 0.8,
+                    }}
+                  >
+                    Shift End Time (IST)
+                  </Typography>
+
+                  <TextField
+                    fullWidth
+                    size="small"
+                    type="time"
+                    value={shiftValues.shift_end_time || ""}
+                    onChange={(event) =>
+                      setShiftValues((current) => ({
+                        ...current,
+                        shift_end_time: event.target.value,
+                      }))
+                    }
+                    inputProps={{
+                      "aria-label": "Shift End Time IST",
+                    }}
+                  />
+                </Box>
+
+                {/* SUBMISSION OPENING TIME */}
+                <Box>
+                  <Typography
+                    sx={{
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      color: "#526581",
+                      mb: 0.8,
+                    }}
+                  >
+                    Daily Entry Submission Opens (IST) *
+                  </Typography>
+
+                  <TextField
+                    fullWidth
+                    size="small"
+                    type="time"
+                    required
+                    value={shiftValues.submission_time || ""}
+                    onChange={(event) =>
+                      setShiftValues((current) => ({
+                        ...current,
+                        submission_time: event.target.value,
+                      }))
+                    }
+                    inputProps={{
+                      "aria-label": "Daily Entry Submission Opens IST",
+                    }}
+                  />
+                </Box>
+
+                {/* SUBMISSION DAY */}
+                <Box>
+                  <Typography
+                    sx={{
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      color: "#526581",
+                      mb: 0.8,
+                    }}
+                  >
+                    Submission Day *
+                  </Typography>
+
+                  <TextField
+                    select
+                    fullWidth
+                    size="small"
+                    value={
+                      shiftValues.submission_day_offset || "Same Day"
+                    }
+                    onChange={(event) =>
+                      setShiftValues((current) => ({
+                        ...current,
+                        submission_day_offset: event.target.value,
+                      }))
+                    }
+                  >
+                    <MenuItem value="Same Day">
+                      Same Day
+                    </MenuItem>
+
+                    <MenuItem value="Next Day">
+                      Next Day
+                    </MenuItem>
+                  </TextField>
+                </Box>
+
+                {/* INFORMATION TEXT */}
+                <Typography
+                  sx={{
+                    gridColumn: "1 / -1",
+                    fontSize: 12,
+                    color: "#667085",
+                    mt: 0.5,
+                    lineHeight: 1.6,
+                  }}
+                >
+                  Working hours are informational.
+                  Submission opening time and day determine
+                  when Indexers can submit Daily Entries.
+                </Typography>
+              </Box>
+
+            )}
+          </DialogContent>
+
+          <DialogActions sx={{ p: 2, gap: 1 }}>
+            <Button
+              disabled={savingShift}
+              onClick={() => setShiftDialogOpen(false)}
+            >
+              Close
+            </Button>
+
+            {shiftAction !== "manage" && (
+              <Button
+                variant="contained"
+                disabled={savingShift}
+                onClick={() => handleSaveShift(shiftValues)}
+                sx={{ textTransform: "none", fontWeight: 700 }}
+              >
+                {savingShift
+                  ? "Saving..."
+                  : editingShift
+                    ? "Update Shift"
+                    : "Save Shift"}
+              </Button>
+            )}
+          </DialogActions>
+        </Dialog>
+      )}
+/// delete diaglog 
+      {administrator && (
+        <Dialog
+          open={Boolean(userToDelete)}
+          onClose={() => {
+            if (!deletingUser) {
+              setUserToDelete(null);
+            }
+          }}
+          fullWidth
+          maxWidth="xs"
+          PaperProps={{
+            sx: { borderRadius: 2 },
+          }}
+        >
+          <DialogTitle sx={{ fontWeight: 800 }}>
+            Delete User?
+          </DialogTitle>
+
+          <DialogContent>
+            <Typography sx={{ fontSize: 14 }}>
+              Are you sure you want to delete
+              {" "}
+              <strong>{userToDelete?.name}</strong>?
+            </Typography>
+
+            <Typography
+              sx={{
+                fontSize: 12,
+                color: "#667085",
+                mt: 1.5,
+              }}
+            >
+              This employee will be removed from User Master
+              and will no longer be able to log in.
+              Existing work and audit history will be preserved.
+            </Typography>
+          </DialogContent>
+
+          <DialogActions sx={{ p: 2, gap: 1 }}>
+            <Button
+              disabled={deletingUser}
+              onClick={() => setUserToDelete(null)}
+            >
+              No, Cancel
+            </Button>
+
+            <Button
+              variant="contained"
+              color="error"
+              disabled={deletingUser}
+              onClick={handleConfirmDelete}
+            >
+              {deletingUser
+                ? "Deleting..."
+                : "Yes, Delete"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
+
+
     </>
   );
 }

@@ -208,6 +208,7 @@ export function CoreTable({
   onAction,
   onCellAction,
   actionVariant = "outlined",
+  onDeleteAction,
 }) {
   const [page, setPage] = useState(0);
 
@@ -330,22 +331,51 @@ export function CoreTable({
                     )}
                   </TableCell>
                 ))}
+
                 {actionLabel && (
                   <TableCell sx={{ py: 1.9 }}>
-                    <Button
-                      size="small"
-                      variant={actionVariant}
-                      onClick={() => onAction?.(row, globalIndex)}
-                      sx={
-                        actionVariant === "text"
-                          ? { color: "#10233d", minWidth: 0, px: 0, fontSize: 12 }
-                          : {}
-                      }
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1,
+                        whiteSpace: "nowrap",
+                      }}
                     >
-                      {actionLabel}
-                    </Button>
+                      <Button
+                        size="small"
+                        variant={actionVariant}
+                        onClick={() => onAction?.(row, globalIndex)}
+                        sx={
+                          actionVariant === "text"
+                            ? {
+                              color: "#10233d",
+                              minWidth: 0,
+                              px: 0,
+                              fontSize: 12,
+                            }
+                            : {}
+                        }
+                      >
+                        {actionLabel}
+                      </Button>
+
+                      {onDeleteAction && (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="error"
+                          onClick={() =>
+                            onDeleteAction(row, globalIndex)
+                          }
+                        >
+                          Delete
+                        </Button>
+                      )}
+                    </Box>
                   </TableCell>
                 )}
+
               </TableRow>
             );
           })}

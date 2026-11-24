@@ -1204,6 +1204,8 @@ const getMyEntries = async (req, res) => {
           tlrc.name,
           rc.name
         ) AS reporting_category,
+         
+        rc.name AS reporting_category_name,
 
         de.team_lead_category_id AS teamLeadCategoryId,
 

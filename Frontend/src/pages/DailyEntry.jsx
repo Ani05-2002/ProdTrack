@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import apiRequest from "../lib/api.js";
 import { useEntryRestriction } from "../lib/useEntryRestriction.js";
 import { useToast } from "../components/ToastProvider.jsx";
@@ -215,6 +215,7 @@ function IndexerDailyEntryIndexer({
   const [saving, setSaving] = useState(false);
   const [editingEntryId, setEditingEntryId] = useState(null);
   const [editingEntryStatus, setEditingEntryStatus] = useState(null);
+  const entryFormRef = useRef(null);
   const [entriesPage, setEntriesPage] = useState(0);
   const DAILY_ROWS_PER_PAGE = 10;
 
@@ -455,16 +456,37 @@ function IndexerDailyEntryIndexer({
     setEditingEntryId(entry.id);
     setEditingEntryStatus(entry.status);
 
+    // Restore all previously saved draft values.
     setFormData({
       productionDate: original.production_date,
       projectId: original.project_id,
-      teamLeadCategoryId: original.teamLeadCategoryId ?? "",
-      reportingCategory: original.reporting_category || "",
-      documentsCompleted: original.documents_completed ?? "",
-      batchesProcessed: original.batches_processed ?? "",
+
+      teamLeadCategoryId:
+        original.teamLeadCategoryId ?? "",
+
+      // Restore the actual reporting category name,
+      // not the combined table display label.
+      reportingCategory:
+        original.reporting_category_name || "",
+
+      documentsCompleted:
+        original.documents_completed ?? "",
+
+      batchesProcessed:
+        original.batches_processed ?? "",
+
       notes: original.notes || "",
     });
+
+    // Automatically take the Indexer to the Entry form.
+    requestAnimationFrame(() => {
+      entryFormRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
   };
+
 
 
   const handleSaveEntry = async (status) => {
@@ -1088,8 +1110,10 @@ function IndexerDailyEntryIndexer({
         </Box>
       )}
       <Card
+        ref={entryFormRef}
         elevation={0}
         sx={{
+          scrollMarginTop: "100px",
           borderRadius: "14px",
           border: "1px solid #dbe3ec",
           bgcolor: "#fff",
@@ -2210,6 +2234,11 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
 
   const toast = useToast();
 
+  const entryFormRef = useRef(null);
+
+  // Stable notification function for loading projects.
+  const showToast = toast.show;
+
   const [projects, setProjects] = useState([]);
   const [saving, setSaving] = useState(false);
 
@@ -2265,7 +2294,10 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
   // LOAD ASSIGNED PROJECTS
   // ===================================================
 
+
   useEffect(() => {
+    let active = true;
+
     const loadProjects = async () => {
       try {
         const data = await apiRequest("/projects/my");
@@ -2276,54 +2308,85 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
           );
         }
 
+        if (!active) return;
+
         const assignedProjects = data.projects || [];
 
         setProjects(assignedProjects);
 
-        // Select the project opened from the Projects page.
-        // Otherwise, select the first assigned project.
+        if (assignedProjects.length === 0) return;
 
-        if (assignedProjects.length > 0) {
+        // Respect navigation from the Projects page.
+        const requestedProjectId = navigationData?.projectId;
 
-          const requestedProjectId = navigationData?.projectId;
+        const requestedProject =
+          requestedProjectId != null
+            ? assignedProjects.find(
+              (project) =>
+                String(project.project_id ?? project.id) ===
+                String(requestedProjectId)
+            )
+            : null;
+
+        if (
+          requestedProjectId != null &&
+          !requestedProject
+        ) {
+          showToast(
+            "The selected project is not assigned to you.",
+            "error"
+          );
+          return;
+        }
+
+        setFormData((current) => {
+          // Keep the project already selected by the Team Lead.
+          const currentProject = assignedProjects.find(
+            (project) =>
+              String(project.project_id ?? project.id) ===
+              String(current.projectId)
+          );
 
           const selectedProject =
-            requestedProjectId != null
-              ? assignedProjects.find(
-                (project) =>
-                  String(project.project_id ?? project.id) ===
-                  String(requestedProjectId)
-              )
-              : assignedProjects[0];
+            requestedProject ||
+            currentProject ||
+            assignedProjects[0];
 
-          if (!selectedProject) {
-            toast.error(
-              "The selected project is not assigned to you."
-            );
-            return;
+          const nextProjectId =
+            selectedProject.project_id ?? selectedProject.id;
+
+          // Do not reset anything if the project is unchanged.
+          if (
+            String(current.projectId) ===
+            String(nextProjectId)
+          ) {
+            return current;
           }
 
-
-          setFormData((current) => ({
+          // Reset category only when the project actually changes.
+          return {
             ...current,
-
-            projectId:
-              selectedProject.project_id ||
-              selectedProject.id,
-
+            projectId: nextProjectId,
             reportingCategory: "",
-          }));
-        }
+          };
+        });
       } catch (error) {
-        toast.error(
-          error.message || "Failed to load projects"
+        if (!active) return;
+
+        showToast(
+          error.message || "Failed to load projects",
+          "error"
         );
       }
     };
 
     loadProjects();
 
-  }, [toast, navigationData?.projectId]);
+    return () => {
+      active = false;
+    };
+  }, [navigationData?.projectId, showToast]);
+
 
 
   // ===================================================
@@ -2540,10 +2603,14 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
       notes: original.notes || "",
     });
 
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
+
+    requestAnimationFrame(() => {
+      entryFormRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
     });
+
   };
 
   // ===================================================
@@ -3144,10 +3211,11 @@ function TeamLeadDailyEntryTeamLead({ navigationData }) {
       {/* =================================================
           ENTRY FORM
        ================================================= */}
-
       <Card
+        ref={entryFormRef}
         elevation={0}
         sx={{
+          scrollMarginTop: "110px",
           borderRadius: "14px",
           border: "1px solid #dbe3ec",
           bgcolor: "#fff",
