@@ -483,6 +483,8 @@ function ExistingReports({
   const [correctionReportRows, setCorrectionReportRows] = useState([]);
   const [allDailyEntries, setAllDailyEntries] = useState([]);
   const [dailyEntryRole, setDailyEntryRole] = useState("all");
+  // Selected date for All Daily Entries
+  const [dailyEntriesDate, setDailyEntriesDate] = useState(getLocalDateInputValue);
   // Stores the selected production date.
   const [dailySummaryDate, setDailySummaryDate] = useState(getLocalDateInputValue);
   // Stores project-wise daily summary records.
@@ -764,18 +766,31 @@ function ExistingReports({
         Number(b.pending || 0) - Number(a.pending || 0)
     );
   // Filter daily entries by role while preserving newest-first order.
-  const filteredDailyEntries = allDailyEntries.filter((entry) => {
-    // Show all records when no specific role is selected.
-    if (dailyEntryRole === "all") return true;
 
-    // Match both supported Team Lead role codes.
-    if (dailyEntryRole === "lead") {
-      return ["lead", "teamLead"].includes(entry.employee_role);
+  const filteredDailyEntries = allDailyEntries.filter((entry) => {
+    // Show only the selected production date
+    const entryDate = String(
+      entry.production_date || ""
+    ).slice(0, 10);
+
+    if (entryDate !== dailyEntriesDate) {
+      return false;
     }
 
-    // Match Indexer records.
+    // Keep existing role filters
+    if (dailyEntryRole === "all") {
+      return true;
+    }
+
+    if (dailyEntryRole === "lead") {
+      return ["lead", "teamLead"].includes(
+        entry.employee_role
+      );
+    }
+
     return entry.employee_role === "indexer";
   });
+
   // Filters the summary by the selected date and project.
   const filteredDailySummaryRows = dailySummaryRows.filter((row) => {
     const rowDate = String(row.productionDate || "").slice(0, 10);
@@ -965,7 +980,8 @@ function ExistingReports({
 
       // Set the CSV filename based on the selected period.
       link.href = downloadUrl;
-      link.download = `prodtrack-all-daily-entries.csv`;
+      link.download =
+        `prodtrack-daily-entries-${dailyEntriesDate}.csv`;
 
       // Trigger the CSV download.
       document.body.appendChild(link);
@@ -1030,6 +1046,314 @@ function ExistingReports({
     URL.revokeObjectURL(downloadUrl);
   };
 
+
+  const handleAllEntriesExcelDownload = async () => {
+    const selectedDate = dailyEntriesDate;
+
+    if (!selectedDate) {
+      toast.info("Please select a production date");
+      return;
+    }
+
+    // Use all records for the date so both roles are exported,
+    // regardless of the currently selected role tab.
+    const entries = allDailyEntries
+      .filter(
+        (entry) =>
+          String(entry.production_date || "").slice(0, 10) ===
+          selectedDate
+      )
+      .sort((a, b) =>
+        String(a.project_name || "").localeCompare(
+          String(b.project_name || "")
+        )
+      );
+
+    if (entries.length === 0) {
+      toast.info("No daily entries found for this date");
+      return;
+    }
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = "ProdTrack";
+      workbook.title = `Daily Entries - ${selectedDate}`;
+
+      const projectSheet = workbook.addWorksheet(
+        "Project-wise Entries"
+      );
+      const allSheet = workbook.addWorksheet("All Entries");
+
+      const headings = [
+        "Production Date",
+        "Project",
+        "Entry ID",
+        "Employee",
+        "Role",
+        "Team Lead Category",
+        "Indexer Category",
+        "Batch / Job",
+        "Documents Received",
+        "Indexer Completed",
+        "Team Lead Completed",
+        "Extracted Documents",
+        "Documents Pending",
+        "Batches Received",
+        "Indexer Batches Processed",
+        "Team Lead Batches Processed",
+        "Batches Pending",
+        "Status",
+        "Notes",
+      ];
+
+      const isTeamLead = (entry) =>
+        ["lead", "teamLead", "team_lead"].includes(
+          entry.employee_role
+        );
+
+      // Prevent user-entered text from becoming Excel formulas.
+      const safeText = (value) => {
+        const text = String(value ?? "");
+        return /^\s*[=+\-@]/.test(text) ? `'${text}` : text;
+      };
+
+      // Preserve blank values instead of turning them into zero.
+      const count = (value) =>
+        value === null || value === undefined || value === ""
+          ? ""
+          : Number(value);
+
+      const createEntryRow = (entry) => {
+        const lead = isTeamLead(entry);
+
+        return [
+          selectedDate,
+          safeText(entry.project_name),
+          entry.id,
+          safeText(entry.employee_name),
+          lead ? "Team Lead" : "Indexer",
+          safeText(entry.team_lead_category),
+          safeText(entry.indexer_category),
+          safeText(entry.batch_ref),
+          lead ? count(entry.received) : "",
+          !lead ? count(entry.completed) : "",
+          lead ? count(entry.team_lead_docs_completed) : "",
+          lead ? count(entry.extracted_documents) : "",
+          count(entry.documents_pending),
+          lead ? count(entry.batches_received) : "",
+          !lead ? count(entry.batches_processed) : "",
+          lead
+            ? count(entry.team_lead_batches_processed)
+            : "",
+          count(entry.batches_pending),
+          safeText(entry.status_name),
+          safeText(entry.notes),
+        ];
+      };
+
+      // Set column widths for both worksheets.
+      [projectSheet, allSheet].forEach((sheet) => {
+        sheet.columns = headings.map((heading) => ({
+          width: Math.max(18, Math.min(34, heading.length + 5)),
+        }));
+
+        sheet.getColumn(2).width = 32;
+        sheet.getColumn(4).width = 28;
+        sheet.getColumn(19).width = 48;
+      });
+
+      const styleHeader = (row) => {
+        row.height = 29;
+
+        row.eachCell({ includeEmpty: true }, (cell) => {
+          cell.font = {
+            bold: true,
+            color: { argb: "FFFFFFFF" },
+          };
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FF2F6DF6" },
+          };
+          cell.alignment = {
+            vertical: "middle",
+            wrapText: true,
+          };
+        });
+      };
+
+      const addBand = (sheet, title, color) => {
+        const row = sheet.addRow([title]);
+
+        sheet.mergeCells(
+          row.number,
+          1,
+          row.number,
+          headings.length
+        );
+
+        row.height = 27;
+        const cell = row.getCell(1);
+
+        cell.font = {
+          bold: true,
+          color: { argb: "FF10233D" },
+        };
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: color },
+        };
+      };
+
+      // --------------------------------------------------
+      // SHEET 1: PROJECT-WISE GROUPED ENTRIES
+      // --------------------------------------------------
+
+      addBand(
+        projectSheet,
+        `PRODTRACK — DAILY ENTRIES — ${selectedDate}`,
+        "FFDCE8FF"
+      );
+
+      projectSheet.addRow([]);
+
+      const projectGroups = new Map();
+
+      entries.forEach((entry) => {
+        const name = entry.project_name || "Unknown Project";
+
+        if (!projectGroups.has(name)) {
+          projectGroups.set(name, []);
+        }
+
+        projectGroups.get(name).push(entry);
+      });
+
+      for (const [projectName, projectEntries] of projectGroups) {
+        const projectRow = projectSheet.addRow([
+          `PROJECT: ${projectName}`,
+        ]);
+
+        projectSheet.mergeCells(
+          projectRow.number,
+          1,
+          projectRow.number,
+          headings.length
+        );
+
+        projectRow.height = 24;
+
+        const projectCell = projectRow.getCell(1);
+
+
+        projectCell.font = {
+          bold: true,
+          color: { argb: "FF000000" }, // Black text
+        };
+
+        projectCell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFFF6666" }, // Red background
+        };
+
+
+        projectCell.alignment = {
+          vertical: "middle",
+          horizontal: "left",
+        };
+
+        const teamLeadEntries = projectEntries.filter(isTeamLead);
+        const indexerEntries = projectEntries.filter(
+          (entry) => !isTeamLead(entry)
+        );
+
+        const addSection = (title, rows) => {
+          addBand(projectSheet, title, "FFEAF4F1");
+
+          styleHeader(projectSheet.addRow(headings));
+
+          if (rows.length === 0) {
+            projectSheet.addRow(["No entries"]);
+          } else {
+            rows.forEach((entry) => {
+              projectSheet.addRow(createEntryRow(entry));
+            });
+          }
+
+          projectSheet.addRow([]);
+        };
+
+        addSection(
+          `TEAM LEAD ENTRIES (${teamLeadEntries.length})`,
+          teamLeadEntries
+        );
+
+        addSection(
+          `INDEXER ENTRIES (${indexerEntries.length})`,
+          indexerEntries
+        );
+
+        projectSheet.addRow([]);
+      }
+
+      // --------------------------------------------------
+      // SHEET 2: ALL ENTRIES (FILTERABLE EXCEL TABLE)
+      // --------------------------------------------------
+
+      styleHeader(allSheet.addRow(headings));
+
+      entries.forEach((entry) => {
+        allSheet.addRow(createEntryRow(entry));
+      });
+
+      allSheet.views = [
+        {
+          state: "frozen",
+          ySplit: 1,
+          xSplit: 4,
+        },
+      ];
+
+      allSheet.autoFilter = {
+        from: "A1",
+        to: `S${allSheet.rowCount}`,
+      };
+
+      // --------------------------------------------------
+      // DOWNLOAD EXCEL FILE
+      // --------------------------------------------------
+
+      const buffer = await workbook.xlsx.writeBuffer();
+
+      const file = new Blob([buffer], {
+        type:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+
+      const downloadUrl = URL.createObjectURL(file);
+      const link = document.createElement("a");
+
+      link.href = downloadUrl;
+      link.download =
+        `ProdTrack-Daily-Entries-${selectedDate}.xlsx`;
+
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setTimeout(() => {
+        URL.revokeObjectURL(downloadUrl);
+      }, 1000);
+
+      toast.success("Daily Entries Excel report downloaded");
+    } catch (error) {
+      console.error("Daily Entries Excel export error:", error);
+      toast.error("Failed to generate Excel report");
+    }
+  };
+
   // Downloads Project Daily Summary as a formatted Excel workbook.
   const handleExcelDownload = async () => {
     // Allow Excel export only for Project Daily Summary.
@@ -1072,6 +1396,7 @@ function ExistingReports({
         "Reporting Category",
         "Received",
         "Completed",
+        "Extracted Documents",
         "Backlog",
         "Pending",
         "Batches Received",
@@ -1102,6 +1427,7 @@ function ExistingReports({
           row.categoryName || "Uncategorized",
           Number(row.received || 0),
           Number(row.completed || 0),
+          Number(row.extractedDocuments || 0),
           Number(row.backlog || 0),
           Number(row.pending || 0),
           Number(row.batchesReceived || 0),
@@ -1112,17 +1438,19 @@ function ExistingReports({
 
       // Set readable widths for all columns.
       worksheet.columns = [
-        { width: 16 },
-        { width: 30 },
-        { width: 42 },
-        { width: 15 },
-        { width: 15 },
-        { width: 15 },
-        { width: 15 },
-        { width: 19 },
-        { width: 20 },
-        { width: 19 },
+        { width: 16 }, // Date
+        { width: 30 }, // Project
+        { width: 42 }, // Reporting Category
+        { width: 15 }, // Received
+        { width: 15 }, // Completed
+        { width: 24 }, // Extracted Documents
+        { width: 15 }, // Backlog
+        { width: 15 }, // Pending
+        { width: 19 }, // Batches Received
+        { width: 20 }, // Batches Processed
+        { width: 19 }, // Pending Batches
       ];
+
 
       // Freeze the heading row.
       worksheet.views = [
@@ -1132,7 +1460,7 @@ function ExistingReports({
       // Add filters to all report columns.
       worksheet.autoFilter = {
         from: "A1",
-        to: `J${worksheet.rowCount}`,
+        to: `K${worksheet.rowCount}`,
       };
 
       // Format the heading row.
@@ -1410,11 +1738,20 @@ function ExistingReports({
 
             {/* Excel export option for Project Daily Summary. */}
             <MenuItem
-              disabled={reportType !== "dailySummary"}
+              disabled={
+                !["dailySummary", "allEntries"].includes(reportType)
+              }
+
               onClick={() => {
                 handleExportMenuClose();
-                handleExcelDownload();
+
+                if (reportType === "allEntries") {
+                  handleAllEntriesExcelDownload();
+                } else {
+                  handleExcelDownload();
+                }
               }}
+
               sx={{ fontSize: 13, py: 1.2 }}
             >
               <span style={{ color: "#16834A", fontWeight: 700 }}>
@@ -1513,7 +1850,7 @@ function ExistingReports({
           </SelectField>
 
           {/* Shows production date with the same styling as SelectField. */}
-          {reportType === "dailySummary" ? (
+          {["dailySummary", "allEntries"].includes(reportType) ? (
             <Box sx={{ width: "100%" }}>
               {/* Keeps the label above the input, matching Report Type. */}
               <Typography
@@ -1530,10 +1867,20 @@ function ExistingReports({
               {/* Matches the existing SelectField dimensions and styling. */}
               <TextField
                 type="date"
-                value={dailySummaryDate}
-                onChange={(event) =>
-                  setDailySummaryDate(event.target.value)
+
+                value={
+                  reportType === "allEntries"
+                    ? dailyEntriesDate
+                    : dailySummaryDate
                 }
+                onChange={(event) => {
+                  if (reportType === "allEntries") {
+                    setDailyEntriesDate(event.target.value);
+                  } else {
+                    setDailySummaryDate(event.target.value);
+                  }
+                }}
+
                 size="small"
                 fullWidth
                 sx={{
@@ -1940,6 +2287,14 @@ function ExistingReports({
                 label: "COMPLETED",
                 render: (row) => Number(row.completed || 0).toLocaleString(),
               },
+
+              {
+                key: "extractedDocuments",
+                label: "EXTRACTED DOCUMENTS",
+                render: (row) =>
+                  Number(row.extractedDocuments || 0).toLocaleString(),
+              },
+
               {
                 key: "backlog",
                 label: "BACKLOG",
@@ -2395,7 +2750,8 @@ function ExistingReports({
           PAGINATION HANDLED BY SimpleReportTable
       ============================================= */}
             <SimpleReportTable
-              title="All Daily Entries — Today"
+              key={`${dailyEntriesDate}-${dailyEntryRole}`}
+              title={`All Daily Entries — ${dailyEntriesDate}`}
               headerActions={
                 <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
                   {/* Switch between all records, Team Leads and Indexers. */}

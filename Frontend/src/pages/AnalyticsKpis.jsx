@@ -8,7 +8,7 @@ import {
   Alert,
   Typography,
   Paper,
-    // Provides the dropdown container for the Analytics month filter.
+  // Provides the dropdown container for the Analytics month filter.
   Menu,
 
   // Provides each selectable month inside the Analytics filter.
@@ -143,83 +143,83 @@ function TrendChartCoreTeam({ trend, targetConfigured }) {
             />
 
             {/* Draws a normal trend when multiple months are available. */}
-{chartData.length > 1 && (
-  <>
-    {/* Keeps the blue filled area underneath the Completed trend. */}
-    <polygon
-      points={completedAreaPoints}
-      fill="url(#trendFill)"
-    />
+            {chartData.length > 1 && (
+              <>
+                {/* Keeps the blue filled area underneath the Completed trend. */}
+                <polygon
+                  points={completedAreaPoints}
+                  fill="url(#trendFill)"
+                />
 
-    {/* Draws the Completed multi-month trend line. */}
-    <polyline
-      points={completedPoints}
-      fill="none"
-      stroke="#3478ed"
-      strokeWidth="3"
-      strokeLinejoin="round"
-      strokeLinecap="round"
-    />
+                {/* Draws the Completed multi-month trend line. */}
+                <polyline
+                  points={completedPoints}
+                  fill="none"
+                  stroke="#3478ed"
+                  strokeWidth="3"
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                />
 
-    {/* Draws the Target multi-month dotted trend line. */}
-    <polyline
-      points={targetPoints}
-      fill="none"
-      stroke="#8052df"
-      strokeWidth="2"
-      strokeDasharray="7 7"
-    />
-  </>
-)}
+                {/* Draws the Target multi-month dotted trend line. */}
+                <polyline
+                  points={targetPoints}
+                  fill="none"
+                  stroke="#8052df"
+                  strokeWidth="2"
+                  strokeDasharray="7 7"
+                />
+              </>
+            )}
 
-{/* Handles a single selected month without creating a triangle. */}
-{chartData.length === 1 && (() => {
-  // Reads the single selected month's Completed value.
-  const completed = chartData[0].completed;
+            {/* Handles a single selected month without creating a triangle. */}
+            {chartData.length === 1 && (() => {
+              // Reads the single selected month's Completed value.
+              const completed = chartData[0].completed;
 
-  // Reads the single selected month's Target value.
-  const target = chartData[0].target;
+              // Reads the single selected month's Target value.
+              const target = chartData[0].target;
 
-  // Calculates the vertical position of the Completed value.
-  const completedY =
-    158 - (completed / maxValue) * 140;
+              // Calculates the vertical position of the Completed value.
+              const completedY =
+                158 - (completed / maxValue) * 140;
 
-  // Calculates the vertical position of the Target value.
-  const targetY =
-    158 - (target / maxValue) * 140;
+              // Calculates the vertical position of the Target value.
+              const targetY =
+                158 - (target / maxValue) * 140;
 
-  return (
-    <>
-      {/* Adds a light blue area underneath the single-month Completed value. */}
-      <polygon
-        points={`0,${completedY} 800,${completedY} 800,158 0,158`}
-        fill="url(#trendFill)"
-      />
+              return (
+                <>
+                  {/* Adds a light blue area underneath the single-month Completed value. */}
+                  <polygon
+                    points={`0,${completedY} 800,${completedY} 800,158 0,158`}
+                    fill="url(#trendFill)"
+                  />
 
-      {/* Draws the single-month Completed value as a horizontal blue line. */}
-      <line
-        x1="0"
-        y1={completedY}
-        x2="800"
-        y2={completedY}
-        stroke="#3478ed"
-        strokeWidth="3"
-        strokeLinecap="round"
-      />
+                  {/* Draws the single-month Completed value as a horizontal blue line. */}
+                  <line
+                    x1="0"
+                    y1={completedY}
+                    x2="800"
+                    y2={completedY}
+                    stroke="#3478ed"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                  />
 
-      {/* Draws the single-month Target value as a horizontal purple dotted line. */}
-      <line
-        x1="0"
-        y1={targetY}
-        x2="800"
-        y2={targetY}
-        stroke="#8052df"
-        strokeWidth="2"
-        strokeDasharray="7 7"
-      />
-    </>
-  );
-})()}
+                  {/* Draws the single-month Target value as a horizontal purple dotted line. */}
+                  <line
+                    x1="0"
+                    y1={targetY}
+                    x2="800"
+                    y2={targetY}
+                    stroke="#8052df"
+                    strokeWidth="2"
+                    strokeDasharray="7 7"
+                  />
+                </>
+              );
+            })()}
           </svg>
         )}
       </Box>
@@ -383,34 +383,34 @@ function AnalyticsKpisCoreTeam() {
   const [notice, setNotice] = useState(false);
 
   // Stores the element used to position the existing month dropdown.
-const [monthAnchorEl, setMonthAnchorEl] = useState(null);
+  const [monthAnchorEl, setMonthAnchorEl] = useState(null);
 
-// Stores the selected production month; empty means all available data.
-const [selectedMonth, setSelectedMonth] = useState("");
+  // Stores the selected production month; empty means all available data.
+  const [selectedMonth, setSelectedMonth] = useState("");
 
-// Stores the production months returned dynamically by the backend.
-const [availableMonths, setAvailableMonths] = useState([]);
+  // Stores the production months returned dynamically by the backend.
+  const [availableMonths, setAvailableMonths] = useState([]);
 
-// Opens the existing month-filter dropdown.
-const handleMonthMenuOpen = (event) => {
-  setMonthAnchorEl(event.currentTarget);
-};
+  // Opens the existing month-filter dropdown.
+  const handleMonthMenuOpen = (event) => {
+    setMonthAnchorEl(event.currentTarget);
+  };
 
-// Closes the existing month-filter dropdown.
-const handleMonthMenuClose = () => {
-  setMonthAnchorEl(null);
-};
+  // Closes the existing month-filter dropdown.
+  const handleMonthMenuClose = () => {
+    setMonthAnchorEl(null);
+  };
 
-// Changes the selected month and closes the dropdown.
-const handleMonthChange = (month) => {
-  setSelectedMonth(month);
-  setMonthAnchorEl(null);
-};
+  // Changes the selected month and closes the dropdown.
+  const handleMonthChange = (month) => {
+    setSelectedMonth(month);
+    setMonthAnchorEl(null);
+  };
 
-// Builds the month query string used by the Analytics APIs.
-const monthQuery = selectedMonth
-  ? `?month=${selectedMonth}`
-  : "";
+  // Builds the month query string used by the Analytics APIs.
+  const monthQuery = selectedMonth
+    ? `?month=${selectedMonth}`
+    : "";
 
   // Stores the live Analytics summary returned by the backend.
   const [analyticsSummary, setAnalyticsSummary] = useState(null);
@@ -425,82 +425,82 @@ const monthQuery = selectedMonth
   const [topPerformers, setTopPerformers] = useState([]);
 
   // Stores Completed vs Target trend data returned by the backend.
-const [completedVsTarget, setCompletedVsTarget] = useState([]);
+  const [completedVsTarget, setCompletedVsTarget] = useState([]);
 
-// Stores whether a production target is currently configured in the database.
-const [targetConfigured, setTargetConfigured] = useState(false);
+  // Stores whether a production target is currently configured in the database.
+  const [targetConfigured, setTargetConfigured] = useState(false);
 
-// Pagination for top performers table.
-const [performersPage, setPerformersPage] = useState(0);
-const PERFORMERS_PER_PAGE = 10;
+  // Pagination for top performers table.
+  const [performersPage, setPerformersPage] = useState(0);
+  const PERFORMERS_PER_PAGE = 10;
 
-// Loads available production months once when the Analytics page opens.
-useEffect(() => {
-  // Requests the months that actually contain production data.
-  const loadAvailableMonths = async () => {
-    try {
-      // Calls the Monthly Analytics endpoint used to build the month dropdown.
-      const data = await apiRequest(
-        "/core-team/analytics/monthly",
-      );
+  // Loads available production months once when the Analytics page opens.
+  useEffect(() => {
+    // Requests the months that actually contain production data.
+    const loadAvailableMonths = async () => {
+      try {
+        // Calls the Monthly Analytics endpoint used to build the month dropdown.
+        const data = await apiRequest(
+          "/core-team/analytics/monthly",
+        );
 
-      // Converts backend monthly records into dropdown options.
-      const dynamicMonths = (data.monthly || [])
-        .map((item) => ({
-          value: item.month_key,
-          label: item.month_name,
-        }))
-        // Shows the newest available production month first.
-        .reverse();
+        // Converts backend monthly records into dropdown options.
+        const dynamicMonths = (data.monthly || [])
+          .map((item) => ({
+            value: item.month_key,
+            label: item.month_name,
+          }))
+          // Shows the newest available production month first.
+          .reverse();
 
-      // Stores the database-driven month list.
-      setAvailableMonths(dynamicMonths);
-    } catch (error) {
-      // Logs month-loading errors without breaking the Analytics page.
-      console.error(
-        "Available Analytics Months Error:",
-        error,
-      );
+        // Stores the database-driven month list.
+        setAvailableMonths(dynamicMonths);
+      } catch (error) {
+        // Logs month-loading errors without breaking the Analytics page.
+        console.error(
+          "Available Analytics Months Error:",
+          error,
+        );
 
-      // Keeps the dropdown safe if month loading fails.
-      setAvailableMonths([]);
-    }
-  };
+        // Keeps the dropdown safe if month loading fails.
+        setAvailableMonths([]);
+      }
+    };
 
-  // Loads the available production months once when the page opens.
-  loadAvailableMonths();
-}, []);
+    // Loads the available production months once when the page opens.
+    loadAvailableMonths();
+  }, []);
 
 
   // Loads all currently connected Core Team Analytics data when the page opens.
   useEffect(() => {
     // Loads the main organisation-wide KPI summary.
-   // Loads the main Analytics KPI summary for the selected month.
-const loadAnalyticsSummary = async () => {
-  try {
-    // Calls the summary API using the current month filter.
-    const data = await apiRequest(
-      `/core-team/analytics/summary${monthQuery}`,
-    );
+    // Loads the main Analytics KPI summary for the selected month.
+    const loadAnalyticsSummary = async () => {
+      try {
+        // Calls the summary API using the current month filter.
+        const data = await apiRequest(
+          `/core-team/analytics/summary${monthQuery}`,
+        );
 
-    // TEMP: Shows exactly what the frontend receives from the backend.
-    console.log("SUMMARY API RESPONSE:", data);
+        // TEMP: Shows exactly what the frontend receives from the backend.
+        console.log("SUMMARY API RESPONSE:", data);
 
-    // Stores the returned summary object for the KPI cards.
-    setAnalyticsSummary(data?.summary || null);
-  } catch (error) {
-    // Shows the exact frontend API error if the request fails.
-    console.error("Analytics Summary Error:", error);
-  }
-};
+        // Stores the returned summary object for the KPI cards.
+        setAnalyticsSummary(data?.summary || null);
+      } catch (error) {
+        // Shows the exact frontend API error if the request fails.
+        console.error("Analytics Summary Error:", error);
+      }
+    };
 
     // Loads the production workflow status distribution.
     const loadStatusDistribution = async () => {
       try {
         // Loads workflow Status Distribution for the selected month.
-const data = await apiRequest(
-  `/core-team/analytics/status-distribution${monthQuery}`,
-);
+        const data = await apiRequest(
+          `/core-team/analytics/status-distribution${monthQuery}`,
+        );
         setStatusDistribution(data.distribution);
       } catch (error) {
         console.error("Status Distribution Error:", error);
@@ -511,7 +511,7 @@ const data = await apiRequest(
     const loadProjectComparison = async () => {
       try {
         // Loads Project Comparison for the selected month.
-          const data = await apiRequest(`/core-team/analytics/projects${monthQuery}`,);
+        const data = await apiRequest(`/core-team/analytics/projects${monthQuery}`,);
         setProjectComparison(data.projects || []);
       } catch (error) {
         console.error("Project Comparison Error:", error);
@@ -521,9 +521,9 @@ const data = await apiRequest(
     // Loads live employee performance values.
     const loadTopPerformers = async () => {
       try {
-          // Loads Top Performers for the selected month.
-        const data = await apiRequest( `/core-team/analytics/top-performers${monthQuery}`,
-);
+        // Loads Top Performers for the selected month.
+        const data = await apiRequest(`/core-team/analytics/top-performers${monthQuery}`,
+        );
         setTopPerformers(data.performers || []);
       } catch (error) {
         console.error("Top Performers Error:", error);
@@ -531,23 +531,23 @@ const data = await apiRequest(
     };
     // Loads Completed vs Target Analytics data from the backend.
     // Loads Completed vs Target Analytics for the selected month.
-const loadCompletedVsTarget = async () => {
-  try {
-    // Sends the selected month to the Completed vs Target backend API.
-    const data = await apiRequest(
-      `/core-team/analytics/completed-vs-target${monthQuery}`,
-    );
+    const loadCompletedVsTarget = async () => {
+      try {
+        // Sends the selected month to the Completed vs Target backend API.
+        const data = await apiRequest(
+          `/core-team/analytics/completed-vs-target${monthQuery}`,
+        );
 
-    // Stores whether production targets are configured.
-    setTargetConfigured(Boolean(data.targetConfigured));
+        // Stores whether production targets are configured.
+        setTargetConfigured(Boolean(data.targetConfigured));
 
-    // Stores the filtered Completed vs Target trend.
-    setCompletedVsTarget(data.trend || []);
-  } catch (error) {
-    // Logs Completed vs Target API errors.
-    console.error("Completed Vs Target Error:", error);
-  }
-};
+        // Stores the filtered Completed vs Target trend.
+        setCompletedVsTarget(data.trend || []);
+      } catch (error) {
+        // Logs Completed vs Target API errors.
+        console.error("Completed Vs Target Error:", error);
+      }
+    };
 
     // Starts all Analytics requests without changing the existing UI structure.
     loadAnalyticsSummary();
@@ -559,183 +559,183 @@ const loadCompletedVsTarget = async () => {
   }, [selectedMonth]);
 
   // Exports the currently displayed Analytics data as a CSV file.
-const handleExportAnalytics = () => {
-  // Creates a readable name for the currently selected reporting period.
-  const selectedMonthLabel = selectedMonth
-    ? availableMonths.find(
+  const handleExportAnalytics = () => {
+    // Creates a readable name for the currently selected reporting period.
+    const selectedMonthLabel = selectedMonth
+      ? availableMonths.find(
         (option) => option.value === selectedMonth,
       )?.label || selectedMonth
-    : "All Months";
+      : "All Months";
 
-  // Starts the CSV with the selected Analytics period.
-  const csvRows = [
-    ["ProdTrack Analytics Report"],
-    ["Period", selectedMonthLabel],
-    [],
-    ["KPI SUMMARY"],
-    ["Metric", "Value"],
+    // Starts the CSV with the selected Analytics period.
+    const csvRows = [
+      ["ProdTrack Analytics Report"],
+      ["Period", selectedMonthLabel],
+      [],
+      ["KPI SUMMARY"],
+      ["Metric", "Value"],
 
-    // Adds the live KPI summary currently displayed on the page.
-    [
-      "Total Received",
-      analyticsSummary?.totalReceived ?? 0,
-    ],
-    [
-      "Total Completed",
-      analyticsSummary?.totalCompleted ?? 0,
-    ],
-    [
-      "Backlog",
-      analyticsSummary?.backlog ?? 0,
-    ],
-    [
-      "Completion Rate",
-      `${analyticsSummary?.completionRate ?? 0}%`,
-    ],
-    [
-      "Average Productivity",
-      analyticsSummary?.averageProductivity ?? 0,
-    ],
-    [
-      "Active Indexers",
-      analyticsSummary?.activeIndexers ?? 0,
-    ],
-    [
-      "Production Days",
-      analyticsSummary?.productionDays ?? 0,
-    ],
+      // Adds the live KPI summary currently displayed on the page.
+      [
+        "Total Received",
+        analyticsSummary?.totalReceived ?? 0,
+      ],
+      [
+        "Total Completed",
+        analyticsSummary?.totalCompleted ?? 0,
+      ],
+      [
+        "Backlog",
+        analyticsSummary?.backlog ?? 0,
+      ],
+      [
+        "Completion Rate",
+        `${analyticsSummary?.completionRate ?? 0}%`,
+      ],
+      [
+        "Average Productivity",
+        analyticsSummary?.averageProductivity ?? 0,
+      ],
+      [
+        "Active Indexers",
+        analyticsSummary?.activeIndexers ?? 0,
+      ],
+      [
+        "Production Days",
+        analyticsSummary?.productionDays ?? 0,
+      ],
 
-    [],
-    ["STATUS DISTRIBUTION"],
-    ["Status", "Documents"],
+      [],
+      ["STATUS DISTRIBUTION"],
+      ["Status", "Documents"],
 
-    // Adds the live workflow distribution values.
-    [
-      "Completed",
-      statusDistribution?.completed ?? 0,
-    ],
-    [
-      "Pending",
-      statusDistribution?.pending ?? 0,
-    ],
-    [
-      "In Review",
-      statusDistribution?.inReview ?? 0,
-    ],
+      // Adds the live workflow distribution values.
+      [
+        "Completed",
+        statusDistribution?.completed ?? 0,
+      ],
+      [
+        "Pending",
+        statusDistribution?.pending ?? 0,
+      ],
+      [
+        "In Review",
+        statusDistribution?.inReview ?? 0,
+      ],
 
-    [],
-    ["COMPLETED VS TARGET"],
-    [
-      "Month",
-      "Completed",
-      "Target",
-      "Achievement Rate",
-    ],
+      [],
+      ["COMPLETED VS TARGET"],
+      [
+        "Month",
+        "Completed",
+        "Target",
+        "Achievement Rate",
+      ],
 
-    // Adds every currently loaded Completed vs Target record.
-    ...completedVsTarget.map((item) => [
-      item.month_name || item.month_key,
-      item.completed ?? 0,
-      item.target ?? 0,
-      `${item.achievementRate ?? 0}%`,
-    ]),
+      // Adds every currently loaded Completed vs Target record.
+      ...completedVsTarget.map((item) => [
+        item.month_name || item.month_key,
+        item.completed ?? 0,
+        item.target ?? 0,
+        `${item.achievementRate ?? 0}%`,
+      ]),
 
-    [],
-    ["PROJECT COMPARISON"],
-    [
-      "Project Code",
-      "Project Name",
-      "Received",
-      "Completed",
-      "Backlog",
-      "Completion Rate",
-    ],
+      [],
+      ["PROJECT COMPARISON"],
+      [
+        "Project Code",
+        "Project Name",
+        "Received",
+        "Completed",
+        "Backlog",
+        "Completion Rate",
+      ],
 
-    // Adds every project from the currently filtered project comparison.
-    ...projectComparison.map((project) => [
-      project.project_code,
-      project.project_name,
-      project.received ?? 0,
-      project.completed ?? 0,
-      project.backlog ?? 0,
-      `${project.completion_rate ?? 0}%`,
-    ]),
+      // Adds every project from the currently filtered project comparison.
+      ...projectComparison.map((project) => [
+        project.project_code,
+        project.project_name,
+        project.received ?? 0,
+        project.completed ?? 0,
+        project.backlog ?? 0,
+        `${project.completion_rate ?? 0}%`,
+      ]),
 
-    [],
-    ["TOP PERFORMERS"],
-    [
-      "Employee ID",
-      "Employee",
-      "Received",
-      "Completed",
-      "Production Days",
-      "Productivity",
-      "Average Daily Productivity",
-    ],
+      [],
+      ["TOP PERFORMERS"],
+      [
+        "Employee ID",
+        "Employee",
+        "Received",
+        "Completed",
+        "Production Days",
+        "Productivity",
+        "Average Daily Productivity",
+      ],
 
-    // Adds every currently displayed top performer.
-    ...topPerformers.map((performer) => [
-      performer.employee_id,
-      performer.name,
-      performer.received ?? 0,
-      performer.completed ?? 0,
-      performer.productionDays ?? 0,
-      `${performer.productivity ?? 0}%`,
-      performer.averageDailyProductivity ?? 0,
-    ]),
-  ];
+      // Adds every currently displayed top performer.
+      ...topPerformers.map((performer) => [
+        performer.employee_id,
+        performer.name,
+        performer.received ?? 0,
+        performer.completed ?? 0,
+        performer.productionDays ?? 0,
+        `${performer.productivity ?? 0}%`,
+        performer.averageDailyProductivity ?? 0,
+      ]),
+    ];
 
-  // Escapes CSV values so commas, quotes and special characters remain valid.
-  const escapeCsvValue = (value) => {
-    const stringValue = String(value ?? "");
+    // Escapes CSV values so commas, quotes and special characters remain valid.
+    const escapeCsvValue = (value) => {
+      const stringValue = String(value ?? "");
 
-    return `"${stringValue.replace(/"/g, '""')}"`;
+      return `"${stringValue.replace(/"/g, '""')}"`;
+    };
+
+    // Converts all Analytics rows into standard CSV text.
+    const csvContent = csvRows
+      .map((row) =>
+        row.map((value) => escapeCsvValue(value)).join(","),
+      )
+      .join("\n");
+
+    // Creates a temporary browser file containing the generated CSV.
+    const csvBlob = new Blob(
+      ["\uFEFF", csvContent],
+      {
+        type: "text/csv;charset=utf-8;",
+      },
+    );
+
+    // Creates a temporary browser URL for the generated CSV file.
+    const downloadUrl = URL.createObjectURL(csvBlob);
+
+    // Creates an invisible download link.
+    const downloadLink = document.createElement("a");
+
+    // Uses the generated CSV URL as the download source.
+    downloadLink.href = downloadUrl;
+
+    // Creates a different filename depending on the selected month.
+    downloadLink.download = selectedMonth
+      ? `ProdTrack_Analytics_${selectedMonth}.csv`
+      : "ProdTrack_Analytics_All_Months.csv";
+
+    // Temporarily adds the download link to the page.
+    document.body.appendChild(downloadLink);
+
+    // Starts the CSV download.
+    downloadLink.click();
+
+    // Removes the temporary download element.
+    document.body.removeChild(downloadLink);
+
+    // Releases the temporary browser URL from memory.
+    URL.revokeObjectURL(downloadUrl);
+
+    // Shows the existing success Snackbar after the export completes.
+    setNotice(true);
   };
-
-  // Converts all Analytics rows into standard CSV text.
-  const csvContent = csvRows
-    .map((row) =>
-      row.map((value) => escapeCsvValue(value)).join(","),
-    )
-    .join("\n");
-
-  // Creates a temporary browser file containing the generated CSV.
-  const csvBlob = new Blob(
-    ["\uFEFF", csvContent],
-    {
-      type: "text/csv;charset=utf-8;",
-    },
-  );
-
-  // Creates a temporary browser URL for the generated CSV file.
-  const downloadUrl = URL.createObjectURL(csvBlob);
-
-  // Creates an invisible download link.
-  const downloadLink = document.createElement("a");
-
-  // Uses the generated CSV URL as the download source.
-  downloadLink.href = downloadUrl;
-
-  // Creates a different filename depending on the selected month.
-  downloadLink.download = selectedMonth
-    ? `ProdTrack_Analytics_${selectedMonth}.csv`
-    : "ProdTrack_Analytics_All_Months.csv";
-
-  // Temporarily adds the download link to the page.
-  document.body.appendChild(downloadLink);
-
-  // Starts the CSV download.
-  downloadLink.click();
-
-  // Removes the temporary download element.
-  document.body.removeChild(downloadLink);
-
-  // Releases the temporary browser URL from memory.
-  URL.revokeObjectURL(downloadUrl);
-
-  // Shows the existing success Snackbar after the export completes.
-  setNotice(true);
-};
 
   return (
     <CorePageShell
@@ -743,75 +743,75 @@ const handleExportAnalytics = () => {
       description="Real-time production, backlog and performance across all projects."
 
       headerExtra={
-  <>
-    {/* Keeps the existing month-filter button styling and opens its dropdown. */}
-    <Button
-      variant="outlined"
-      size="small"
-      onClick={handleMonthMenuOpen}
-      sx={{
-        width: 112,
-        height: 36,
-        bgcolor: "#fff",
-        borderColor: "#c8d9ff",
-        borderRadius: "8px",
-        justifyContent: "space-between",
-        px: 1.5,
-        color: "#2458c7",
-        fontSize: 12,
-        textTransform: "none",
-      }}
-    >
-      
-     {/* Shows the selected database-driven month or All months. */}
-{selectedMonth
-  ? availableMonths.find(
-      (option) => option.value === selectedMonth,
-    )?.label || "All months"
-  : "All months"}
+        <>
+          {/* Keeps the existing month-filter button styling and opens its dropdown. */}
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={handleMonthMenuOpen}
+            sx={{
+              width: 112,
+              height: 36,
+              bgcolor: "#fff",
+              borderColor: "#c8d9ff",
+              borderRadius: "8px",
+              justifyContent: "space-between",
+              px: 1.5,
+              color: "#2458c7",
+              fontSize: 12,
+              textTransform: "none",
+            }}
+          >
 
-      <span aria-hidden="true">⌄</span>
-    </Button>
+            {/* Shows the selected database-driven month or All months. */}
+            {selectedMonth
+              ? availableMonths.find(
+                (option) => option.value === selectedMonth,
+              )?.label || "All months"
+              : "All months"}
 
-    {/* Displays available production months below the existing filter button. */}
-    <Menu
-      anchorEl={monthAnchorEl}
-      open={Boolean(monthAnchorEl)}
-      onClose={handleMonthMenuClose}
-    >
-      {/* Creates one selectable menu item for every available production month. */}
-    {/* Provides an option to remove the month filter and show all production data. */}
-<MenuItem
-  selected={selectedMonth === ""}
-  onClick={() => handleMonthChange("")}
-  sx={{
-    fontSize: 12,
-    minWidth: 130,
-  }}
->
-  All months
-</MenuItem>
+            <span aria-hidden="true">⌄</span>
+          </Button>
 
-{/* Creates month options automatically from production data returned by the backend. */}
-{availableMonths.map((option) => (
-  <MenuItem
-    key={option.value}
-    selected={selectedMonth === option.value}
-    onClick={() =>
-      handleMonthChange(option.value)
-    }
-    sx={{
-      fontSize: 12,
-      minWidth: 130,
-    }}
-  >
-    {option.label}
-  </MenuItem>
-))}
-    </Menu>
-  </>
-}
-        
+          {/* Displays available production months below the existing filter button. */}
+          <Menu
+            anchorEl={monthAnchorEl}
+            open={Boolean(monthAnchorEl)}
+            onClose={handleMonthMenuClose}
+          >
+            {/* Creates one selectable menu item for every available production month. */}
+            {/* Provides an option to remove the month filter and show all production data. */}
+            <MenuItem
+              selected={selectedMonth === ""}
+              onClick={() => handleMonthChange("")}
+              sx={{
+                fontSize: 12,
+                minWidth: 130,
+              }}
+            >
+              All months
+            </MenuItem>
+
+            {/* Creates month options automatically from production data returned by the backend. */}
+            {availableMonths.map((option) => (
+              <MenuItem
+                key={option.value}
+                selected={selectedMonth === option.value}
+                onClick={() =>
+                  handleMonthChange(option.value)
+                }
+                sx={{
+                  fontSize: 12,
+                  minWidth: 130,
+                }}
+              >
+                {option.label}
+              </MenuItem>
+            ))}
+          </Menu>
+        </>
+      }
+
       actionLabel="Export"
       // Downloads the currently filtered Analytics data.
       actionHandler={handleExportAnalytics}
@@ -850,8 +850,8 @@ const handleExportAnalytics = () => {
         }}
       >
         <SectionCard title="Completed vs target — trend">
-          <TrendChartCoreTeam  trend={completedVsTarget}
-  targetConfigured={targetConfigured} />
+          <TrendChartCoreTeam trend={completedVsTarget}
+            targetConfigured={targetConfigured} />
         </SectionCard>
         <SectionCard title="Status distribution">
           {/* Passes live status data into the original donut-chart component. */}
@@ -861,185 +861,234 @@ const handleExportAnalytics = () => {
       <Box
         sx={{
           display: "grid",
-          gridTemplateColumns: "1fr 1fr",
+          gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
           gap: 2,
           "@media (max-width: 700px)": {
             gridTemplateColumns: "1fr",
           },
         }}
       >
+
         <SectionCard title="Project comparison">
+          {/* Horizontal scrolling stays inside the card */}
           <Box
+
             sx={{
-              height: 235,
-              display: "flex",
-              alignItems: "end",
-              justifyContent: "space-around",
+              width: "100%",
+              minWidth: 0,
+              overflowX: "auto",
+              overflowY: "hidden",
               px: 2,
-              pb: 2,
-              mb:3,
+              pt: 2,
+              pb: 1.5,
+              boxSizing: "border-box",
+
+              // Hide scrollbar but keep horizontal scrolling
+              scrollbarWidth: "none", // Firefox
+              msOverflowStyle: "none", // Legacy Edge / IE
+
+              "&::-webkit-scrollbar": {
+                display: "none", // Chrome, Safari, Edge
+              },
             }}
+
           >
-            {/* Renders live project values with the original bar-chart layout. */}
-            {projectComparison.map((project, index) => {
-              // Uses completed documents as the existing bar value.
-              const value = Number(project.completed || 0);
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "flex-end",
+                gap: 1.5,
+                width: "max-content",
+                minWidth: "100%",
+                height: 235,
+                pb: "38px",
+                boxSizing: "border-box",
+              }}
+            >
+              {projectComparison.map((project, index) => {
+                const value = Number(project.completed || 0);
+                const name = project.project_name || "Unknown";
 
-              // Uses the backend project name for the existing label.
-              const name = project.project_name;
+                const maxCompleted = Math.max(
+                  ...projectComparison.map((item) =>
+                    Number(item.completed || 0)
+                  ),
+                  1
+                );
 
-              // Finds the largest live value so every bar remains proportional.
-              const maxCompleted = Math.max(
-                ...projectComparison.map((item) => Number(item.completed || 0)),
-                1,
-              );
+                const barHeight = (value / maxCompleted) * 145;
 
-              // Converts the completed count into the original maximum bar height.
-              const barHeight = (value / maxCompleted) * 145;
-
-              return (
-                <Box
-                  key={project.id}
-                  sx={{
-                    width: 38,
-                    height: `${barHeight}px`,
-                    maxHeight: 145,
-                    bgcolor:
-                      index === projectComparison.length - 1
-                        ? "#8060d9"
-                        : "#4b7ff0",
-                    borderRadius: "7px 7px 0 0",
-                    position: "relative",
-                  }}
-                >
-                  <Typography
+                return (
+                  <Box
+                    key={project.id ?? index}
                     sx={{
-                      position: "absolute",
-                      top: -22,
-                      width: 40,
-                      textAlign: "center",
-                      fontSize: 11,
+                      flex: "0 0 96px",
+                      width: 96,
+                      height: 145,
+                      display: "flex",
+                      alignItems: "flex-end",
+                      justifyContent: "center",
+                      position: "relative",
                     }}
                   >
-                    {value}
-                  </Typography>
-                  <Typography
-                    sx={{
-                      position: "absolute",
-                      bottom: -24,
-                      width: 50,
-                      left: -6,
-                      textAlign: "center",
-                      fontSize: 11,
-                      color: "#526581",
-                    }}
-                  >
-                    {name.split(" ")[0]}
-                  </Typography>
-                </Box>
-              );
-            })}
+                    <Box
+                      sx={{
+                        width: 38,
+                        height: `${barHeight}px`,
+                        maxHeight: 145,
+                        bgcolor:
+                          index === projectComparison.length - 1
+                            ? "#8060d9"
+                            : "#4b7ff0",
+                        borderRadius: "7px 7px 0 0",
+                        position: "relative",
+                      }}
+                    >
+                      {/* Completed count */}
+                      <Typography
+                        sx={{
+                          position: "absolute",
+                          top: -22,
+                          left: "50%",
+                          transform: "translateX(-50%)",
+                          textAlign: "center",
+                          fontSize: 11,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {value}
+                      </Typography>
+
+                      {/* Project name */}
+                      <Typography
+                        title={name}
+                        sx={{
+                          position: "absolute",
+                          bottom: -30,
+                          left: "50%",
+                          transform: "translateX(-50%)",
+                          width: 90,
+                          textAlign: "center",
+                          fontSize: 11,
+                          color: "#526581",
+                          overflow: "hidden",
+                          whiteSpace: "nowrap",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
+                        {name}
+                      </Typography>
+                    </Box>
+                  </Box>
+                );
+              })}
+            </Box>
           </Box>
         </SectionCard>
         <SectionCard title="Top performers — this month">
-  <Box
-    sx={{
-      display: "grid",
-      gridTemplateColumns: "repeat(3, minmax(max-content, 1fr))",
-      bgcolor: "#f8fafc",
-      px: 2,
-      py: 1,
-      color: "#526581",
-      fontSize: 11,
-      fontWeight: 700,
-      alignItems: "center",
-      gap: 1,
-    }}
-  >
-    <span>EMPLOYEE</span>
-    <span>COMPLETED</span>
-    <span>PRODUCTIVITY</span>
-  </Box>
 
-  {topPerformers.slice(performersPage * PERFORMERS_PER_PAGE, (performersPage + 1) * PERFORMERS_PER_PAGE).map((performer) => {
-    const initials = performer.name
-      ? performer.name
-          .split(" ")
-          .map((part) => part[0])
-          .join("")
-          .slice(0, 2)
-          .toUpperCase()
-      : "";
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+              width: "100%",
+              minWidth: 0,
+              boxSizing: "border-box",
+              bgcolor: "#f8fafc",
+              px: 2,
+              py: 1,
+              color: "#526581",
+              fontSize: 11,
+              fontWeight: 700,
+              alignItems: "center",
+              gap: 1,
+            }}
+          >
+            <span>EMPLOYEE</span>
+            <span>COMPLETED</span>
+            <span>PRODUCTIVITY</span>
+          </Box>
 
-    return (
-      <Box
-        key={performer.id}
-        sx={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, minmax(max-content, 1fr))",
-          alignItems: "center",
-          px: 2,
-          py: 1.1,
-          borderTop: "1px solid #e3e8ef",
-          fontSize: 12,
-          gap: 1,
-        }}
-      >
-        <Person initials={initials} name={performer.name} />
 
-        <span>{performer.completed}</span>
+          {topPerformers.slice(performersPage * PERFORMERS_PER_PAGE, (performersPage + 1) * PERFORMERS_PER_PAGE).map((performer) => {
+            const initials = performer.name
+              ? performer.name
+                .split(" ")
+                .map((part) => part[0])
+                .join("")
+                .slice(0, 2)
+                .toUpperCase()
+              : "";
 
-        <Chip
-          label={`${performer.productivity}%`}
-          size="small"
-          color="success"
-          sx={{
-            width: 43,
-            fontSize: 10,
-            fontWeight: 800,
-          }}
-        />
-      </Box>
-    );
-  })}
+            return (
+              <Box
+                key={performer.id}
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, minmax(max-content, 1fr))",
+                  alignItems: "center",
+                  px: 2,
+                  py: 1.1,
+                  borderTop: "1px solid #e3e8ef",
+                  fontSize: 12,
+                  gap: 1,
+                }}
+              >
+                <Person initials={initials} name={performer.name} />
 
-  {/* Performers pagination footer */}
-  {Math.ceil(topPerformers.length / PERFORMERS_PER_PAGE) > 1 && (
-    <Box
-      sx={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "flex-end",
-        gap: 1,
-        px: 2,
-        py: 1,
-        borderTop: "1px solid #e3e8ef",
-      }}
-    >
-      <Typography sx={{ fontSize: 12, color: "#526581" }}>
-        {performersPage * PERFORMERS_PER_PAGE + 1}–
-        {Math.min((performersPage + 1) * PERFORMERS_PER_PAGE, topPerformers.length)}{" "}
-        of {topPerformers.length}
-      </Typography>
-      <Button
-        size="small"
-        disabled={performersPage === 0}
-        onClick={() => setPerformersPage((p) => p - 1)}
-        sx={{ minWidth: 28, height: 28, p: 0, fontSize: 16, color: "#526581" }}
-      >
-        ‹
-      </Button>
-      <Button
-        size="small"
-        disabled={performersPage >= Math.ceil(topPerformers.length / PERFORMERS_PER_PAGE) - 1}
-        onClick={() => setPerformersPage((p) => p + 1)}
-        sx={{ minWidth: 28, height: 28, p: 0, fontSize: 16, color: "#526581" }}
-      >
-        ›
-      </Button>
-    </Box>
-  )}
-</SectionCard>
+                <span>{performer.completed}</span>
+
+                <Chip
+                  label={`${performer.productivity}%`}
+                  size="small"
+                  color="success"
+                  sx={{
+                    width: 43,
+                    fontSize: 10,
+                    fontWeight: 800,
+                  }}
+                />
+              </Box>
+            );
+          })}
+
+          {/* Performers pagination footer */}
+          {Math.ceil(topPerformers.length / PERFORMERS_PER_PAGE) > 1 && (
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-end",
+                gap: 1,
+                px: 2,
+                py: 1,
+                borderTop: "1px solid #e3e8ef",
+              }}
+            >
+              <Typography sx={{ fontSize: 12, color: "#526581" }}>
+                {performersPage * PERFORMERS_PER_PAGE + 1}–
+                {Math.min((performersPage + 1) * PERFORMERS_PER_PAGE, topPerformers.length)}{" "}
+                of {topPerformers.length}
+              </Typography>
+              <Button
+                size="small"
+                disabled={performersPage === 0}
+                onClick={() => setPerformersPage((p) => p - 1)}
+                sx={{ minWidth: 28, height: 28, p: 0, fontSize: 16, color: "#526581" }}
+              >
+                ‹
+              </Button>
+              <Button
+                size="small"
+                disabled={performersPage >= Math.ceil(topPerformers.length / PERFORMERS_PER_PAGE) - 1}
+                onClick={() => setPerformersPage((p) => p + 1)}
+                sx={{ minWidth: 28, height: 28, p: 0, fontSize: 16, color: "#526581" }}
+              >
+                ›
+              </Button>
+            </Box>
+          )}
+        </SectionCard>
       </Box>
       <Snackbar
         open={notice}
@@ -1388,9 +1437,9 @@ function AnalyticsKpisAdministrator() {
                 display:
                   i === 3
                     ? {
-                        xs: "none",
-                        sm: "block",
-                      }
+                      xs: "none",
+                      sm: "block",
+                    }
                     : "block",
               }}
             >

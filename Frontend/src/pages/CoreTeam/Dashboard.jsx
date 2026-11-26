@@ -191,215 +191,188 @@ function StatCard({
 // ======================================================
 
 function TrendChart({ data }) {
-  const trendData = data || [];
+  const trendData = Array.isArray(data)
+    ? [...data].sort((a, b) =>
+        String(a.month_key).localeCompare(
+          String(b.month_key)
+        )
+      )
+    : [];
 
-  const chartWidth = 800;
-  const chartHeight = 180;
-  const verticalPadding = 18;
-
-  const maxCompleted = Math.max(
-    ...trendData.map((item) =>
-      Number(item.completed || 0)
-    ),
-    1
+  const maxValue = Math.max(
+    1,
+    ...trendData.flatMap((item) => [
+      Number(item.received) || 0,
+      Number(item.completed) || 0,
+    ])
   );
 
-  const completedPoints = trendData
-    .map((item, index) => {
-      const x =
-        trendData.length === 1
-          ? chartWidth / 2
-          : (index / (trendData.length - 1)) *
-            chartWidth;
+  const formatValue = (value) =>
+    Number(value || 0).toLocaleString("en-IN");
 
-      const y =
-        chartHeight -
-        verticalPadding -
-        (Number(item.completed || 0) / maxCompleted) *
-          (chartHeight - verticalPadding * 2);
-
-      return `${x},${y}`;
-    })
-    .join(" ");
-
-  const completedFillPoints =
-    trendData.length > 0
-      ? `0,${chartHeight} ${completedPoints} ${chartWidth},${chartHeight}`
-      : "";
+  if (trendData.length === 0) {
+    return (
+      <Box sx={{ p: 3, textAlign: "center" }}>
+        <Typography color="text.secondary">
+          No monthly production records available.
+        </Typography>
+      </Box>
+    );
+  }
 
   return (
-    <Box
-      sx={{
-        px: { xs: 1.5, sm: 2.5 },
-        pt: 2,
-        pb: 1.5,
-      }}
-    >
-      {/* Chart */}
-
+    <Box sx={{ px: 2.5, pt: 3, pb: 2 }}>
+      {/* Horizontal scrolling with hidden scrollbar */}
       <Box
         sx={{
-          height: {
-            xs: 140,
-            sm: 170,
-            md: 200,
+          width: "100%",
+          overflowX: "auto",
+          overflowY: "hidden",
+          scrollbarWidth: "none",
+          msOverflowStyle: "none",
+          "&::-webkit-scrollbar": {
+            display: "none",
           },
-        }}
-      >
-        <svg
-          viewBox="0 0 800 180"
-          width="100%"
-          height="100%"
-          preserveAspectRatio="none"
-          role="img"
-          aria-label="Monthly production trend"
-        >
-          <defs>
-            <linearGradient
-              id="dashboardTrendFill"
-              x1="0"
-              y1="0"
-              x2="0"
-              y2="1"
-            >
-              <stop
-                offset="0%"
-                stopColor="#3478ed"
-                stopOpacity=".18"
-              />
-
-              <stop
-                offset="100%"
-                stopColor="#3478ed"
-                stopOpacity=".02"
-              />
-            </linearGradient>
-          </defs>
-
-          {/* Horizontal grid lines */}
-
-          {[36, 72, 108, 144, 180].map((y) => (
-            <line
-              key={y}
-              x1="0"
-              y1={y}
-              x2="800"
-              y2={y}
-              stroke={LINE2}
-              strokeWidth="1"
-            />
-          ))}
-
-          {/* Shaded completed production area */}
-
-          {trendData.length > 0 && (
-            <polygon
-              points={completedFillPoints}
-              fill="url(#dashboardTrendFill)"
-            />
-          )}
-
-          {/* Completed production line */}
-
-          {trendData.length > 0 && (
-            <polyline
-              points={completedPoints}
-              fill="none"
-              stroke="#3478ed"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          )}
-
-          {/* Monthly production points */}
-
-          {trendData.map((item, index) => {
-            const x =
-              trendData.length === 1
-                ? chartWidth / 2
-                : (index / (trendData.length - 1)) *
-                  chartWidth;
-
-            const y =
-              chartHeight -
-              verticalPadding -
-              (Number(item.completed || 0) /
-                maxCompleted) *
-                (chartHeight - verticalPadding * 2);
-
-            return (
-              <circle
-                key={item.month_key}
-                cx={x}
-                cy={y}
-                r="4"
-                fill="#3478ed"
-              />
-            );
-          })}
-        </svg>
-      </Box>
-
-      {/* Month labels */}
-
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          mt: 0.5,
-          gap: 1,
-        }}
-      >
-        {trendData.map((item) => (
-          <Typography
-            key={item.month_key}
-            sx={{
-              fontSize: 11,
-              color: MUTED,
-              textAlign: "center",
-            }}
-          >
-            {item.month_name}
-          </Typography>
-        ))}
-      </Box>
-
-      {/* Chart legend */}
-
-      <Box
-        sx={{
-          display: "flex",
-          gap: 2.5,
-          pt: 1.25,
-          flexWrap: "wrap",
         }}
       >
         <Box
           sx={{
             display: "flex",
-            alignItems: "center",
-            gap: "5px",
-            fontSize: 12,
-            color: MUTED,
+            alignItems: "flex-end",
+            gap: 2,
+            width: "max-content",
+            minWidth: "100%",
+            borderBottom: "1px solid #dbe3ec",
+            pb: 1,
           }}
         >
-          <Box
-            component="i"
-            sx={{
-              display: "inline-block",
-              width: 18,
-              height: 0,
-              borderTop: "2px solid #3478ed",
-            }}
-          />
+          {trendData.map((item) => (
+            <Box
+              key={item.month_key}
+              sx={{
+                flex: "0 0 145px",
+                width: 145,
+                textAlign: "center",
+              }}
+            >
+              <Box
+                sx={{
+                  height: 210,
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "flex-end",
+                  gap: 2,
+                }}
+              >
+                {[
+                  {
+                    key: "received",
+                    color: "#8054e8",
+                  },
+                  {
+                    key: "completed",
+                    color: "#3478ed",
+                  },
+                ].map((bar) => {
+                  const value =
+                    Number(item[bar.key]) || 0;
 
-          Completed
+                  const height =
+                    (value / maxValue) * 165;
+
+                  return (
+                    <Box
+                      key={bar.key}
+                      title={`${item.month_name} - ${bar.key}: ${formatValue(value)}`}
+                      sx={{
+                        width: 43,
+                        height: `${height}px`,
+                        minHeight: value > 0 ? 4 : 0,
+                        bgcolor: bar.color,
+                        borderRadius: "7px 7px 0 0",
+                        position: "relative",
+                        transition: "height 0.3s",
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          position: "absolute",
+                          top: -23,
+                          left: "50%",
+                          transform: "translateX(-50%)",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          whiteSpace: "nowrap",
+                          color: "#10233d",
+                        }}
+                      >
+                        {formatValue(value)}
+                      </Typography>
+                    </Box>
+                  );
+                })}
+              </Box>
+
+              <Typography
+                sx={{
+                  mt: 1,
+                  fontSize: 12,
+                  color: "#526581",
+                  fontWeight: 600,
+                }}
+              >
+                {item.month_name}
+              </Typography>
+            </Box>
+          ))}
         </Box>
+      </Box>
+
+      {/* Received and Completed legend */}
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          gap: 3,
+          mt: 2,
+        }}
+      >
+        {[
+          { label: "Received", color: "#8054e8" },
+          { label: "Completed", color: "#3478ed" },
+        ].map((item) => (
+          <Box
+            key={item.label}
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+            }}
+          >
+            <Box
+              sx={{
+                width: 13,
+                height: 13,
+                bgcolor: item.color,
+                borderRadius: "3px",
+              }}
+            />
+
+            <Typography
+              sx={{
+                fontSize: 12,
+                color: "#526581",
+              }}
+            >
+              {item.label}
+            </Typography>
+          </Box>
+        ))}
       </Box>
     </Box>
   );
 }
+
 
 // ======================================================
 // BACKLOG BY PROJECT
@@ -422,6 +395,14 @@ function BacklogRow({ name, pct, total }) {
         py: 1.1,
 
         borderBottom: `1px solid ${LINE2}`,
+
+        height: {
+          xs: 70,
+          sm: 46,
+        },
+        boxSizing: "border-box",
+        flexShrink: 0,
+
 
         "&:last-of-type": {
           borderBottom: "none",
@@ -1025,11 +1006,11 @@ export default function Dashboard({ onNavigate }) {
     (card, index) => {
       const values = dashboard
         ? [
-            dashboard.totalReceived,
-            dashboard.totalCompleted,
-            dashboard.projectBacklog,
-            dashboard.activeEmployees,
-          ]
+          dashboard.totalReceived,
+          dashboard.totalCompleted,
+          dashboard.projectBacklog,
+          dashboard.activeEmployees,
+        ]
         : [];
 
       return {
@@ -1200,18 +1181,38 @@ export default function Dashboard({ onNavigate }) {
             </Button>
           }
         >
-          <TrendChart data={monthlyTrend} />
+          <TrendChart data={monthlyTrend.slice(-6)} />
         </SectionCard>
 
         {/* Backlog by project */}
+
 
         <SectionCard title="Backlog by project">
           <Box
             sx={{
               pt: 0.5,
               pb: 0.5,
+
+              // Show up to 10 project rows
+              maxHeight: {
+                xs: 708,
+                sm: 468,
+              },
+
+              // Enable vertical scrolling
+              overflowY: "auto",
+              overflowX: "hidden",
+
+              // Hide scrollbar
+              scrollbarWidth: "none",
+              msOverflowStyle: "none",
+
+              "&::-webkit-scrollbar": {
+                display: "none",
+              },
             }}
           >
+
             {backlogProjects.map((project) => (
               <BacklogRow
                 key={project.id}
@@ -1221,10 +1222,10 @@ export default function Dashboard({ onNavigate }) {
                 pct={
                   project.received > 0
                     ? Math.round(
-                        (project.backlog /
-                          project.received) *
-                          100
-                      )
+                      (project.backlog /
+                        project.received) *
+                      100
+                    )
                     : 0
                 }
               />

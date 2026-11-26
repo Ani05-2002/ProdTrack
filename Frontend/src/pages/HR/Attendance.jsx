@@ -250,6 +250,12 @@ export default function Attendance() {
 
             // Refresh pending requests and approval/rejection history.
             await Promise.all([loadRequests(), loadReviewedRequests()]);
+
+            // Refresh the HR Attendance sidebar badge
+            window.dispatchEvent(
+                new Event("prodtrack-sidebar-badges-updated")
+            );
+
         } catch (err) {
             // Keep the dialog open so HR can retry if the API fails.
             setError(err.message || "Failed to process leave request");
@@ -309,7 +315,7 @@ export default function Attendance() {
         currentPage * ROWS_PER_PAGE,
         (currentPage + 1) * ROWS_PER_PAGE
     );
-   
+
     // =====================================================
     // USER INTERFACE
     // =====================================================

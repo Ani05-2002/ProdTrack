@@ -26,7 +26,7 @@ import {
   CircularProgress,
 } from "@mui/material";
 
-import FileDownloadRoundedIcon from "@mui/icons-material/FileDownloadRounded";
+import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
 import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import CheckCircleOutlineRoundedIcon from "@mui/icons-material/CheckCircleOutlineRounded";
 import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
@@ -138,8 +138,8 @@ export default function IndexingGuide({
 
           updatedDate: item.updated_date
             ? new Date(
-                item.updated_date
-              ).toLocaleDateString("en-IN")
+              item.updated_date
+            ).toLocaleDateString("en-IN")
             : "—",
 
           acknowledged:
@@ -216,7 +216,7 @@ export default function IndexingGuide({
       if (!data.success) {
         throw new Error(
           data.message ||
-            "Failed to acknowledge guide"
+          "Failed to acknowledge guide"
         );
       }
 
@@ -224,18 +224,18 @@ export default function IndexingGuide({
       setGuides((currentGuides) =>
         currentGuides.map((item) =>
           String(item.version_id) ===
-          String(versionId)
+            String(versionId)
             ? {
-                ...item,
-                acknowledged: true,
-              }
+              ...item,
+              acknowledged: true,
+            }
             : item
         )
       );
     } catch (err) {
       setError(
         err.message ||
-          "Failed to acknowledge guide"
+        "Failed to acknowledge guide"
       );
     } finally {
       setSavingId(null);
@@ -283,7 +283,7 @@ export default function IndexingGuide({
       if (!data.success) {
         throw new Error(
           data.message ||
-            "Failed to load guide history"
+          "Failed to load guide history"
         );
       }
 
@@ -301,7 +301,7 @@ export default function IndexingGuide({
     } catch (err) {
       setHistoryError(
         err.message ||
-          "Failed to load guide history"
+        "Failed to load guide history"
       );
     } finally {
       setHistoryLoading(false);
@@ -410,12 +410,11 @@ export default function IndexingGuide({
             </Typography>
           </Box>
 
+
           <Button
             variant="contained"
             startIcon={
-              <FileDownloadRoundedIcon
-                sx={{ fontSize: 16 }}
-              />
+              <VisibilityRoundedIcon sx={{ fontSize: 18 }} />
             }
             onClick={onViewGuide}
             sx={{
@@ -425,8 +424,9 @@ export default function IndexingGuide({
               py: 1,
             }}
           >
-            View / Download
+            View Guide
           </Button>
+
         </Box>
       </Card>
     );
@@ -784,7 +784,7 @@ export default function IndexingGuide({
                             }}
                           >
                             {String(savingId) ===
-                            String(guide.version_id)
+                              String(guide.version_id)
                               ? "Saving..."
                               : "Acknowledge now"}
                           </Button>
@@ -972,10 +972,10 @@ export default function IndexingGuide({
                       <TableCell>
                         {item.updated_date
                           ? new Date(
-                              item.updated_date
-                            ).toLocaleDateString(
-                              "en-IN"
-                            )
+                            item.updated_date
+                          ).toLocaleDateString(
+                            "en-IN"
+                          )
                           : "—"}
                       </TableCell>
 
@@ -1004,13 +1004,13 @@ export default function IndexingGuide({
                           size="small"
                           label={
                             Number(item.acknowledged) ===
-                            1
+                              1
                               ? "Read"
                               : "Unread"
                           }
                           color={
                             Number(item.acknowledged) ===
-                            1
+                              1
                               ? "success"
                               : "warning"
                           }

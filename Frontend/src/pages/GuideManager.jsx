@@ -969,99 +969,6 @@ function GuideManagerCoreTeam() {
             >
               Guides
             </Typography>
-
-            {/* Selects a guide version whose sections should be managed. */}
-            <TextField
-              select
-              label="Manage guide"
-              size="small"
-              value={
-                sectionVersionId ||
-                ""
-              }
-              onChange={async (
-                event
-              ) => {
-                // Gets the selected guide version ID.
-                const versionId =
-                  Number(
-                    event.target
-                      .value
-                  );
-
-                // Clears section manager when placeholder is selected.
-                if (
-                  !versionId
-                ) {
-                  setSectionVersionId(
-                    null
-                  );
-                  setGuideSections(
-                    []
-                  );
-                  setSelectedSectionId(
-                    null
-                  );
-                  return;
-                }
-
-                // Finds the selected guide's table index.
-                const rowIndex =
-                  guides.findIndex(
-                    (guide) =>
-                      Number(
-                        guide.version_id
-                      ) ===
-                      versionId
-                  );
-
-                // Loads that guide version through the prepared handler.
-                if (
-                  rowIndex >= 0
-                ) {
-                  await handleManageSections(
-                    rows[
-                    rowIndex
-                    ],
-                    rowIndex
-                  );
-                }
-              }}
-              sx={{
-                minWidth: 260,
-                bgcolor: "#fff",
-              }}
-              SelectProps={{
-                displayEmpty:
-                  true,
-              }}
-            >
-              {/* Default selector option. */}
-              <MenuItem value="">
-                Manage guide
-                sections
-              </MenuItem>
-
-              {/* Shows every currently loaded guide/version. */}
-              {guides.map(
-                (guide) => (
-                  <MenuItem
-                    key={`sections-${guide.version_id}`}
-                    value={
-                      guide.version_id
-                    }
-                  >
-                    {
-                      guide.project
-                    }{" "}
-                    —{" "}
-                    {
-                      guide.version
-                    }
-                  </MenuItem>
-                )
-              )}
-            </TextField>
           </Box>
 
           <Box
@@ -1082,6 +989,8 @@ function GuideManagerCoreTeam() {
                 "STATUS",
               ]}
               rows={rows}
+              rowsPerPage={6}
+              alwaysShowPagination
               actionLabel={
                 loading
                   ? "Loading..."

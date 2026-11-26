@@ -1575,6 +1575,13 @@ const getAllDailyEntriesReport = async (req, res) => {
         de.docs_received AS received,
         de.docs_completed AS completed,
 
+        de.batch_ref AS batch_ref,
+        de.team_lead_docs_completed AS team_lead_docs_completed,
+        de.extracted_documents AS extracted_documents,
+        de.docs_pending AS documents_pending,
+        de.team_lead_batches_processed AS team_lead_batches_processed,
+        de.batches_pending AS batches_pending,
+
         -- Return received batches for Team Leaders.
         de.batches_received AS batches_received,
 

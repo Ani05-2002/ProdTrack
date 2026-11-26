@@ -679,15 +679,21 @@ function UserMasterPage({
 
       // Shows Team Lead only while adding a new user.
       // Shows Team Lead in both Add User and Edit User.
+
       {
         name: "lead",
         label: "Team lead",
         placeholder: "Select team lead",
-        options: [
-          "None",
-          ...teamLeads.map((lead) => lead.name),
-        ],
+        options: teamLeads.map((lead) => lead.name),
+
+        // Mandatory only for Indexers
+        required: true,
+
+        // Hide for every other role
+        visibleWhen: (values) =>
+          values.role === "Indexer",
       },
+
       {
         name: "status",
         label: "Status",
@@ -805,7 +811,7 @@ function UserMasterPage({
         designation: "",
         role: "Indexer",
         shift: "",
-        lead: "None",
+        lead: "",
         status: "",
         projects: "",
       };
@@ -813,8 +819,7 @@ function UserMasterPage({
 
     // Finds the Team Lead name already assigned to the selected employee.
     const leadName =
-      selectedUser.team_lead_name ||
-      "None";
+      selectedUser.team_lead_name || "";
 
     // Determines how the current project assignment should appear in the existing single-select control.
     let projectValue = "";
@@ -977,10 +982,19 @@ function UserMasterPage({
       const departmentId =
         selectedDepartment?.id || null;
       // Converts Team Lead selection into its user ID.
+
+      // Assign a Team Lead only to Indexers
       const teamLeadId =
-        getSelectedTeamLeadId(
-          values.lead
-        );
+        values.role === "Indexer"
+          ? getSelectedTeamLeadId(values.lead)
+          : null;
+
+      // Validate Indexer Team Lead assignment
+      if (values.role === "Indexer" && !teamLeadId) {
+        toast.error("Please select a Team Lead for the Indexer.");
+        return;
+      }
+
 
       // Converts Active/Inactive into lowercase backend values.
       const status =
@@ -1717,7 +1731,7 @@ function UserMasterPage({
           </DialogActions>
         </Dialog>
       )}
-/// delete diaglog 
+
       {administrator && (
         <Dialog
           open={Boolean(userToDelete)}

@@ -159,9 +159,18 @@ const ROLE_COLORS = {
 };
 
 // Shared pagination footer used by CoreTable and other tables throughout the app.
-export function TablePagination({ page, total, rowsPerPage, onPageChange }) {
+
+export function TablePagination({
+  page,
+  total,
+  rowsPerPage,
+  onPageChange,
+  alwaysShow = false,
+}) {
   const totalPages = Math.ceil(total / rowsPerPage);
-  if (totalPages <= 1) return null;
+
+  if (totalPages <= 1 && !alwaysShow) return null;
+
   const start = page * rowsPerPage + 1;
   const end = Math.min((page + 1) * rowsPerPage, total);
   return (
@@ -201,6 +210,7 @@ export function TablePagination({ page, total, rowsPerPage, onPageChange }) {
 
 const CORE_TABLE_ROWS_PER_PAGE = 10;
 
+
 export function CoreTable({
   columns,
   rows,
@@ -209,15 +219,21 @@ export function CoreTable({
   onCellAction,
   actionVariant = "outlined",
   onDeleteAction,
+  rowsPerPage = CORE_TABLE_ROWS_PER_PAGE,
+  alwaysShowPagination = false,
 }) {
+
   const [page, setPage] = useState(0);
 
-  // Reset to page 0 whenever rows change (filter/data refresh).
-  useEffect(() => { setPage(0); }, [rows.length]);
+
+  // Reset pagination when records or page size change
+  useEffect(() => {
+    setPage(0);
+  }, [rows.length, rowsPerPage]);
 
   const pagedRows = rows.slice(
-    page * CORE_TABLE_ROWS_PER_PAGE,
-    (page + 1) * CORE_TABLE_ROWS_PER_PAGE,
+    page * rowsPerPage,
+    (page + 1) * rowsPerPage
   );
 
   return (
@@ -251,7 +267,7 @@ export function CoreTable({
         </TableHead>
         <TableBody>
           {pagedRows.map((row, rowIndex) => {
-            const globalIndex = page * CORE_TABLE_ROWS_PER_PAGE + rowIndex;
+            const globalIndex = page * rowsPerPage + rowIndex;
             return (
               <TableRow key={`row-${globalIndex}`} hover>
                 {row.map((cell, cellIndex) => (
@@ -381,11 +397,13 @@ export function CoreTable({
           })}
         </TableBody>
       </Table>
+
       <TablePagination
         page={page}
         total={rows.length}
-        rowsPerPage={CORE_TABLE_ROWS_PER_PAGE}
+        rowsPerPage={rowsPerPage}
         onPageChange={setPage}
+        alwaysShow={alwaysShowPagination}
       />
     </Paper>
   );

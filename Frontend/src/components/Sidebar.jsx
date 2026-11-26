@@ -27,7 +27,7 @@ function NavItem({
 }) {
   const isActive = currentPage === item.page;
 
-  
+
 
   return (
     <ListItemButton
@@ -88,39 +88,39 @@ function NavItem({
       {/* NEW BADGE */}
 
       {/* Shows the NEW badge using the original green sidebar design. */}
-{item.badge && !item.badge.dot && (
-  <Chip
-    label={item.badge.text}
-    size="small"
-    sx={{
-      // Keeps the badge compact like the original design.
-      height: 19,
+      {item.badge && !item.badge.dot && (
+        <Chip
+          label={item.badge.text}
+          size="small"
+          sx={{
+            // Keeps the badge compact like the original design.
+            height: 19,
 
-      // Forces the NEW badge to stay green even when the menu item is selected.
-      bgcolor: "#18a879",
+            // Forces the NEW badge to stay green even when the menu item is selected.
+            bgcolor: "#18a879",
 
-      // Keeps NEW text white.
-      color: "#ffffff",
+            // Keeps NEW text white.
+            color: "#ffffff",
 
-      // Keeps the compact text size and weight.
-      fontSize: 9,
-      fontWeight: 800,
+            // Keeps the compact text size and weight.
+            fontSize: 9,
+            fontWeight: 800,
 
-      // Creates the rounded pill shape.
-      borderRadius: "10px",
+            // Creates the rounded pill shape.
+            borderRadius: "10px",
 
-      // Prevents MUI hover/selected styles from changing the badge.
-      "&:hover": {
-        bgcolor: "#18a879",
-      },
+            // Prevents MUI hover/selected styles from changing the badge.
+            "&:hover": {
+              bgcolor: "#18a879",
+            },
 
-      // Controls horizontal spacing inside the badge.
-      "& .MuiChip-label": {
-        px: 0.8,
-      },
-    }}
-  />
-)}
+            // Controls horizontal spacing inside the badge.
+            "& .MuiChip-label": {
+              px: 0.8,
+            },
+          }}
+        />
+      )}
 
       {/* NUMBER BADGE */}
 
@@ -168,6 +168,10 @@ export default function Sidebar({
   // Stores the live unread notification count shown in the existing Notifications badge.
   const [notificationCount, setNotificationCount] = useState(0);
 
+
+  const [attendanceCount, setAttendanceCount] = useState(0);
+
+
   // Stores the live pending correction/approval count for Team Lead, Core Team and Administrator.
   const [approvalCount, setApprovalCount] = useState(0);
 
@@ -193,6 +197,34 @@ export default function Sidebar({
             if (active) setNotificationCount(0);
           })
       );
+
+
+      // HR Attendance badge - pending leave requests
+      if (roleKey === "hr") {
+        requests.push(
+          apiRequest("/hr/leave-requests")
+            .then((data) => {
+              if (!active) return;
+
+              setAttendanceCount(
+                Number(data.count ?? data.requests?.length ?? 0)
+              );
+            })
+            .catch((error) => {
+              console.error(
+                "HR attendance badge error:",
+                error
+              );
+
+              if (active) {
+                setAttendanceCount(0);
+              }
+            })
+        );
+      } else if (active) {
+        setAttendanceCount(0);
+      }
+
 
       // Team Lead, Core Team and Administrator use the existing approval summary for pending corrections.
       if (["teamLead", "coreTeam", "administrator"].includes(roleKey)) {
@@ -279,16 +311,31 @@ export default function Sidebar({
 
   // Injects live badge data into the existing menu items without changing any sidebar UI/styling.
   const menuItems = baseMenuItems.map((item) => {
+
+    if (roleKey === "hr" && item.page === "attendance") {
+      return {
+        ...item,
+        badge:
+          attendanceCount > 0
+            ? {
+              dot: true,
+              text: String(attendanceCount),
+              color: "error",
+            }
+            : null,
+      };
+    }
+
     if (item.page === "notifications") {
       return {
         ...item,
         badge:
           notificationCount > 0
             ? {
-                dot: true,
-                text: String(notificationCount),
-                color: "error",
-              }
+              dot: true,
+              text: String(notificationCount),
+              color: "error",
+            }
             : null,
       };
     }
@@ -299,10 +346,10 @@ export default function Sidebar({
         badge:
           approvalCount > 0
             ? {
-                dot: true,
-                text: String(approvalCount),
-                color: "error",
-              }
+              dot: true,
+              text: String(approvalCount),
+              color: "error",
+            }
             : null,
       };
     }
@@ -312,9 +359,9 @@ export default function Sidebar({
         ...item,
         badge: hasNewGuide
           ? {
-              text: "NEW",
-              color: "success",
-            }
+            text: "NEW",
+            color: "success",
+          }
           : null,
       };
     }
@@ -421,26 +468,26 @@ export default function Sidebar({
       ================================================== */}
 
       <List
-  sx={{
-    py: 0,
-    flex: "1 1 auto",
-    minHeight: 0,
+        sx={{
+          py: 0,
+          flex: "1 1 auto",
+          minHeight: 0,
 
-    // Keeps vertical scrolling enabled.
-    overflowY: "auto",
-    overflowX: "hidden",
+          // Keeps vertical scrolling enabled.
+          overflowY: "auto",
+          overflowX: "hidden",
 
-    // Hides the scrollbar in Firefox while keeping scrolling enabled.
-    scrollbarWidth: "none",
+          // Hides the scrollbar in Firefox while keeping scrolling enabled.
+          scrollbarWidth: "none",
 
-    // Hides the scrollbar in older Microsoft browsers.
-    msOverflowStyle: "none",
+          // Hides the scrollbar in older Microsoft browsers.
+          msOverflowStyle: "none",
 
-    // Hides the scrollbar in Chrome, Edge, and Safari.
-    "&::-webkit-scrollbar": {
-      display: "none",
-    },
-  }}
+          // Hides the scrollbar in Chrome, Edge, and Safari.
+          "&::-webkit-scrollbar": {
+            display: "none",
+          },
+        }}
 
       >
         {menuItems.map((item) => (
